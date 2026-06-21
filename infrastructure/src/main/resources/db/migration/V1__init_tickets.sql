@@ -1,0 +1,1 @@
+-- moved to db/changelog/changes/V1__init_tickets.sql (liquibase)

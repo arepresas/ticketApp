@@ -1,0 +1,4 @@
+databaseChangeLog:
+  - include:
+      file: changes/V1__init_tickets.sql
+      relativeToChangelogFile: true
