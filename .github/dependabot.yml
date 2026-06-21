@@ -1,0 +1,71 @@
+# `dependabot.yml` — weekly Monday updates for all ecosystems.
+# Docs: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+
+updates:
+  # Java / Maven (parent + domain + infrastructure + bff)
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "java"]
+    commit-message:
+      prefix: "deps(maven)"
+    target-branch: main
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Front (Svelte / Vite) — uses pnpm (lockfile: pnpm-lock.yaml)
+  - package-ecosystem: "npm"
+    directory: "/front"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+    commit-message:
+      prefix: "deps(front)"
+    target-branch: main
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Docker base images (CI services + local-environment)
+  - package-ecosystem: "docker"
+    directory: "/local-environment"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "deps(docker)"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "docker", "ci"]
+    commit-message:
+      prefix: "deps(ci-docker)"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

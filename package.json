@@ -1,0 +1,6 @@
+{
+  "name": "ticketapp",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Workspace root for the ticketApp monorepo. Exists so the @sonar/scan CLI can bootstrap a package context when invoked from the repo root."
+}

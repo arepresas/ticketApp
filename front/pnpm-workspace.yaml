@@ -1,0 +1,3 @@
+minimumReleaseAgeExclude:
+  - '@testing-library/svelte-core@1.1.0'
+  - '@testing-library/svelte@5.4.0'

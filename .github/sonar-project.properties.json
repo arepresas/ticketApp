@@ -1,0 +1,8 @@
+{
+  "organization": "com.ticketapp",
+  "check_run_settings": {
+    "extra_headers": {
+      "sonar-token": "${env.SONAR_TOKEN}"
+    }
+  }
+}

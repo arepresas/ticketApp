@@ -1,0 +1,29 @@
+{
+  "name": "ticketapp-front",
+  "version": "0.0.1",
+  "description": "Svelte 5 web components for ticketApp",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.provider=v8 --coverage.reporter=lcov --coverage.reporter=text --coverage.reportsDirectory=coverage",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@testing-library/svelte": "^5.4.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "jsdom": "^29.1.1",
+    "svelte": "^5.56.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
