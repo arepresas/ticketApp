@@ -5,8 +5,8 @@ import com.ticketapp.domain.TicketRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +19,7 @@ import java.util.UUID;
 public class JdbcTicketRepository implements TicketRepository {
 
     private final JdbcTemplate jdbc;
+    private final TicketRowMapper mapper = new TicketRowMapper();
 
     public JdbcTicketRepository(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -31,7 +32,7 @@ public class JdbcTicketRepository implements TicketRepository {
     public Optional<Ticket> findById(UUID id) {
         return jdbc.query(
                 "SELECT " + SELECT_COLS + " FROM tickets WHERE id = ?",
-                TicketRowMapper.INSTANCE,
+                mapper,
                 id
         ).stream().findFirst();
     }
@@ -40,7 +41,7 @@ public class JdbcTicketRepository implements TicketRepository {
     public List<Ticket> findAll() {
         return jdbc.query(
                 "SELECT " + SELECT_COLS + " FROM tickets ORDER BY created_at DESC",
-                TicketRowMapper.INSTANCE
+                mapper
         );
     }
 
@@ -60,8 +61,8 @@ public class JdbcTicketRepository implements TicketRepository {
                 ticket.title(),
                 ticket.description(),
                 ticket.status().name(),
-                Timestamp.from(ticket.createdAt()),
-                Timestamp.from(ticket.updatedAt())
+                OffsetDateTime.ofInstant(ticket.createdAt(), ZoneOffset.UTC),
+                OffsetDateTime.ofInstant(ticket.updatedAt(), ZoneOffset.UTC)
         );
         if (updated == 0) {
             throw new IllegalStateException("Failed to upsert ticket " + ticket.id());
@@ -76,6 +77,6 @@ public class JdbcTicketRepository implements TicketRepository {
 
     /** Convenience for callers needing the current instant in UTC. */
     public static Instant nowUtc() {
-        return Instant.now().atOffset(ZoneOffset.UTC).toInstant();
+        return Instant.now();
     }
 }
