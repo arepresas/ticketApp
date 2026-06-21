@@ -3,8 +3,9 @@ import { vi } from 'vitest';
 
 // jsdom does not implement matchMedia. Provide a minimal stub used by
 // the dark-mode theme toggle on first paint and on $effect re-runs.
-if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
-	Object.defineProperty(window, 'matchMedia', {
+// Use `globalThis` (S7764) so this works in jsdom, happy-dom and node alike.
+if (typeof globalThis !== 'undefined' && typeof globalThis.matchMedia !== 'function') {
+	Object.defineProperty(globalThis, 'matchMedia', {
 		writable: true,
 		value: vi.fn().mockImplementation((query: string) => ({
 			matches: false,
