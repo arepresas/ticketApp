@@ -1,0 +1,46 @@
+meta {
+  name: Create Ticket
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/tickets
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "title": "Sample ticket from Bruno",
+    "description": "Created via local-environment Bruno collection."
+  }
+}
+
+docs {
+  Create a new ticket. Status is always OPEN on creation.
+  Server generates id, createdAt, updatedAt.
+  Returns 201 + full Ticket JSON.
+  
+  Validation: title and description required by controller signature;
+  no @NotBlank constraints declared yet — null/blank may produce NPE
+  or empty-string description persisted.
+}
+
+asserts {
+  res.status: eq 201
+  res.headers["content-type"]: contains application/json
+  res.body.id: isString
+  res.body.status: eq OPEN
+  res.body.title: eq Sample ticket from Bruno
+}
+
+tests {
+  test("capture new id for chained requests", function() {
+    bru.setVar("createdTicketId", res.body.id);
+  });
+}

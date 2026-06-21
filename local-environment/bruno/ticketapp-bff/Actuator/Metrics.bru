@@ -1,0 +1,21 @@
+meta {
+  name: Metrics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/actuator/metrics
+  body: none
+  auth: none
+}
+
+docs {
+  List of available metric names (jvm.memory.used, http.server.requests, ...).
+  Drill into a metric: GET /actuator/metrics/{name}
+}
+
+asserts {
+  res.status: eq 200
+  res.body.names: isArray
+}

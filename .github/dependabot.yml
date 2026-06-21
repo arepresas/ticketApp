@@ -42,7 +42,7 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # Docker base images (CI services + local-environment)
+  # Docker base images used in local-environment/docker-compose.yml.
   - package-ecosystem: "docker"
     directory: "/local-environment"
     schedule:
@@ -54,7 +54,13 @@ updates:
     labels: ["dependencies", "docker"]
     commit-message:
       prefix: "deps(docker)"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
 
+  # BFF Dockerfile (root). Tracks both the build stage (eclipse-temurin) and the
+  # runtime stage (distroless java-base). Major JDK updates are ignored because
+  # they require code recompilation.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
@@ -65,7 +71,9 @@ updates:
     open-pull-requests-limit: 3
     labels: ["dependencies", "docker", "ci"]
     commit-message:
-      prefix: "deps(ci-docker)"
+      prefix: "deps(docker-bff)"
     ignore:
-      - dependency-name: "postgres"
+      - dependency-name: "eclipse-temurin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "distroless"
         update-types: ["version-update:semver-major"]

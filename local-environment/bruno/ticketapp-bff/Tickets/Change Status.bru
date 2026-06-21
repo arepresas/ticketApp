@@ -1,0 +1,39 @@
+meta {
+  name: Change Status
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/api/tickets/:id/status
+  body: json
+  auth: none
+}
+
+params:path {
+  id: {{createdTicketId}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "IN_PROGRESS"
+  }
+}
+
+docs {
+  Transition a ticket's status. Allowed values:
+    OPEN | IN_PROGRESS | DONE | CANCELLED
+  
+  Server updates updatedAt to now (UTC). All other fields unchanged.
+  Returns 200 + full Ticket JSON, or 404 if id not found.
+}
+
+asserts {
+  res.status: eq 200
+  res.body.status: eq IN_PROGRESS
+  res.body.id: eq {{createdTicketId}}
+}

@@ -1,0 +1,7 @@
+# Local profile — matches docker-compose (local-environment/docker-ticketApp/docker-compose.yml)
+# Override docker compose env (see .env.example).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:6432/ticketAppDb
+    username: ticketAppUser
+    password: ticketAppPass

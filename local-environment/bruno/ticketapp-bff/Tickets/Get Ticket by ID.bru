@@ -1,0 +1,25 @@
+meta {
+  name: Get Ticket by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/tickets/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: 00000000-0000-0000-0000-000000000000
+}
+
+docs {
+  Fetch a single ticket by UUID.
+  Returns 200 + Ticket JSON, or 404 with empty body if not found.
+  Path param `id` must be a valid UUID — otherwise Spring returns 400.
+}
+
+asserts {
+  res.status: eq 404
+}

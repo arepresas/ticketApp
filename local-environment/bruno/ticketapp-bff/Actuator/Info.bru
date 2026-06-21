@@ -1,0 +1,19 @@
+meta {
+  name: Info
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/actuator/info
+  body: none
+  auth: none
+}
+
+docs {
+  Build/app metadata. Empty object unless `info.*` contributors are configured.
+}
+
+asserts {
+  res.status: eq 200
+}

@@ -1,0 +1,22 @@
+meta {
+  name: List Tickets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/tickets
+  body: none
+  auth: none
+}
+
+docs {
+  Retrieve all tickets, newest first (ORDER BY created_at DESC).
+  Returns 200 + JSON array. Empty array if no tickets.
+}
+
+asserts {
+  res.status: eq 200
+  res.headers["content-type"]: contains application/json
+  res.body: isArray
+}
