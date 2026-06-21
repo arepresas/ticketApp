@@ -1,13 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ticketApp dev</title>
-  </head>
-  <body>
-    <h1>ticketApp dev</h1>
-    <ticket-app api-url="/api/tickets"></ticket-app>
-    <script type="module" src="/src/index.ts"></script>
-  </body>
+<html lang="en" class="scroll-smooth">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="theme-color" content="#10b981" media="(prefers-color-scheme: light)" />
+	<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+	<meta name="description" content="TicketApp turns every receipt — supermarket, pharmacy, restaurant, fuel — into a clean, searchable timeline. Open source, local-first, private." />
+	<meta property="og:title" content="TicketApp — Every receipt. One searchable place." />
+	<meta property="og:description" content="From paper to insight in 3 steps. Open source, privacy-first." />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="TicketApp — Every receipt. One searchable place." />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<title>TicketApp — Every receipt. One searchable place.</title>
+	<script>
+		(function () {
+			try {
+				var s = localStorage.getItem('ticketapp-theme');
+				var m = s === 'light' || s === 'dark' ? s : 'system';
+				var r = m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+				document.documentElement.classList.toggle('dark', r === 'dark');
+				document.documentElement.style.colorScheme = r;
+			} catch (_) {}
+		})();
+	</script>
+</head>
+<body>
+	<landing-app></landing-app>
+	<script type="module" src="/src/index.ts"></script>
+</body>
 </html>

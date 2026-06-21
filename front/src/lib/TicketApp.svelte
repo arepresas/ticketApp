@@ -1,3 +1,5 @@
+<svelte:options customElement="ticket-app" />
+
 <script lang="ts">
   let { apiUrl = '/api/tickets' }: { apiUrl?: string } = $props();
   let tickets = $state<Ticket[]>([]);
