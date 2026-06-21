@@ -44,6 +44,7 @@ front/node_modules/
 front/dist/
 front/build/
 front/.svelte-kit/
+front/.vite/
 front/coverage/
 front/reports/
 front/.npm/
@@ -61,3 +62,4 @@ local-environment/volumes/
 ### Temporary files ###
 .tmp
 .playwright-mcp
+front/screenshots

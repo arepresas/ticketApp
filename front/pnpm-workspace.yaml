@@ -1,3 +1,14 @@
-minimumReleaseAgeExclude:
-  - '@testing-library/svelte-core@1.1.0'
-  - '@testing-library/svelte@5.4.0'
+# pnpm 11 workspace configuration.
+#
+# `minimumReleaseAge: 24` enables the supply-chain attack mitigation that pnpm
+# applies by default when this file exists: any package whose latest version on
+# the registry was published within the last 24 hours will fail the build.
+# This forces a human review window before pulling newly-published versions,
+# which is the only effective defense against typosquatting and account-takeover
+# attacks on the npm registry.
+#
+# No `minimumReleaseAgeExclude` entries. Any package upgrade must wait 24h
+# after its registry publish time before it can land in this repo. Dependabot
+# opens the PR the day a new version ships; the merge button unlocks once the
+# 24h window has elapsed (re-run the workflow or wait).
+minimumReleaseAge: 24
