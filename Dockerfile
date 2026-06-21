@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build the BFF (multi-module reactor — only `bff/` is assembled here)
 # -----------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-25 AS build
+FROM maven:3-eclipse-temurin-26 AS build
 WORKDIR /workspace
 
 # Cache dependencies first
