@@ -1,0 +1,22 @@
+meta {
+  name: Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+docs {
+  Liveness/readiness probe.
+  Returns 200 + {"status":"UP"} when app + DB are reachable.
+  show-details is "when-authorized" but no auth configured → details hidden.
+}
+
+asserts {
+  res.status: eq 200
+  res.body.status: eq UP
+}

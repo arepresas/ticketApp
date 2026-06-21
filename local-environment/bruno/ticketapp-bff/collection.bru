@@ -1,0 +1,24 @@
+vars {
+  baseUrl: http://localhost:8080
+}
+
+docs {
+  ticketapp BFF — Spring Boot REST API.
+  
+  Base path: {{baseUrl}}/api/tickets
+  Auth: none (Spring Security not on classpath)
+  
+  Endpoints:
+    GET    /api/tickets              list all
+    GET    /api/tickets/{id}         get by UUID
+    POST   /api/tickets              create (status starts OPEN)
+    PATCH  /api/tickets/{id}/status  change status
+    DELETE /api/tickets/{id}         delete
+  
+  Actuator:
+    GET /actuator/health
+    GET /actuator/info
+    GET /actuator/metrics
+  
+  Status enum: OPEN | IN_PROGRESS | DONE | CANCELLED
+}

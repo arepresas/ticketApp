@@ -57,3 +57,7 @@ front/package-lock.json
 ### Local infra ###
 local-environment/.data/
 local-environment/volumes/
+
+### Temporary files ###
+.tmp
+.playwright-mcp

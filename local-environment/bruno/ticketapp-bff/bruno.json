@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "ticketapp-bff",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

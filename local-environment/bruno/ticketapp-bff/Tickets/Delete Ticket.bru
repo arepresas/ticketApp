@@ -1,0 +1,25 @@
+meta {
+  name: Delete Ticket
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/tickets/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: {{createdTicketId}}
+}
+
+docs {
+  Hard-delete a ticket by UUID.
+  Returns 204 No Content on success.
+  Idempotent: deleting a missing id still returns 204 (no row affected).
+}
+
+asserts {
+  res.status: eq 204
+}
