@@ -31,11 +31,11 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <postgresql.version>42.7.5</postgresql.version>
+        <postgresql.version>42.7.11</postgresql.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <liquibase.version>5.0.3</liquibase.version>
         <spring-boot.version>4.1.0</spring-boot.version>
-        <jacoco.version>0.8.13</jacoco.version>
+        <jacoco.version>0.8.15</jacoco.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
