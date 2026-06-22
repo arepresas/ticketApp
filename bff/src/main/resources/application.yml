@@ -25,3 +25,15 @@ logging:
   level:
     root: INFO
     com.ticketapp: DEBUG
+
+google:
+  # OAuth 2.0 Web client id (matches front VITE_GOOGLE_CLIENT_ID).
+  client-id: ${GOOGLE_CLIENT_ID:}
+
+bff:
+  jwt:
+    # HS256 secret — generate locally with `openssl rand -base64 32`.
+    # NEVER commit a real value. The placeholder below is 32+ chars so
+    # the app starts in dev; replace via env in any non-local environment.
+    secret: ${BFF_JWT_SECRET:dev-only-placeholder-secret-change-me-please-32}
+    ttl-hours: 24

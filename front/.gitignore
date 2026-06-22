@@ -1,0 +1,27 @@
+# Local env overrides — never commit
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Vite / Svelte
+.svelte-kit/
+dist/
+build/
+*.log
+
+# Coverage / test artefacts
+coverage/
+reports/
+
+# pnpm / node
+node_modules/
+.pnpm-store/

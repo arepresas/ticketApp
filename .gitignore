@@ -40,6 +40,7 @@ Thumbs.db
 .env.*.local
 
 ### Node / Front ###
+node_modules/
 front/node_modules/
 front/dist/
 front/build/
@@ -54,6 +55,10 @@ front/storybook-static/
 .scannerwork/
 # package-lock.json is not used — pnpm-lock.yaml is the source of truth.
 front/package-lock.json
+# pnpm artefacts at the repo root — there is no workspace here, so
+# anything under ./node_modules/ and ./pnpm-lock.yaml is accidental
+# (e.g. running `pnpm install` at the wrong cwd) and must not be committed.
+/pnpm-lock.yaml
 
 ### Local infra ###
 local-environment/.data/

@@ -2,3 +2,6 @@ databaseChangeLog:
   - include:
       file: changes/V1__init_tickets.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V2__auth.sql
+      relativeToChangelogFile: true
