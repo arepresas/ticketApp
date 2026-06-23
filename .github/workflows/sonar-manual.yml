@@ -1,0 +1,152 @@
+name: SonarQube (manual)
+
+# Manual SonarCloud scan against any branch. Useful when you want a
+# quality snapshot of a feature branch WITHOUT waiting for CI / pushing
+# to main / opening a PR. Runs static analysis + jacoco/lcov coverage
+# if a previous CI run uploaded the artifacts.
+#
+# Usage:
+#   1. Actions tab → "SonarQube (manual)" → Run workflow
+#   2. Pick the branch (defaults to the default branch)
+#   3. Optionally override project key
+#   4. Results land on the same branch in SonarCloud.
+#
+# Reuses the same secrets as CI:
+#   SONAR_TOKEN, SONAR_HOST_URL, SONAR_ORGANIZATION
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to scan (must exist on origin)'
+        required: true
+        default: 'main'
+        type: string
+      project_key:
+        description: 'Sonar project key (leave blank for default)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  # One scan per branch at a time — re-running replaces the in-flight run.
+  group: sonar-manual-${{ inputs.branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    name: SonarQube scan
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_ORGANIZATION: ${{ secrets.SONAR_ORGANIZATION }}
+      SCAN_BRANCH: ${{ inputs.branch }}
+      SCAN_PROJECT_KEY: ${{ inputs.project_key }}
+    steps:
+      - name: Validate inputs
+        run: |
+          if [ -z "$SCAN_BRANCH" ]; then
+            echo "::error::Branch input is required."
+            exit 1
+          fi
+
+      - name: Validate SonarQube secrets
+        run: |
+          missing=0
+          for v in SONAR_TOKEN SONAR_HOST_URL SONAR_ORGANIZATION; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Required secret $v is not set. Add it under Settings -> Secrets and variables -> Actions."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Check out branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0  # Sonar needs blame / SCM history.
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271  # v6.0.9
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: '24'
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287  # v5.3.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Try to restore backend jacoco coverage
+        # The CI workflow only uploads artifacts from pushes/PRs to main,
+        # so a manual scan on a feature branch usually has nothing here.
+        # `continue-on-error` ensures we don't fail just because no prior
+        # CI run happened on this branch.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: backend-coverage
+          path: .
+
+      - name: Try to restore frontend lcov coverage
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: frontend-coverage
+          path: front/coverage
+
+      - name: Compile back-end (no tests)
+        # sonar.java.binaries points at target/classes; without compiling
+        # the scanner rejects the property. Skip tests — coverage is
+        # either supplied via the artifacts above or omitted.
+        run: mvn -B -ntp -DskipTests test-compile
+
+      - name: Single SonarQube scan
+        # Reuses the same scanner invocation as CI (pnpm dlx sonar) so the
+        # scan mode, exclusions and project shape stay identical. Only
+        # difference: we pin sonar.branch.name to whatever the user picked,
+        # so the analysis appears under that branch in SonarCloud.
+        env:
+          SCANNER_ARGS: >-
+            -Dsonar.token=$SONAR_TOKEN
+            -Dsonar.host.url=$SONAR_HOST_URL
+            -Dsonar.organization=$SONAR_ORGANIZATION
+            -Dsonar.projectBaseDir=$GITHUB_WORKSPACE
+            -Dsonar.branch.name=$SCAN_BRANCH
+            -Dsonar.branch.target=main
+        run: |
+          args="$SCANNER_ARGS"
+          if [ -n "$SCAN_PROJECT_KEY" ]; then
+            args="$args -Dsonar.projectKey=$SCAN_PROJECT_KEY"
+          fi
+          # shellcheck disable=SC2086
+          pnpm --package=@sonar/scan@4.3.8 dlx sonar $args
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### SonarQube manual scan"
+            echo ""
+            echo "- Branch: \`$SCAN_BRANCH\`"
+            echo "- Project key: \`${SCAN_PROJECT_KEY:-com.ticketapp:ticketapp}\`"
+            echo "- Host: $SONAR_HOST_URL"
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "- Status: :white_check_mark: scan complete"
+            else
+              echo "- Status: :x: scan failed (check logs)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
