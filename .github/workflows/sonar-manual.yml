@@ -90,19 +90,60 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Try to restore backend jacoco coverage
-        # The CI workflow only uploads artifacts from pushes/PRs to main,
-        # so a manual scan on a feature branch usually has nothing here.
-        # `continue-on-error` ensures we don't fail just because no prior
-        # CI run happened on this branch.
+      # The CI workflow only uploads artifacts from pushes/PRs to main, so a
+      # manual scan on a feature branch usually has none. `download-artifact`
+      # errors out hard when the artifact is missing, so we probe the API
+      # first and skip the download silently if no prior CI run uploaded it.
+
+      - name: Check for prior backend coverage artifact
+        id: check-backend
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          found=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name=="backend-coverage" and .expired==false and .workflow_run.head_branch=="'"$SCAN_BRANCH"'") | .id' \
+            | head -n1)
+          set -e
+          if [ -n "$found" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Found backend-coverage artifact id=$found"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No backend-coverage artifact for branch '$SCAN_BRANCH' — scan will proceed without backend coverage."
+          fi
+
+      - name: Restore backend jacoco coverage
+        if: steps.check-backend.outputs.exists == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: backend-coverage
           path: .
 
-      - name: Try to restore frontend lcov coverage
+      - name: Check for prior frontend coverage artifact
+        id: check-frontend
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          found=$(gh api \
+            "repos/${{ github.repository }}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name=="frontend-coverage" and .expired==false and .workflow_run.head_branch=="'"$SCAN_BRANCH"'") | .id' \
+            | head -n1)
+          set -e
+          if [ -n "$found" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Found frontend-coverage artifact id=$found"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No frontend-coverage artifact for branch '$SCAN_BRANCH' — scan will proceed without frontend coverage."
+          fi
+
+      - name: Restore frontend lcov coverage
+        if: steps.check-frontend.outputs.exists == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: frontend-coverage
@@ -119,21 +160,26 @@ jobs:
         # scan mode, exclusions and project shape stay identical. Only
         # difference: we pin sonar.branch.name to whatever the user picked,
         # so the analysis appears under that branch in SonarCloud.
-        env:
-          SCANNER_ARGS: >-
-            -Dsonar.token=$SONAR_TOKEN
-            -Dsonar.host.url=$SONAR_HOST_URL
-            -Dsonar.organization=$SONAR_ORGANIZATION
-            -Dsonar.projectBaseDir=$GITHUB_WORKSPACE
-            -Dsonar.branch.name=$SCAN_BRANCH
-            -Dsonar.branch.target=main
+        #
+        # Args are assembled inside the script (not via env pre-expansion)
+        # so $GITHUB_WORKSPACE / $SONAR_HOST_URL get expanded by bash at
+        # invocation time — earlier versions baked them into SCANNER_ARGS
+        # which only got a single pass of expansion and shipped the literal
+        # `$GITHUB_WORKSPACE` to the scanner.
         run: |
-          args="$SCANNER_ARGS"
+          set -euo pipefail
+          args=(
+            "-Dsonar.token=${SONAR_TOKEN}"
+            "-Dsonar.host.url=${SONAR_HOST_URL}"
+            "-Dsonar.organization=${SONAR_ORGANIZATION}"
+            "-Dsonar.projectBaseDir=${GITHUB_WORKSPACE}"
+            "-Dsonar.branch.name=${SCAN_BRANCH}"
+            "-Dsonar.branch.target=main"
+          )
           if [ -n "$SCAN_PROJECT_KEY" ]; then
-            args="$args -Dsonar.projectKey=$SCAN_PROJECT_KEY"
+            args+=("-Dsonar.projectKey=${SCAN_PROJECT_KEY}")
           fi
-          # shellcheck disable=SC2086
-          pnpm --package=@sonar/scan@4.3.8 dlx sonar $args
+          pnpm --package=@sonar/scan@4.3.8 dlx sonar "${args[@]}"
 
       - name: Summary
         if: always()
@@ -144,6 +190,8 @@ jobs:
             echo "- Branch: \`$SCAN_BRANCH\`"
             echo "- Project key: \`${SCAN_PROJECT_KEY:-com.ticketapp:ticketapp}\`"
             echo "- Host: $SONAR_HOST_URL"
+            echo "- Backend coverage: \`${{ steps.check-backend.outputs.exists == 'true' && 'yes' || 'no' }}\`"
+            echo "- Frontend coverage: \`${{ steps.check-frontend.outputs.exists == 'true' && 'yes' || 'no' }}\`"
             if [ "${{ job.status }}" = "success" ]; then
               echo "- Status: :white_check_mark: scan complete"
             else
