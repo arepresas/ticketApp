@@ -1,6 +1,16 @@
+<svelte:options
+  customElement={{
+    props: {
+      class: { type: "String" },
+      style: { type: "String" },
+      id: { type: "String" }
+    }
+  }}
+/>
+
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
-	import { cn } from '$lib/utils';
+	import { cn } from '../../../utils';
 
 	type Props = HTMLAttributes<HTMLHRElement> & {
 		class?: string;
