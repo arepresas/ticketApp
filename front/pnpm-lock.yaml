@@ -11,9 +11,15 @@ importers:
       '@lucide/svelte':
         specifier: ^1.21.0
         version: 1.21.0(svelte@5.56.3)
+      chart.js:
+        specifier: ^4.5.1
+        version: 4.5.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      svelte-chartjs:
+        specifier: ^4.0.1
+        version: 4.0.1(chart.js@4.5.1)(svelte@5.56.3)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -23,13 +29,16 @@ importers:
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.1.2
-        version: 7.1.2(svelte@5.56.3)(vite@8.0.16(jiti@2.7.0))
+        version: 7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
       '@tailwindcss/vite':
         specifier: ^4.3.1
-        version: 4.3.1(vite@8.0.16(jiti@2.7.0))
+        version: 4.3.1(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
       '@testing-library/svelte':
         specifier: ^5.4.1
-        version: 5.4.1(svelte@5.56.3)(vite@8.0.16(jiti@2.7.0))(vitest@4.1.9)
+        version: 5.4.1(svelte@5.56.3)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))(vitest@4.1.9)
+      '@types/node':
+        specifier: ^26.0.1
+        version: 26.0.1
       '@vitest/coverage-v8':
         specifier: ^4.1.9
         version: 4.1.9(vitest@4.1.9)
@@ -50,10 +59,10 @@ importers:
         version: 1.4.0
       vite:
         specifier: ^8.0.16
-        version: 8.0.16(jiti@2.7.0)
+        version: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
       vitest:
         specifier: ^4.1.9
-        version: 4.1.9(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(jiti@2.7.0))
+        version: 4.1.9(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
 
 packages:
 
@@ -174,6 +183,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kurkle/color@0.3.4':
+    resolution: {integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==}
 
   '@lucide/svelte@1.21.0':
     resolution: {integrity: sha512-MEv//A7Jv3kHukZowv/DWp1MAtUzJKYwtJsmnQ7X98lCgtac3z3NbaToDl3Q6jO3gS9sougFpcD+t+YuxOkRMw==}
@@ -438,6 +450,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/node@26.0.1':
+    resolution: {integrity: sha512-fc3KiUoBt6kie0N9bIW3E47vZsuaMf0PM2AaUpLCLT0s/LvX1nxAim6Fc049cNxODPpGm6qRAuUOB86SkRuPQw==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -516,6 +531,10 @@ packages:
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
+
+  chart.js@4.5.1:
+    resolution: {integrity: sha512-GIjfiT9dbmHRiYi6Nl2yFCq7kkwdkp1W/lp2J99rX0yo9tgJGn3lKQATztIjb5tVtevcBtIdICNWqlq5+E8/Pw==}
+    engines: {pnpm: '>=8'}
 
   chokidar@4.0.3:
     resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
@@ -833,6 +852,12 @@ packages:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
     engines: {node: '>=8'}
 
+  svelte-chartjs@4.0.1:
+    resolution: {integrity: sha512-4z+0J+w/6ADH2Cy+/AnVek2HxRrznQ7dJfWTybc9BHm9//DCb1BmLrSE3NGDRDLj+kwJbKw2o1tPLBE3CmdHmw==}
+    peerDependencies:
+      chart.js: ^3.5.0 || ^4.0.0
+      svelte: ^5.0.0
+
   svelte-check@4.6.0:
     resolution: {integrity: sha512-KhVnDFDSid57mmZtHz8gfW8AAGylOZ0vPnOIzVmAL+urzwK8sBYXRss953gD8T0OdgAQ11mdWhE6uadmtOz8TQ==}
     engines: {node: '>= 18.0.0'}
@@ -908,6 +933,9 @@ packages:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  undici-types@8.3.0:
+    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==}
 
   undici@7.28.0:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
@@ -1146,6 +1174,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@kurkle/color@0.3.4': {}
+
   '@lucide/svelte@1.21.0(svelte@5.56.3)':
     dependencies:
       svelte: 5.56.3
@@ -1218,14 +1248,14 @@ snapshots:
 
   '@sveltejs/load-config@0.1.1': {}
 
-  '@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(jiti@2.7.0))':
+  '@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))':
     dependencies:
       deepmerge: 4.3.1
       magic-string: 0.30.21
       obug: 2.1.3
       svelte: 5.56.3
-      vite: 8.0.16(jiti@2.7.0)
-      vitefu: 1.1.3(vite@8.0.16(jiti@2.7.0))
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
+      vitefu: 1.1.3(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
 
   '@tailwindcss/node@4.3.1':
     dependencies:
@@ -1288,12 +1318,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.1
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.1
 
-  '@tailwindcss/vite@4.3.1(vite@8.0.16(jiti@2.7.0))':
+  '@tailwindcss/vite@4.3.1(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))':
     dependencies:
       '@tailwindcss/node': 4.3.1
       '@tailwindcss/oxide': 4.3.1
       tailwindcss: 4.3.1
-      vite: 8.0.16(jiti@2.7.0)
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -1310,14 +1340,14 @@ snapshots:
     dependencies:
       svelte: 5.56.3
 
-  '@testing-library/svelte@5.4.1(svelte@5.56.3)(vite@8.0.16(jiti@2.7.0))(vitest@4.1.9)':
+  '@testing-library/svelte@5.4.1(svelte@5.56.3)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))(vitest@4.1.9)':
     dependencies:
       '@testing-library/dom': 10.4.1
       '@testing-library/svelte-core': 1.1.2(svelte@5.56.3)
       svelte: 5.56.3
     optionalDependencies:
-      vite: 8.0.16(jiti@2.7.0)
-      vitest: 4.1.9(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(jiti@2.7.0))
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
+      vitest: 4.1.9(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
 
   '@tybys/wasm-util@0.10.2':
     dependencies:
@@ -1335,6 +1365,10 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/node@26.0.1':
+    dependencies:
+      undici-types: 8.3.0
+
   '@types/trusted-types@2.0.7': {}
 
   '@vitest/coverage-v8@4.1.9(vitest@4.1.9)':
@@ -1349,7 +1383,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.9(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(jiti@2.7.0))
+      vitest: 4.1.9(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
 
   '@vitest/expect@4.1.9':
     dependencies:
@@ -1360,13 +1394,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.9(vite@8.0.16(jiti@2.7.0))':
+  '@vitest/mocker@4.1.9(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))':
     dependencies:
       '@vitest/spy': 4.1.9
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.16(jiti@2.7.0)
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
 
   '@vitest/pretty-format@4.1.9':
     dependencies:
@@ -1419,6 +1453,10 @@ snapshots:
       require-from-string: 2.0.2
 
   chai@6.2.2: {}
+
+  chart.js@4.5.1:
+    dependencies:
+      '@kurkle/color': 0.3.4
 
   chokidar@4.0.3:
     dependencies:
@@ -1693,6 +1731,11 @@ snapshots:
     dependencies:
       has-flag: 4.0.0
 
+  svelte-chartjs@4.0.1(chart.js@4.5.1)(svelte@5.56.3):
+    dependencies:
+      chart.js: 4.5.1
+      svelte: 5.56.3
+
   svelte-check@4.6.0(picomatch@4.0.4)(svelte@5.56.3)(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -1773,9 +1816,11 @@ snapshots:
 
   typescript@6.0.3: {}
 
+  undici-types@8.3.0: {}
+
   undici@7.28.0: {}
 
-  vite@8.0.16(jiti@2.7.0):
+  vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -1783,17 +1828,18 @@ snapshots:
       rolldown: 1.0.3
       tinyglobby: 0.2.17
     optionalDependencies:
+      '@types/node': 26.0.1
       fsevents: 2.3.3
       jiti: 2.7.0
 
-  vitefu@1.1.3(vite@8.0.16(jiti@2.7.0)):
+  vitefu@1.1.3(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0)):
     optionalDependencies:
-      vite: 8.0.16(jiti@2.7.0)
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
 
-  vitest@4.1.9(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(jiti@2.7.0)):
+  vitest@4.1.9(@types/node@26.0.1)(@vitest/coverage-v8@4.1.9)(jsdom@29.1.1)(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0)):
     dependencies:
       '@vitest/expect': 4.1.9
-      '@vitest/mocker': 4.1.9(vite@8.0.16(jiti@2.7.0))
+      '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@26.0.1)(jiti@2.7.0))
       '@vitest/pretty-format': 4.1.9
       '@vitest/runner': 4.1.9
       '@vitest/snapshot': 4.1.9
@@ -1810,9 +1856,10 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.0.16(jiti@2.7.0)
+      vite: 8.0.16(@types/node@26.0.1)(jiti@2.7.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@types/node': 26.0.1
       '@vitest/coverage-v8': 4.1.9(vitest@4.1.9)
       jsdom: 29.1.1
     transitivePeerDependencies:

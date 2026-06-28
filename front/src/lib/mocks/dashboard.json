@@ -1,0 +1,64 @@
+{
+  "kpis": {
+    "totalTickets": 42,
+    "openTickets": 7,
+    "totalSpentEur": 3187.5,
+    "avgTicketEur": 75.89
+  },
+  "ticketsPerMonth": [
+    { "month": "2025-12", "count": 5 },
+    { "month": "2026-01", "count": 6 },
+    { "month": "2026-02", "count": 4 },
+    { "month": "2026-03", "count": 8 },
+    { "month": "2026-04", "count": 9 },
+    { "month": "2026-05", "count": 10 }
+  ],
+  "spendByCategory": [
+    { "category": "transport", "amountEur": 845.0 },
+    { "category": "food", "amountEur": 1120.5 },
+    { "category": "lodging", "amountEur": 920.0 },
+    { "category": "other", "amountEur": 302.0 }
+  ],
+  "recentTickets": [
+    {
+      "id": "t-1042",
+      "title": "Cena con cliente",
+      "category": "food",
+      "date": "2026-05-28",
+      "amountEur": 142.5,
+      "status": "open"
+    },
+    {
+      "id": "t-1041",
+      "title": "Vuelo Madrid–Berlin",
+      "category": "transport",
+      "date": "2026-05-22",
+      "amountEur": 318.4,
+      "status": "closed"
+    },
+    {
+      "id": "t-1040",
+      "title": "Hotel 3 noches",
+      "category": "lodging",
+      "date": "2026-05-19",
+      "amountEur": 412.0,
+      "status": "open"
+    },
+    {
+      "id": "t-1039",
+      "title": "Taxi aeropuerto",
+      "category": "transport",
+      "date": "2026-05-15",
+      "amountEur": 48.6,
+      "status": "closed"
+    },
+    {
+      "id": "t-1038",
+      "title": "Comida equipo",
+      "category": "food",
+      "date": "2026-05-12",
+      "amountEur": 87.3,
+      "status": "closed"
+    }
+  ]
+}
