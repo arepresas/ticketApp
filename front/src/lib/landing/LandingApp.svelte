@@ -8,7 +8,6 @@
 	// element's shadow DOM (light-DOM stylesheets don't cross the boundary).
 	import tailwindCss from '../../app.css?inline';
 
-	import Nav from './Nav.svelte';
 	import Hero from './Hero.svelte';
 	import Categories from './Categories.svelte';
 	import Features from './Features.svelte';
@@ -21,7 +20,6 @@
 <svelte:element this={'style'}>{@html tailwindCss}</svelte:element>
 
 <div class="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
-	<Nav />
 	<main id="main" class="flex-1">
 		<Hero />
 		<Categories />

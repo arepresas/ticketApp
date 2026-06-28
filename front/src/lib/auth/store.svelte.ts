@@ -14,13 +14,14 @@ import type { AuthState, AuthUser } from './types';
 
 const TOKEN_KEY = 'ticketapp.session';
 
+/**
+ * Read `sessionStorage` from whatever host is running us — browser,
+ * jsdom, happy-dom, or Node. `globalThis` is the only universal anchor;
+ * `window` is not a valid identifier outside browser globals.
+ */
 const sessionStorage = (): Storage | null => {
-  // globalThis keeps this working in jsdom, happy-dom, and node — we
-  // never reach for `window` directly because it's not a valid identifier
-  // outside browser globals (S7764).
-  const g: { window?: { sessionStorage?: Storage } } | undefined =
-    (globalThis as unknown as { window?: { sessionStorage?: Storage } }).window;
-  return g?.sessionStorage ?? null;
+	const g = (globalThis as { window?: { sessionStorage?: Storage } }).window;
+	return g?.sessionStorage ?? null;
 };
 
 const readToken = (): string | null => {
@@ -125,3 +126,28 @@ export const logout = async (): Promise<void> => {
   state.status = 'idle';
   state.error = null;
 };
+
+// Dev-only debug surface. Exposes the auth store on `window.__auth` so the
+// browser console (or Playwright) can flip state without a real Google
+// round-trip. Tree-shaken in production by Vite's `import.meta.env.DEV`
+// dead-code elimination — the assignment is replaced by an empty statement
+// when the build runs with `mode !== 'development'`.
+if (import.meta.env.DEV) {
+  (globalThis as unknown as { __auth?: typeof auth }).__auth = auth;
+  (
+    globalThis as unknown as {
+      __loginAs?: (u: { id: string; email: string; name: string; picture?: string }) => void;
+    }
+  ).__loginAs = (u) => {
+    state.user = u;
+    state.status = 'authenticated';
+    state.error = null;
+  };
+  (
+    globalThis as unknown as { __logout?: () => void }
+  ).__logout = () => {
+    state.user = null;
+    state.status = 'idle';
+    state.error = null;
+  };
+}
