@@ -10,10 +10,9 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "types": ["vitest/globals", "node"],
-    "baseUrl": ".",
     "paths": {
-      "$lib": ["src/lib"],
-      "$lib/*": ["src/lib/*"]
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]

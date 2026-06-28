@@ -27,7 +27,21 @@
 	</script>
 </head>
 <body>
+	<div id="app-header-mount"></div>
 	<landing-app></landing-app>
+	<dashboard-app></dashboard-app>
+	<style>
+		/* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
+		   Toggled reactively by front/src/lib/auth/host.ts based on
+		   `auth.isAuthenticated`. Default (unauthenticated): landing shows.
+		   Authenticated: dashboard shows. */
+		body:not(.is-authenticated) dashboard-app {
+			display: none;
+		}
+		body.is-authenticated landing-app {
+			display: none;
+		}
+	</style>
 	<script type="module" src="/src/index.ts"></script>
 </body>
 </html>
