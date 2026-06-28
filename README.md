@@ -24,18 +24,31 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 ## Local startup
 
 ```bash
-# 1. start postgres
+# 1. copy env template (Postgres + Sonar + Google + BFF JWT)
+cp .env.example .env
+$EDITOR .env
+
+# 2. start postgres
 docker compose -f local-environment/docker-compose.yml up -d
 
-# 2. backend (unit + integration via Testcontainers)
+# 3. run the BFF (dev mode, profile=local picks up application-local.yml)
+#    Default port: 8080. Health: http://localhost:8080/actuator/health
+mvn -B -pl bff -am spring-boot:run -Dspring-boot.run.profiles=local
+
+# 4. run backend unit + integration tests (uses Testcontainers, no live DB needed)
 mvn -B verify
 
-# 3. front
+# 5. front
 cd front
 corepack enable
 pnpm install --ignore-scripts
 pnpm dev
 ```
+
+The BFF reads Postgres + Google + JWT vars from the process environment (so
+`export $(grep -v '^#' .env | xargs)` or a direnv/`.envrc` setup works). Tests
+under `bff/` spin up their own Postgres via Testcontainers and ignore these
+vars.
 
 ## Build
 
@@ -68,6 +81,11 @@ Variables defined:
 | Variable            | Used by                                              | Notes                       |
 |---------------------|------------------------------------------------------|-----------------------------|
 | `POSTGRES_*`        | `local-environment/docker-ticketApp/docker-compose.yml` | DB name, user, password, host port |
+| `DB_URL`            | `bff` (Spring `spring.datasource.url`)               | JDBC URL. Default in `application-local.yml` is `jdbc:postgresql://localhost:6432/ticketAppDb`; override for non-local profiles. |
+| `DB_USER`           | `bff` (Spring `spring.datasource.username`)          | Default in `application-local.yml`: `ticketAppUser`. |
+| `DB_PASSWORD`       | `bff` (Spring `spring.datasource.password`)          | Default in `application-local.yml`: `ticketAppPass`. |
+| `GOOGLE_CLIENT_ID`  | `bff` (`google.client-id`) + `front` (`VITE_GOOGLE_CLIENT_ID`) | OAuth 2.0 Web client id from Google Cloud Console. Same value on both sides — the SPA exchanges the Google `id_token` and the BFF verifies it against this audience. |
+| `BFF_JWT_SECRET`    | `bff` (`bff.jwt.secret`)                             | HS256 signing key for BFF-issued session JWTs. **≥32 chars (256 bits)** or the app refuses to start. Generate with `openssl rand -base64 32`. A dev placeholder ships in `application.yml` so `mvn verify` works without it; replace it in any non-local environment. |
 | `SONARQUBE_TOKEN`   | opencode MCP server, CI workflows (as GitHub secret) | `sqp_...` from <https://sonarcloud.io/account/security>; required |
 | `SONARQUBE_ORG`     | opencode MCP server, CI workflows (as GitHub secret) | this repo's organization: `arepresas`; required |
 | `SONARQUBE_URL`     | opencode MCP server, CI workflows (as GitHub secret) | required, no default — set to `https://sonarcloud.io` (or `https://sonarqube.us` for SonarQube Cloud US, or your self-hosted URL) |
