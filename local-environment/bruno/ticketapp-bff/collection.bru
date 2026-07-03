@@ -6,14 +6,15 @@ docs {
   ticketapp BFF — Spring Boot REST API.
   
   Base path: {{baseUrl}}/api/tickets
-  Auth: none (Spring Security not on classpath)
+  Auth: Bearer JWT from POST /api/auth/google (set `authToken` in the
+        Local environment after exchanging a Google id_token).
   
   Endpoints:
     GET    /api/tickets              list all
     GET    /api/tickets/{id}         get by UUID
-    POST   /api/tickets              create (status starts OPEN)
+    POST   /api/tickets              create from multipart upload (file required)
     PATCH  /api/tickets/{id}/status  change status
-    DELETE /api/tickets/{id}         delete
+    DELETE /api/tickets/{id}         delete (cascades the file bytes)
   
   Actuator:
     GET /actuator/health
@@ -21,4 +22,10 @@ docs {
     GET /actuator/metrics
   
   Status enum: OPEN | IN_PROGRESS | DONE | CANCELLED
+  
+  Upload constraints:
+    - mime: image/* or application/pdf
+    - max size: 10 MB
+    - the file bytes are stored verbatim in the `tickets` table; no
+      filesystem staging.
 }

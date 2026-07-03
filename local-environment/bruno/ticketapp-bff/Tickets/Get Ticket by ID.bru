@@ -5,21 +5,18 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/tickets/:id
+  url: {{baseUrl}}/api/tickets/{{createdTicketId}}
   body: none
-  auth: none
-}
-
-params:path {
-  id: 00000000-0000-0000-0000-000000000000
+  auth: bearer {{authToken}}
 }
 
 docs {
-  Fetch a single ticket by UUID.
-  Returns 200 + Ticket JSON, or 404 with empty body if not found.
-  Path param `id` must be a valid UUID — otherwise Spring returns 400.
+  Fetch a single ticket by UUID. Returns 200 + TicketResponse JSON,
+  or 404 if no row matches the id. Auth-gated.
 }
 
 asserts {
-  res.status: eq 404
+  res.status: eq 200
+  res.headers["content-type"]: contains application/json
+  res.body.id: eq {{createdTicketId}}
 }

@@ -1,5 +1,10 @@
 vars {
   baseUrl: http://localhost:8080
+  # Populate this with the JWT returned by `POST /api/auth/google` after
+  # exchanging a Google id_token. The Tickets collection is auth-gated,
+  # so every request needs `Bearer {{authToken}}` in the Authorization
+  # header.
+  authToken: replace-me-with-bff-jwt
 }
 
 vars:secret [

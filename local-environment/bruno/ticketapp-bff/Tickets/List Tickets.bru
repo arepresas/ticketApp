@@ -7,12 +7,13 @@ meta {
 get {
   url: {{baseUrl}}/api/tickets
   body: none
-  auth: none
+  auth: bearer {{authToken}}
 }
 
 docs {
   Retrieve all tickets, newest first (ORDER BY created_at DESC).
   Returns 200 + JSON array. Empty array if no tickets.
+  Auth-gated: requires a Bearer token.
 }
 
 asserts {
