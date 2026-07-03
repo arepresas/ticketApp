@@ -120,7 +120,7 @@ class BffApplicationIT {
     @Test
     void listReturnsAtLeastOneAfterSeed() {
         String token = loginAndGetToken();
-        Ticket seeded = tickets.save(Ticket.open("list-seed", "x"));
+        tickets.save(Ticket.open("list-seed", "x"));
 
         web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
