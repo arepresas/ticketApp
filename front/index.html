@@ -30,6 +30,7 @@
 	<div id="app-header-mount"></div>
 	<landing-app></landing-app>
 	<dashboard-app></dashboard-app>
+	<new-ticket-app></new-ticket-app>
 	<style>
 		/* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
 		   Toggled reactively by front/src/lib/auth/host.ts based on
@@ -39,6 +40,19 @@
 			display: none;
 		}
 		body.is-authenticated landing-app {
+			display: none;
+		}
+
+		/* <new-ticket-app> shows only when the `is-new` body class is set
+		   by the Header "New" link (or any future router action). When
+		   it is set, both landing and dashboard hide so the upload screen
+		   gets the full viewport. The element itself gates on auth and
+		   renders nothing when signed-out — see NewTicketApp.svelte. */
+		body:not(.is-new) new-ticket-app {
+			display: none;
+		}
+		body.is-new landing-app,
+		body.is-new dashboard-app {
 			display: none;
 		}
 	</style>
