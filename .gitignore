@@ -63,6 +63,7 @@ front/package-lock.json
 ### Local infra ###
 local-environment/.data/
 local-environment/volumes/
+local-environment/docker-ticketApp/pg-data/
 
 ### Temporary files ###
 .tmp
