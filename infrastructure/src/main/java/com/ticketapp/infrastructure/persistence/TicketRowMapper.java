@@ -20,6 +20,9 @@ import java.util.UUID;
  * <p>Timestamps come back from the driver as {@link java.sql.Timestamp};
  * we convert through {@link OffsetDateTime} (S2143) instead of using the
  * deprecated {@code Timestamp.toInstant()} overload directly.
+ *
+ * <p>File columns are nullable; {@code rs.getBytes("file_data")} returns
+ * {@code null} for SQL NULL and is forwarded as-is to the domain.
  */
 final class TicketRowMapper implements RowMapper<Ticket> {
 
@@ -31,12 +34,16 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         Ticket.Status status = Ticket.Status.valueOf(rs.getString("status"));
         Instant createdAt = readInstant(rs, "created_at");
         Instant updatedAt = readInstant(rs, "updated_at");
-        return new Ticket(id, title, description, status, createdAt, updatedAt);
+        String contentType = rs.getString("content_type");
+        String fileName = rs.getString("file_name");
+        byte[] fileData = rs.getBytes("file_data");
+        return new Ticket(id, title, description, status, createdAt, updatedAt,
+                contentType, fileName, fileData);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */
     private static Instant readInstant(ResultSet rs, String column) throws SQLException {
-        return rs.getObject(column, java.time.OffsetDateTime.class)
+        return rs.getObject(column, OffsetDateTime.class)
                 .withOffsetSameInstant(ZoneOffset.UTC)
                 .toInstant();
     }

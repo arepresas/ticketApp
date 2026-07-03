@@ -11,6 +11,12 @@ spring:
     password: ${DB_PASSWORD}
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+  servlet:
+    multipart:
+      # Ticket uploads are capped client-side at 10 MB; raise the Tomcat
+      # ceiling slightly to leave headroom for multipart envelope overhead.
+      max-file-size: 11MB
+      max-request-size: 12MB
 
 management:
   endpoints:
