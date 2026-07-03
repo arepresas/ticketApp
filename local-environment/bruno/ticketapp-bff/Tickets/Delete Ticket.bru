@@ -1,23 +1,19 @@
 meta {
   name: Delete Ticket
   type: http
-  seq: 5
+  seq: 6
 }
 
 delete {
-  url: {{baseUrl}}/api/tickets/:id
+  url: {{baseUrl}}/api/tickets/{{createdTicketId}}
   body: none
-  auth: none
-}
-
-params:path {
-  id: {{createdTicketId}}
+  auth: bearer {{authToken}}
 }
 
 docs {
-  Hard-delete a ticket by UUID.
-  Returns 204 No Content on success.
-  Idempotent: deleting a missing id still returns 204 (no row affected).
+  Permanently delete a ticket and its attached file bytes.
+  Returns 204 No Content on success, or 404 if the ticket doesn't exist.
+  Auth-gated.
 }
 
 asserts {

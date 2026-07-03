@@ -6,29 +6,28 @@ meta {
 
 post {
   url: {{baseUrl}}/api/tickets
-  body: json
-  auth: none
-}
-
-headers {
-  Content-Type: application/json
-}
-
-body:json {
-  {
-    "title": "Sample ticket from Bruno",
-    "description": "Created via local-environment Bruno collection."
-  }
+  body: multipart
+  auth: bearer {{authToken}}
 }
 
 docs {
-  Create a new ticket. Status is always OPEN on creation.
-  Server generates id, createdAt, updatedAt.
-  Returns 201 + full Ticket JSON.
+  Create a new ticket from an uploaded receipt (image or PDF).
   
-  Validation: title and description required by controller signature;
-  no @NotBlank constraints declared yet — null/blank may produce NPE
-  or empty-string description persisted.
+  Multipart parts:
+    - file         (required)  the receipt. mime ∈ image/* or application/pdf. max 10 MB.
+    - title        (optional)  override the title (defaults to the original filename).
+    - description  (optional)  free-form note.
+  
+  Server-generated fields: id, status (always OPEN), createdAt, updatedAt,
+  contentType, fileName, sizeBytes. The file bytes are stored in the DB
+  (BYTEA) and never echoed back on the wire.
+  
+  Returns 201 + TicketResponse JSON. Returns 401 without a Bearer token,
+  400 if the file is missing / wrong type / too large, 500 on I/O failure.
+  
+  To get a `authToken` for the Authorization header, hit
+  `POST /api/auth/google` with a Google `id_token` and copy the
+  `token` field of the response into the Local environment's `authToken`.
 }
 
 asserts {
@@ -36,7 +35,10 @@ asserts {
   res.headers["content-type"]: contains application/json
   res.body.id: isString
   res.body.status: eq OPEN
-  res.body.title: eq Sample ticket from Bruno
+  res.body.title: isString
+  res.body.fileName: isString
+  res.body.contentType: isString
+  res.body.sizeBytes: isNumber
 }
 
 tests {
@@ -44,3 +46,12 @@ tests {
     bru.setVar("createdTicketId", res.body.id);
   });
 }
+
+body:multipart-form {
+  file: @file(receipt.pdf)
+  description: Created via Bruno collection.
+}
+
+# The @file(receipt.pdf) reference resolves to a sibling file next to
+# this request — `local-environment/bruno/ticketapp-bff/Tickets/receipt.pdf`.
+# Replace it with a real receipt of your own to test larger payloads.
