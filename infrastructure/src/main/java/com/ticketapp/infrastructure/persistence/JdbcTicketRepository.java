@@ -31,6 +31,21 @@ public class JdbcTicketRepository implements TicketRepository {
             "id, title, description, status, created_at, updated_at, " +
             "content_type, file_name, file_data";
 
+    private static final String UPSERT_SQL = """
+            INSERT INTO tickets
+                (id, title, description, status, created_at, updated_at,
+                 content_type, file_name, file_data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                title = EXCLUDED.title,
+                description = EXCLUDED.description,
+                status = EXCLUDED.status,
+                updated_at = EXCLUDED.updated_at,
+                content_type = EXCLUDED.content_type,
+                file_name = EXCLUDED.file_name,
+                file_data = EXCLUDED.file_data
+            """;
+
     @Override
     public Optional<Ticket> findById(UUID id) {
         return jdbc.query(
@@ -51,21 +66,7 @@ public class JdbcTicketRepository implements TicketRepository {
     @Override
     public Ticket save(Ticket ticket) {
         jdbc.update(con -> {
-            PreparedStatement ps = con.prepareStatement(
-                    """
-                    INSERT INTO tickets
-                        (id, title, description, status, created_at, updated_at,
-                         content_type, file_name, file_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT (id) DO UPDATE SET
-                        title = EXCLUDED.title,
-                        description = EXCLUDED.description,
-                        status = EXCLUDED.status,
-                        updated_at = EXCLUDED.updated_at,
-                        content_type = EXCLUDED.content_type,
-                        file_name = EXCLUDED.file_name,
-                        file_data = EXCLUDED.file_data
-                    """);
+            PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
             ps.setObject(1, ticket.id());
             ps.setString(2, ticket.title());
             ps.setString(3, ticket.description());
