@@ -28,8 +28,8 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 cp .env.example .env
 $EDITOR .env
 
-# 2. start postgres
-docker compose -f local-environment/docker-compose.yml up -d
+# 2. start postgres (data persists in local-environment/docker-ticketApp/pg-data/)
+docker compose -f local-environment/docker-ticketApp/docker-compose.yml up -d
 
 # 3. run the BFF (dev mode, profile=local picks up application-local.yml)
 #    Default port: 8080. Health: http://localhost:8080/actuator/health
