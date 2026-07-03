@@ -118,6 +118,26 @@ describe('Header', () => {
 		expect(desktopLabels(container)).toEqual(['Tickets', 'New', 'Dashboard']);
 	});
 
+	it('wires the "New" link to the upload-screen hash', () => {
+		// The "New" entry doesn't navigate to an in-page anchor like the
+		// other app links — it opens the <new-ticket-app> shell by setting
+		// the `is-new` body class. Pinning the href keeps that contract
+		// visible from the test surface.
+		snapshot.user = {
+			id: 'u-1',
+			email: 'ada@example.com',
+			name: 'Ada Lovelace'
+		};
+		snapshot.isAuthenticated = true;
+		snapshot.status = 'authenticated';
+
+		const { container } = render(Header);
+
+		const desktopNav = container.querySelector('nav[aria-label="Primary"]');
+		const newLink = desktopNav?.querySelector<HTMLAnchorElement>('a[href="#new"]');
+		expect(newLink?.textContent?.trim()).toBe('New');
+	});
+
 	it('includes the theme toggle and login button', () => {
 		const { container } = render(Header);
 

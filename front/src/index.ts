@@ -4,6 +4,7 @@ import { mount } from 'svelte';
 import TicketApp from './lib/TicketApp.svelte';
 import LandingApp from './lib/landing/LandingApp.svelte';
 import DashboardApp from './lib/auth/DashboardApp.svelte';
+import NewTicketApp from './lib/new/NewTicketApp.svelte';
 import Header from './lib/components/layout/Header.svelte';
 // Eager side-effect import: mounts the EffectHost that toggles
 // `document.body.classList` based on `auth.isAuthenticated`. Must run
@@ -19,4 +20,4 @@ if (headerTarget) {
 	mount(Header, { target: headerTarget });
 }
 
-export { TicketApp, LandingApp, DashboardApp };
+export { TicketApp, LandingApp, DashboardApp, NewTicketApp };

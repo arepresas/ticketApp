@@ -30,25 +30,40 @@
 	import ThemeToggle from '../../landing/ThemeToggle.svelte';
 
 	// Public mode — marketing anchors. Order matters; rendered left-to-right.
-	const publicLinks: ReadonlyArray<{ href: string; label: string }> = [
-		{ href: '#features', label: 'Features' },
-		{ href: '#how-it-works', label: 'How it works' },
-		{ href: '#pricing', label: 'Pricing' },
-		{ href: '#faq', label: 'FAQ' }
-	];
+	const publicLinks: ReadonlyArray<{ href: string; label: string; onClick?: (e: MouseEvent) => void }> =
+		[
+			{ href: '#features', label: 'Features' },
+			{ href: '#how-it-works', label: 'How it works' },
+			{ href: '#pricing', label: 'Pricing' },
+			{ href: '#faq', label: 'FAQ' }
+		];
 
 	// Authenticated mode — app anchors. Replace with router routes later.
-	const appLinks: ReadonlyArray<{ href: string; label: string }> = [
-		{ href: '#main', label: 'Tickets' },
-		{ href: '#main', label: 'New' },
-		{ href: '#main', label: 'Dashboard' }
-	];
+	const appLinks: ReadonlyArray<{ href: string; label: string; onClick?: (e: MouseEvent) => void }> =
+		[
+			{ href: '#main', label: 'Tickets' },
+			{ href: '#new', label: 'New', onClick: openNewTicket },
+			{ href: '#main', label: 'Dashboard' }
+		];
 
 	const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 
 	let dialog: HTMLDialogElement = $state(null!);
 
 	const links = $derived(auth.isAuthenticated ? appLinks : publicLinks);
+
+	/**
+	 * Open the "New ticket" upload screen by setting `body.is-new`. The
+	 * hash gives us a real URL the user can bookmark/back-button to; the
+	 * body class is what the index.html CSS gate reads. `preventDefault`
+	 * stops the browser from jumping the scroll position to a missing
+	 * `#new` anchor.
+	 */
+	function openNewTicket(e: MouseEvent): void {
+		e.preventDefault();
+		window.location.hash = 'new';
+		document.body.classList.add('is-new');
+	}
 
 	function openMenu(): void {
 		dialog?.showModal();
@@ -77,6 +92,7 @@
 			{#each links as link (link.label)}
 				<a
 					href={link.href}
+					onclick={link.onClick}
 					class="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 				>
 					{link.label}
@@ -160,6 +176,7 @@
 			{#each links as link (link.label)}
 				<a
 					href={link.href}
+					onclick={link.onClick}
 					class="rounded-md px-3 py-2 text-sm font-medium hover:bg-accent"
 				>
 					{link.label}
