@@ -31,6 +31,7 @@
 	<landing-app></landing-app>
 	<dashboard-app></dashboard-app>
 	<new-ticket-app></new-ticket-app>
+	<pending-tickets-app></pending-tickets-app>
 	<style>
 		/* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
 		   Toggled reactively by front/src/lib/auth/host.ts based on
@@ -53,6 +54,20 @@
 		}
 		body.is-new landing-app,
 		body.is-new dashboard-app {
+			display: none;
+		}
+
+		/* <pending-tickets-app> mirrors the new-ticket gate: visible
+		   only when the Header "Pending tickets" link adds `is-pending`,
+		   hides landing + dashboard so the list gets the full viewport.
+		   The element gates on auth and renders nothing when signed-out
+		   — see PendingTicketsApp.svelte. */
+		body:not(.is-pending) pending-tickets-app {
+			display: none;
+		}
+		body.is-pending landing-app,
+		body.is-pending dashboard-app,
+		body.is-pending new-ticket-app {
 			display: none;
 		}
 	</style>

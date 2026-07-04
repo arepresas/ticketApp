@@ -41,7 +41,7 @@
 	// Authenticated mode — app anchors. Replace with router routes later.
 	const appLinks: ReadonlyArray<{ href: string; label: string; onClick?: (e: MouseEvent) => void }> =
 		[
-			{ href: '#main', label: 'Tickets' },
+			{ href: '#pending', label: 'Pending tickets', onClick: openPendingTickets },
 			{ href: '#new', label: 'New', onClick: openNewTicket },
 			{ href: '#main', label: 'Dashboard' }
 		];
@@ -51,6 +51,24 @@
 	let dialog: HTMLDialogElement = $state(null!);
 
 	const links = $derived(auth.isAuthenticated ? appLinks : publicLinks);
+
+	/**
+	 * Open the "Pending tickets" list by setting `body.is-pending`.
+	 * Mirrors `openNewTicket` — the hash gives us a bookmarkable URL
+	 * and `preventDefault` keeps the browser from scrolling to a
+	 * missing anchor. Also fires a `pending:open` CustomEvent so the
+	 * `<pending-tickets-app>` shell can react — the body class toggle
+	 * alone is invisible to Svelte's reactivity (the DOM classList is
+	 * not a reactive source), so the screen needs a DOM-level signal
+	 * to trigger its initial fetch.
+	 */
+	function openPendingTickets(e: MouseEvent): void {
+		e.preventDefault();
+		window.location.hash = 'pending';
+		document.body.classList.add('is-pending');
+		document.body.classList.remove('is-new');
+		window.dispatchEvent(new CustomEvent('pending:open'));
+	}
 
 	/**
 	 * Open the "New ticket" upload screen by setting `body.is-new`. The
@@ -63,6 +81,7 @@
 		e.preventDefault();
 		window.location.hash = 'new';
 		document.body.classList.add('is-new');
+		document.body.classList.remove('is-pending');
 	}
 
 	function openMenu(): void {

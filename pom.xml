@@ -13,7 +13,8 @@
 
     <modules>
         <module>domain</module>
-        <module>infrastructure</module>
+        <module>persistence</module>
+        <module>minimax-ai</module>
         <module>bff</module>
     </modules>
 
@@ -36,6 +37,8 @@
         <liquibase.version>5.0.3</liquibase.version>
         <spring-boot.version>4.1.0</spring-boot.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <pdfbox.version>3.0.7</pdfbox.version>
+        <openai-java.version>4.9.0</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
@@ -52,7 +55,12 @@
             </dependency>
             <dependency>
                 <groupId>com.ticketapp</groupId>
-                <artifactId>infrastructure</artifactId>
+                <artifactId>persistence</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.ticketapp</groupId>
+                <artifactId>minimax-ai</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
@@ -64,6 +72,26 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
+            <dependency>
+                <!-- Official OpenAI Java SDK. The `openai-java` artifact
+                     on Maven Central is an empty 342-byte stub that
+                     pulls in the real implementation via
+                     `openai-java-core` (the same way the Gradle module
+                     metadata does it). Both are required. -->
+                <groupId>com.openai</groupId>
+                <artifactId>openai-java</artifactId>
+                <version>${openai-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.openai</groupId>
+                <artifactId>openai-java-core</artifactId>
+                <version>${openai-java.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
@@ -95,6 +123,14 @@
                     <configuration>
                         <release>${java.version}</release>
                         <parameters>true</parameters>
+                        <proc>full</proc>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>${lombok.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
                     </configuration>
                 </plugin>
                 <plugin>

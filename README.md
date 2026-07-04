@@ -6,9 +6,10 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 
 | Path | Stack |
 |------|-------|
-| `domain/` | Pure Java domain model (no deps) |
-| `infrastructure/` | JDBC + Liquibase persistence |
-| `bff/` | Spring Boot 4 backend-for-frontend |
+| `domain/` | Pure Java domain model (no deps); owns the `ReceiptExtractor` port |
+| `persistence/` | JDBC + Liquibase persistence |
+| `minimax-ai/` | Provider implementation of the `ReceiptExtractor` port (MiniMax) |
+| `bff/` | Spring Boot 4 backend-for-frontend; orchestrates against the port |
 | `front/` | Svelte 5 + Vite 8 web components |
 | `local-environment/` | docker-compose (PostgreSQL 18) |
 | `.github/` | CI workflows, Dependabot, PR template |

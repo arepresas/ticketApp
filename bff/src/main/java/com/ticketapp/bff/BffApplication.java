@@ -1,11 +1,25 @@
 package com.ticketapp.bff;
 
+import com.ticketapp.bff.ai.AiProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@ComponentScan(basePackages = { "com.ticketapp.bff", "com.ticketapp.infrastructure", "com.ticketapp.domain" })
+@EnableScheduling   // ADR 0006 — enables the @Scheduled TicketExtractionJob.
+@EnableConfigurationProperties(AiProperties.class)
+// Scans the BFF module, the domain module, and the persistence
+// module so the @Repository beans (TicketRepository,
+// TicketExtractionRepository, JdbcTicketExtractionRepository) are
+// registered. The AI module (minimax-ai today) is wired through
+// Spring Boot autoconfiguration — see ADR 0007.
+@ComponentScan(basePackages = {
+        "com.ticketapp.bff",
+        "com.ticketapp.domain",
+        "com.ticketapp.persistence"
+})
 public class BffApplication {
     static {
         // google-auth-library emits a benign warning when no application

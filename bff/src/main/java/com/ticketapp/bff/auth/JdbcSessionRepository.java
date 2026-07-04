@@ -1,5 +1,6 @@
 package com.ticketapp.bff.auth;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -12,13 +13,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
+@RequiredArgsConstructor
 public class JdbcSessionRepository implements SessionRepository {
 
     private final JdbcTemplate jdbc;
-
-    public JdbcSessionRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
 
     private static final RowMapper<Session> MAPPER = (rs, rowNum) -> new Session(
             (UUID) rs.getObject("jti"),

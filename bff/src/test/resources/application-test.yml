@@ -1,0 +1,37 @@
+# Test profile overrides — operator-layer for the test context.
+#
+# Loaded automatically by @SpringBootTest when the `test` profile is
+# active (the default for Spring Boot tests). The ITs in this module
+# also activate it via @ActiveProfiles("test") in individual ITs.
+#
+# This file is hermetic on purpose — tests must not be affected by
+# the developer's local `.env`. Every key under `ticketapp.ai.*` is
+# supplied explicitly below (no env-var reads, no defaults from
+# application.yml — application.yml has no defaults either, by
+# design, so the operator layer is always explicit).
+#
+# Goals:
+#   * Disable the AI extraction scheduler so CI doesn't burn tokens.
+#   * Use a stable fake JWT secret so SessionTokenService produces
+#     deterministic tokens across the test suite.
+#   * Pin cron to a value that never fires naturally; we drive
+#     scheduler ticks by hand where needed.
+
+ticketapp:
+  ai:
+    enabled: false
+    # Run the cron once a year so that if `enabled` is ever flipped
+    # in a test it doesn't fire on test class load.
+    cron: "0 0 0 1 1 ?"
+    batch-size: 5
+    retry-attempts: 2
+    minimax:
+      base-url: "https://api.minimax.io/v1"
+      api-key: "test-api-key-not-used"
+      model: "MiniMax-M3"
+      timeout-ms: 30000
+
+bff:
+  jwt:
+    secret: "test-secret-must-be-at-least-32-chars-long-for-hs256"
+    ttl-hours: 1

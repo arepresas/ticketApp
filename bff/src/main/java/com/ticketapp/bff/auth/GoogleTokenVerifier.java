@@ -4,8 +4,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -29,9 +28,8 @@ import java.util.Optional;
  * fire-and-forget contract for tests and other call sites.
  */
 @Service
+@Slf4j
 public class GoogleTokenVerifier {
-
-    private static final Logger log = LoggerFactory.getLogger(GoogleTokenVerifier.class);
 
     private final GoogleIdTokenVerifier delegate;
     private final String expectedAudience;

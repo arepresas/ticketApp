@@ -15,7 +15,8 @@
 ## Modules touched
 
 - [ ] `domain`
-- [ ] `infrastructure`
+- [ ] `persistence`
+- [ ] `minimax-ai` (or other AI provider module)
 - [ ] `bff`
 - [ ] `front`
 - [ ] `local-environment`
@@ -38,7 +39,7 @@
 ## Database / migrations
 
 - [ ] No DB change
-- [ ] New migration(s) added under `infrastructure/src/main/resources/db/migration`
+- [ ] New migration(s) added under `persistence/src/main/resources/db/changelog/changes/`
 - [ ] Backward-compatible (additive only)
 - [ ] Requires data backfill
 

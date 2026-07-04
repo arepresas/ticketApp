@@ -86,3 +86,26 @@ export const createTicket = async (
 	}
 	return (await res.json()) as CreatedTicket;
 };
+
+/**
+ * Fetch the tickets that haven't reached a terminal state (OPEN +
+ * IN_PROGRESS). Backed by {@code GET /api/tickets/pending} on the BFF
+ * — the filter happens server-side so the response stays small
+ * regardless of the total ticket count.
+ *
+ * Newest first (ordered by `createdAt` desc). The wire shape matches
+ * {@link CreatedTicket} — bytes are omitted, same as the rest of the
+ * ticket API.
+ *
+ * @param token BFF session JWT. The endpoint returns 401 without one.
+ */
+export const listPendingTickets = async (token: string): Promise<CreatedTicket[]> => {
+	const res = await fetch(`${API_BASE}/pending`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket[];
+};

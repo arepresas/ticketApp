@@ -2,6 +2,8 @@ package com.ticketapp.bff.api;
 
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
+import com.ticketapp.bff.auth.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,12 +14,16 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@ActiveProfiles("test")
 @Import(TestGoogleConfig.class)
 class TicketControllerIT {
 
@@ -57,6 +64,23 @@ class TicketControllerIT {
 
     @Autowired
     com.ticketapp.domain.TicketRepository tickets;
+
+    @Autowired
+    UserRepository users;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @BeforeEach
+    void cleanSlate() {
+        // Reset DB between tests so the upserted user id from one
+        // test doesn't leak into another (and so leftover tickets
+        // don't pollute the list assertions).
+        jdbc.update("DELETE FROM ticket_extractions");
+        jdbc.update("DELETE FROM tickets");
+        jdbc.update("DELETE FROM auth_sessions");
+        jdbc.update("DELETE FROM app_users");
+    }
 
     private WebTestClient web() {
         return WebTestClient.bindToServer()
@@ -171,10 +195,15 @@ class TicketControllerIT {
         assertThat(response.sizeBytes()).isPositive();
 
         // Verify the bytes round-tripped through the DB.
-        var persisted = tickets.findById(response.id());
+        UUID owner = users.findByGoogleSub("google-sub-stub")
+                .orElseThrow(() -> new IllegalStateException(
+                        "test setup: user row not created — call loginAndGetToken first"))
+                .id();
+        var persisted = tickets.findById(response.id(), owner);
         assertThat(persisted).isPresent();
         assertThat(persisted.get().fileData()).isEqualTo(bytes);
         assertThat(persisted.get().contentType()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
+        assertThat(persisted.get().ownerId()).isEqualTo(owner);
     }
 
     @Test
