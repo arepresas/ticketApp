@@ -1,5 +1,6 @@
 package com.ticketapp.bff.auth;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -14,13 +15,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
+@RequiredArgsConstructor
 public class JdbcUserRepository implements UserRepository {
 
     private final JdbcTemplate jdbc;
-
-    public JdbcUserRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
 
     private static final String COLS =
             "id, google_sub, email, name, picture_url, created_at, last_login_at";

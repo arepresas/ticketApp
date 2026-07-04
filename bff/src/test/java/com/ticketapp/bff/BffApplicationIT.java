@@ -2,18 +2,24 @@ package com.ticketapp.bff;
 
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.AuthController;
+import com.ticketapp.bff.auth.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,9 +31,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * full multipart upload flow and the auth path; this stays focused on
  * context wiring, health, and the status-change/delete endpoints which
  * are unchanged from before the upload migration.
+ *
+ * <p>Ownership scoping: seeded tickets carry the logged-in user's id
+ * so the auth-protected endpoints can read them back. A separate
+ * {@link com.ticketapp.bff.api.TicketOwnershipIT} exercises the
+ * cross-tenant case.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
+@ActiveProfiles("test")
 @Import(TestGoogleConfig.class)
 class BffApplicationIT {
 
@@ -48,7 +60,25 @@ class BffApplicationIT {
     TicketRepository tickets;
 
     @Autowired
+    UserRepository users;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @Autowired
     com.ticketapp.bff.api.TicketController ticketController;
+
+    @BeforeEach
+    void cleanSlate() {
+        // Wipe per-test so each scenario starts from a clean DB.
+        // The Testcontainers container is reused across tests in the
+        // class (static @Container + @ServiceConnection), so a clean
+        // slate is required.
+        jdbc.update("DELETE FROM ticket_extractions");
+        jdbc.update("DELETE FROM tickets");
+        jdbc.update("DELETE FROM auth_sessions");
+        jdbc.update("DELETE FROM app_users");
+    }
 
     private WebTestClient web() {
         return WebTestClient.bindToServer()
@@ -68,6 +98,15 @@ class BffApplicationIT {
         return resp.token();
     }
 
+    /** After login, look up the persisted user id (UUID derived from
+     * the google-sub in the upsert flow). */
+    private UUID ownerId() {
+        return users.findByGoogleSub("google-sub-stub")
+                .orElseThrow(() -> new IllegalStateException(
+                        "test setup: user row not created — call loginAndGetToken first"))
+                .id();
+    }
+
     @Test
     void contextLoadsAndControllerIsRegistered() {
         assertThat(ticketController).isNotNull();
@@ -85,7 +124,8 @@ class BffApplicationIT {
         // Seed directly through the repository — the upload path is covered
         // by TicketControllerIT. This test exercises GET/PATCH/DELETE only.
         String token = loginAndGetToken();
-        Ticket seeded = tickets.save(Ticket.open("smoke", "smoke test"));
+        UUID owner = ownerId();
+        Ticket seeded = tickets.save(Ticket.open(owner, "smoke", "smoke test"));
 
         // GET
         web().get().uri("/api/tickets/{id}", seeded.id())
@@ -120,7 +160,8 @@ class BffApplicationIT {
     @Test
     void listReturnsAtLeastOneAfterSeed() {
         String token = loginAndGetToken();
-        tickets.save(Ticket.open("list-seed", "x"));
+        UUID owner = ownerId();
+        tickets.save(Ticket.open(owner, "list-seed", "x"));
 
         web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + token)

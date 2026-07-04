@@ -1,0 +1,35 @@
+-- extraction_payload: full structured response from the AI provider.
+--
+-- On 2026-07-05 we moved raw_response from JSONB to TEXT (V5) because
+-- the upstream started emitting non-JSON wrapping (the parser strips
+-- fences / think blocks, but the JSONB type couldn't accept the
+-- wrapped bytes). That move traded the JSONB advantage for survivability.
+--
+-- This migration adds back a JSONB column dedicated to the structured
+-- part of the response: the parser-extracted object (the same shape we
+-- feed TicketExtraction, but richer — including per-product discounts,
+-- per-line pricePerKg vs pricePerUnit, full merchant transaction data).
+-- See the schema in the EXTRACTION_PROMPT and the curl that confirmed
+-- it works (item.discounts[], totals.{gross_total,total_discount,
+-- amount_to_pay}, vat_breakdown, etc.).
+--
+-- Why a second column instead of reusing raw_response_text? The text
+-- column carries whatever the model emitted (think blocks + fences +
+-- body). The JSONB column carries the canonical, parsed object so
+-- downstream queries (dashboard, analytics) can index into the
+-- structured fields without re-parsing on every read.
+--
+-- Additive: nullable, no default, no rewrite of existing rows.
+-- Backfill is intentionally empty — historical rows don't have the
+-- structured object, and reconstructing it from raw_response_text
+-- would be a separate project (the model versions that produced those
+-- rows are gone).
+--
+-- Plan:
+--   * V7 (this file): add extraction_payload JSONB, nullable.
+--   * V8 (follow-up): NOT NULL after every new row carries it; or
+--     drop the column if the project decides parsing is no longer
+--     worth persisting separately.
+
+ALTER TABLE ticket_extractions
+    ADD COLUMN extraction_payload JSONB;

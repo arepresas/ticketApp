@@ -20,6 +20,7 @@ import java.util.UUID;
  */
 public record Ticket(
         UUID id,
+        UUID ownerId,
         String title,
         String description,
         Status status,
@@ -27,24 +28,27 @@ public record Ticket(
         Instant updatedAt,
         String contentType,
         String fileName,
-        byte[] fileData
+        byte[] fileData,
+        String errorMessage
 ) {
 
     public Ticket {
         if (id == null) throw new NullPointerException("id");
+        if (ownerId == null) throw new NullPointerException("ownerId");
         if (title == null) throw new NullPointerException("title");
         if (description == null) description = "";
         if (status == null) throw new NullPointerException("status");
         if (createdAt == null) throw new NullPointerException("createdAt");
         if (updatedAt == null) throw new NullPointerException("updatedAt");
+        if (errorMessage != null && errorMessage.isBlank()) errorMessage = null;
     }
 
     /**
      * Build a ticket without an attached file. Kept for backward
      * compatibility with callers (tests, fixtures) that don't upload.
      */
-    public static Ticket open(String title, String description) {
-        return open(title, description, null, null, null);
+    public static Ticket open(UUID ownerId, String title, String description) {
+        return open(ownerId, title, description, null, null, null);
     }
 
     /**
@@ -52,19 +56,51 @@ public record Ticket(
      * is preserved as-is — callers decide whether to use the upload's
      * original filename or a user-typed title.
      */
-    public static Ticket open(String title,
+    public static Ticket open(UUID ownerId,
+                              String title,
                               String description,
                               String contentType,
                               String fileName,
                               byte[] fileData) {
         Instant now = Instant.now();
-        return new Ticket(UUID.randomUUID(), title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData);
+        return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
+                now, now, contentType, fileName, fileData, null);
     }
 
+    /**
+     * Transition to a new status. When the target status is anything
+     * other than {@link Status#ON_ERROR}, any previously stored error
+     * message is cleared — this is how a manual retry (PATCH
+     * {@code /api/tickets/{id}/status} → {@code OPEN}) wipes the
+     * failure reason so the dashboard no longer shows a stale error.
+     * The orchestrator never sets {@code ON_ERROR} via this method;
+     * it calls {@link #markError(String)} instead.
+     */
     public Ticket withStatus(Status newStatus) {
-        return new Ticket(id, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData);
+        String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
+        return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
+                contentType, fileName, fileData, cleared);
+    }
+
+    /**
+     * Mark the ticket as failed. Sets status to {@link Status#ON_ERROR}
+     * and stores the supplied message so the dashboard and operators
+     * can see why the scheduled extraction did not succeed. ON_ERROR
+     * is terminal from the scheduler's POV — the next cron tick
+     * filters on {@code Status.OPEN} only, so a failed ticket is not
+     * retried automatically. A user-initiated PATCH (to {@code OPEN}
+     * or {@code CANCELLED}) clears the message via
+     * {@link #withStatus(Status)}.
+     *
+     * @param message human-readable failure reason. Callers are
+     *                expected to truncate before calling (the
+     *                orchestrator caps at 2000 chars) — this method
+     *                does not enforce a bound.
+     */
+    public Ticket markError(String message) {
+        return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
+                createdAt, Instant.now(),
+                contentType, fileName, fileData, message);
     }
 
     @Override
@@ -72,6 +108,7 @@ public record Ticket(
         if (this == o) return true;
         if (!(o instanceof Ticket other)) return false;
         return java.util.Objects.equals(id, other.id)
+                && java.util.Objects.equals(ownerId, other.ownerId)
                 && java.util.Objects.equals(title, other.title)
                 && java.util.Objects.equals(description, other.description)
                 && status == other.status
@@ -79,23 +116,35 @@ public record Ticket(
                 && java.util.Objects.equals(updatedAt, other.updatedAt)
                 && java.util.Objects.equals(contentType, other.contentType)
                 && java.util.Objects.equals(fileName, other.fileName)
-                && Arrays.equals(fileData, other.fileData);
+                && Arrays.equals(fileData, other.fileData)
+                && java.util.Objects.equals(errorMessage, other.errorMessage);
     }
 
     @Override
     public int hashCode() {
-        int h = java.util.Objects.hash(id, title, description, status, createdAt,
-                updatedAt, contentType, fileName);
+        int h = java.util.Objects.hash(id, ownerId, title, description, status,
+                createdAt, updatedAt, contentType, fileName, errorMessage);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
     @Override
     public String toString() {
-        return "Ticket[id=" + id + ", title=" + title + ", description=" + description
-                + ", status=" + status + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
+        return "Ticket[id=" + id + ", ownerId=" + ownerId + ", title=" + title
+                + ", description=" + description + ", status=" + status
+                + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
                 + ", contentType=" + contentType + ", fileName=" + fileName
-                + ", fileData=" + Arrays.toString(fileData) + "]";
+                + ", fileData=" + Arrays.toString(fileData)
+                + ", errorMessage=" + errorMessage + "]";
     }
 
-    public enum Status { OPEN, IN_PROGRESS, DONE, CANCELLED }
+    /**
+     * Lifecycle states. {@link #ON_ERROR} is the terminal failure
+     * state for the scheduled extraction pipeline: a ticket reaches
+     * it when the AI provider call throws (non-2xx, parse failure,
+     * empty reply, etc.) and is not retried automatically. Manual
+     * intervention via PATCH {@code /api/tickets/{id}/status} moves
+     * it back to {@link #OPEN} (clears the error message) or
+     * {@link #CANCELLED}.
+     */
+    public enum Status { OPEN, IN_PROGRESS, ON_ERROR, DONE, CANCELLED }
 }

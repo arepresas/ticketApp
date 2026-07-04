@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.ticketapp</groupId>
+        <artifactId>ticketapp-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>minimax-ai</artifactId>
+    <name>ticketapp-minimax-ai</name>
+    <description>Provider implementation of the ReceiptExtractor port
+        backed by MiniMax's chat-completions API (ADR 0007).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.ticketapp</groupId>
+            <artifactId>domain</artifactId>
+        </dependency>
+
+        <!-- Apache PDFBox: required by PdfTextExtractor. MiniMax's
+             chat-completions endpoint doesn't accept PDFs natively, so
+             we extract text before sending (ADR 0006, D3). -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+
+        <!-- OpenAI Java SDK: the official client for OpenAI-compatible
+             APIs. MiniMax exposes its chat-completions endpoint as
+             OpenAI-compatible (ADR 0006, D6) so we can drive it with
+             the SDK and a custom baseUrl. -->
+        <dependency>
+            <groupId>com.openai</groupId>
+            <artifactId>openai-java</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <!-- Required for @Configuration + Spring Boot autoconfiguration
+                 imports. The web stack is intentionally NOT included; this
+                 module is a library, not a runnable service. -->
+        </dependency>
+        <!-- Bean validation for MinimaxAiProperties (@NotBlank,
+             @Positive). Jakarta validation is part of the standard
+             Spring Boot dependency management so no version is needed. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

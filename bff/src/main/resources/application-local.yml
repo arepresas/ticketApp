@@ -1,7 +1,52 @@
-# Local profile — matches docker-compose (local-environment/docker-ticketApp/docker-compose.yml)
-# Override docker compose env (see .env.example).
+# Local profile — operator-layer override for local development.
+#
+# Activate with: `mvn -pl bff spring-boot:run
+#   -Dspring-boot.run.profiles=local`
+#
+# This file supplies values for the operator-layer contract documented
+# at the bottom of `application.yml`. By project convention no
+# defaults live here either: every key either is supplied literally
+# below or comes from the environment / `.env`.
+#
+# `spring.config.import: optional:file:.env[.properties]` loads the
+# project-root `.env` so docker-compose-style exports (DB_URL,
+# MINIMAX_*, BFF_JWT_SECRET, GOOGLE_CLIENT_ID) flow through. The
+# `optional:` prefix means a missing `.env` is fine — the local
+# literals below cover the rest.
+#
+# Anything that has a real value in `.env` MUST NOT be repeated
+# here, because a YAML literal would win over the .env-imported
+# placeholder. The MiniMax api-key / base-url / model / timeout are
+# loaded from `.env`; this profile only configures the local-dev
+# database coordinates and the BFF scheduler knobs.
+
 spring:
+  config:
+    import: "optional:file:.env[.properties]"
   datasource:
     url: jdbc:postgresql://localhost:6432/ticketAppDb
     username: ticketAppUser
     password: ticketAppPass
+
+# Local-dev JWT secret. Production must set BFF_JWT_SECRET to a
+# ≥ 32-char value (see security.md §Auth-specific). Local uses a
+# deterministic placeholder so the dev can sign in without generating
+# a real secret.
+bff:
+  jwt:
+    secret: dev-only-placeholder-secret-change-me-please-32
+
+ticketapp:
+  ai:
+    enabled: true
+    cron: "*/10 * * * * *"
+    batch-size: 5
+    retry-attempts: 2
+    minimax:
+      base-url: https://api.minimax.io/v1
+      model:    MiniMax-M3
+      # Two-minute request budget. Multimodal extraction with images
+      # takes 10-30 s on MiniMax-M3; 3 s was too tight and caused
+      # OpenAIIoException("Request failed") on every ticket.
+      # Tune via MINIMAX_TIMEOUT_MS in .env when needed.
+      timeout-ms: 120000

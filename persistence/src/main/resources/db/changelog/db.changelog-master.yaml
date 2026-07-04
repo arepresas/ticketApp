@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - include:
+      file: changes/V1__init_tickets.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V2__auth.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V3__add_ticket_file.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V4__ticket_extractions.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V5__add_raw_response_text.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V7__add_extraction_payload.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V8__add_ticket_error_message.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V9__add_ticket_owner_id.sql
+      relativeToChangelogFile: true

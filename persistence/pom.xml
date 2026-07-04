@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.ticketapp</groupId>
+        <artifactId>ticketapp-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>persistence</artifactId>
+    <name>ticketapp-persistence</name>
+    <description>Persistence: JDBC + Liquibase. Implements the domain
+        repository ports for tickets and ticket_extractions (ADR 0007).
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.ticketapp</groupId>
+            <artifactId>domain</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-liquibase</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+
+        <!-- Jackson 2: pinned explicitly because persistence has no
+             web starter, so the transitive Jackson is test-scoped only.
+             We need it at compile time to round-trip the products JSONB
+             column (see ExtractionRowMapper). Version managed by
+             Spring Boot parent → stays in sync with the bff. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-jackson2</artifactId>
+        </dependency>
+
+        <!-- Lombok: provided scope, version managed by Spring Boot parent
+             alongside the other modules. Used by ExtractionRowMapper
+             (@RequiredArgsConstructor, @UtilityClass, @NonNull) to
+             collapse the JDBC mapper's manual constructor and the
+             JsonbSupport helper's private ctor. -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <!--
+                    forkCount=1 + reuseForks=true forces all *IT classes
+                    in this module to run inside a single JVM. Required
+                    because AbstractPostgresIntegrationTest declares the
+                    Testcontainers Postgres container as a `static`
+                    `@Container` field — without a single JVM the
+                    container is recreated per class, which collides
+                    with how the Spring test context caches its
+                    DataSource and runs into "Connection is not
+                    available" warnings when the new container starts
+                    before the old one has fully released its ports.
+                -->
+                <configuration>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,5 +1,6 @@
 package com.ticketapp.bff.auth;
 
+import lombok.RequiredArgsConstructor;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,7 @@ import java.util.Optional;
  * while still letting protected routes return 401 cleanly.
  */
 @Component
+@RequiredArgsConstructor
 public class SessionFilter extends OncePerRequestFilter {
 
     static final String ATTR_USER = "auth.user";
@@ -29,11 +31,6 @@ public class SessionFilter extends OncePerRequestFilter {
 
     private final SessionTokenService sessions;
     private final UserRepository users;
-
-    public SessionFilter(SessionTokenService sessions, UserRepository users) {
-        this.sessions = sessions;
-        this.users = users;
-    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,

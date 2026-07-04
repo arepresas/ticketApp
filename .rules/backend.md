@@ -1,17 +1,30 @@
 # Backend rules (Java + Spring)
 
-> Load this pack when editing Java code under `domain/`, `infrastructure/`, or `bff/`.
+> Load this pack when editing Java code under `domain/`, `persistence/`, `minimax-ai/`, or `bff/`.
 
 ## Layer boundaries (build-break if violated)
 
 ```
-bff  ──▶  infrastructure  ──▶  domain
- └────────────────────────────▶
+                       ┌────────────┐
+                       │   domain   │   (no outward deps)
+                       └────────────┘
+                            ▲   ▲
+              ┌─────────────┘   └────────────┐
+              │                              │
+       ┌─────────────┐                ┌─────────────┐
+       │ persistence │                │  minimax-ai │   (ADR 0007)
+       └─────────────┘                └─────────────┘
+              ▲                              ▲
+              └─────────────┐   ┌────────────┘
+                            │   │
+                       ┌────────────┐
+                       │     bff    │
+                       └────────────┘
 ```
 
 - `domain` imports **only** `java.*` and JDK-only annotations (`org.jetbrains.annotations`).
-- `infrastructure` imports `domain` and JDBC drivers/Liquibase. **Never** `bff`.
-- `bff` imports `domain` and `infrastructure`. Holds Spring wiring, controllers, DTOs.
+- `persistence` and `minimax-ai` import `domain` only. **Never** `bff`. **Never** each other.
+- `bff` imports all three (`domain`, `persistence`, `minimax-ai`). Holds Spring wiring, controllers, DTOs.
 
 If a reverse dependency is required, stop and write an ADR (`docs/adr/`).
 
@@ -26,18 +39,22 @@ com.ticketapp.<module>.<concern>.<role>
 | `com.ticketapp.bff.api` | `@RestController` classes |
 | `com.ticketapp.bff.auth` | `SessionFilter`, `SessionTokenService`, `GoogleTokenVerifier`, `AuthenticatedUser` |
 | `com.ticketapp.bff.auth` | Repository interfaces (`SessionRepository`, `UserRepository`) |
-| `com.ticketapp.infrastructure.auth` | JDBC implementations (`JdbcSessionRepository`, `JdbcUserRepository`) |
+| `com.ticketapp.persistence` | JDBC implementations (`JdbcTicketRepository`, `JdbcTicketExtractionRepository`, ...) |
 | `com.ticketapp.domain.<bounded-context>` | Pure model |
+| `com.ticketapp.domain.ai` | Provider-agnostic ports (`ReceiptExtractor`) — ADR 0007 |
+| `com.ticketapp.minimaxai` | Provider implementation of the `ReceiptExtractor` port |
 
 **Banned package names**: `util`, `helpers`, `common`, `shared`, `misc`, `dto`, `constants`. Lift to `domain` (if pure) or accept duplication.
 
 ## Idioms
 
-- Records for value objects and DTOs. No Lombok.
+- Records for value objects and DTOs. Lombok is allowed in BFF and backend modules for boilerplate reduction (for example `@RequiredArgsConstructor`, `@Slf4j`) when behavior remains explicit and code stays easy to review.
 - Constructor injection only. No `@Autowired` on fields.
 - `@ConfigurationProperties` records when 3+ properties belong to the same concern.
+- Provider-specific properties (`@ConfigurationProperties("ticketapp.ai.<provider>.*")`) live with the provider module, not in the BFF. The BFF owns provider-agnostic knobs (`enabled`, `cron`, `batchSize`, `retryAttempts`) only.
 - Throw domain-specific unchecked exceptions with stable error codes (`AUTH_SESSION_EXPIRED`). Map to `ProblemDetail` (RFC 7807) in a single `@RestControllerAdvice`.
 - Never `catch (Exception)` or `catch (Throwable)`. Never silently swallow.
+- When a method declares `throws X`, the caller catches `X` and propagates. Provider modules wrap their internal failures into domain exceptions at the port boundary — callers should never see provider-specific exception classes.
 
 ## What to avoid
 
@@ -47,6 +64,7 @@ com.ticketapp.<module>.<concern>.<role>
 - Field injection, circular bean dependencies.
 - Catching and re-logging without rethrow.
 - Returning `Map<String, Object>` from controllers — use a typed DTO/record.
+- Importing a provider-specific class from the BFF (or anywhere outside the provider module). The orchestrator depends only on the port.
 
 ## Auth-specific (in `bff/auth/**`)
 
@@ -74,3 +92,4 @@ com.ticketapp.<module>.<concern>.<role>
 - [ ] No new dependencies without PR-body justification.
 - [ ] No secrets in `application.yml` defaults.
 - [ ] Layer boundaries still hold (`mvn -B -ntp dependency:tree` is clean).
+- [ ] If you added a new provider module: it ships a Spring Boot autoconfiguration that registers a `ReceiptExtractor` bean; the BFF never imports any of its classes.

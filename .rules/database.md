@@ -6,7 +6,7 @@
 
 - One logical change per changeset file.
 - Filename: `YYYYMMDDHHMMSS_<short-descriptor>.yaml` (or `.xml`, `.sql`).
-- Files live under `infrastructure/src/main/resources/db/migration/`.
+- Files live under `persistence/src/main/resources/db/changelog/changes/`.
 - The numeric prefix determines apply order. Never renumber an existing shipped changeset.
 - The master changelog (`db.changelog-master.yaml`) includes files in lexicographic order. Don't hand-edit it once a changeset has shipped.
 
@@ -44,7 +44,7 @@
 - `JdbcTemplate` or `NamedParameterJdbcTemplate`. No JPA/Hibernate.
 - One mapper method per query. Mappers are package-private static methods on the repository.
 - No SQL string concatenation. Use parameter binding.
-- Transactional boundaries live in `bff` service classes, not in `infrastructure` repositories.
+- Transactional boundaries live in `bff` service classes, not in `persistence` repositories.
 
 ## Migration verification in tests
 
@@ -62,7 +62,7 @@
 
 ## Quick checklist before pushing
 
-- [ ] New changeset under `infrastructure/src/main/resources/db/migration/`
+- [ ] New changeset under `persistence/src/main/resources/db/changelog/changes/`
 - [ ] Master changelog includes the new file in order
 - [ ] Migration is additive or has an ADR justifying the destructive change
 - [ ] Constraints, indexes, and column types follow the conventions above

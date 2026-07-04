@@ -34,12 +34,32 @@ logging:
 
 google:
   # OAuth 2.0 Web client id (matches front VITE_GOOGLE_CLIENT_ID).
-  client-id: ${GOOGLE_CLIENT_ID:}
+  client-id: ${GOOGLE_CLIENT_ID}
 
 bff:
   jwt:
-    # HS256 secret — generate locally with `openssl rand -base64 32`.
-    # NEVER commit a real value. The placeholder below is 32+ chars so
-    # the app starts in dev; replace via env in any non-local environment.
-    secret: ${BFF_JWT_SECRET:dev-only-placeholder-secret-change-me-please-32}
+    # HS256 secret. Set BFF_JWT_SECRET to a value generated with
+    # `openssl rand -base64 32` (must be ≥ 32 chars; the application
+    # refuses to start otherwise — see security.md §Auth-specific).
+    secret: ${BFF_JWT_SECRET}
     ttl-hours: 24
+
+ticketapp:
+  ai:
+    # Operator layer supplies every key under
+    # `ticketapp.ai.{provider}.*` and the provider-agnostic keys
+    # (`enabled`, `cron`, `batch-size`, `retry-attempts`).
+    # application-local.yml supplies the local-dev defaults;
+    # application-test.yml supplies test-context defaults; and in
+    # production all of these come from the deploy environment.
+    # No fallbacks here on purpose — see ADR 0007 D3 (provider
+    # selection happens via the classpath, not via this file).
+    enabled: ${TICKETAPP_AI_ENABLED}
+    cron: ${TICKETAPP_AI_CRON}
+    batch-size: ${TICKETAPP_AI_BATCH_SIZE}
+    retry-attempts: ${TICKETAPP_AI_RETRY_ATTEMPTS}
+    minimax:
+      base-url: ${MINIMAX_BASE_URL}
+      model: ${MINIMAX_MODEL}
+      timeout-ms: ${MINIMAX_TIMEOUT_MS}
+      api-key: ${MINIMAX_API_KEY}

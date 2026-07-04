@@ -58,7 +58,7 @@ For changes that touch architecture (new module, new auth flow, new persistence 
 
 ### 4.2 Code style
 
-- Java: see `CONVENTIONS.md` §3. Constructor injection, records for value objects, no Lombok.
+- Java: see `CONVENTIONS.md` §3. Constructor injection, records for value objects, Lombok allowed for boilerplate reduction when readability stays high.
 - SQL: see `CONVENTIONS.md` §4. Liquibase for every schema change.
 - Svelte/TS: see `CONVENTIONS.md` §5. Runes, strict TS, shadcn-style primitives.
 - Tests: see `CONVENTIONS.md` §9. Test the behaviour, not the implementation.

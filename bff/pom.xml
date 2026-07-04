@@ -21,7 +21,15 @@
         </dependency>
         <dependency>
             <groupId>com.ticketapp</groupId>
-            <artifactId>infrastructure</artifactId>
+            <artifactId>persistence</artifactId>
+        </dependency>
+        <!-- AI provider module — ADR 0007. Drop this <dependency>
+             and replace with another (e.g. ticketapp-openai-ai) to
+             swap providers; the ReceiptExtractor bean comes from
+             whatever AI module's autoconfiguration is on the classpath. -->
+        <dependency>
+            <groupId>com.ticketapp</groupId>
+            <artifactId>minimax-ai</artifactId>
         </dependency>
 
         <dependency>
@@ -102,6 +110,11 @@
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 

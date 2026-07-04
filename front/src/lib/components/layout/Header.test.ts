@@ -115,7 +115,7 @@ describe('Header', () => {
 
 		const { container } = render(Header);
 
-		expect(desktopLabels(container)).toEqual(['Tickets', 'New', 'Dashboard']);
+		expect(desktopLabels(container)).toEqual(['Pending tickets', 'New', 'Dashboard']);
 	});
 
 	it('wires the "New" link to the upload-screen hash', () => {
