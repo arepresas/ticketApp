@@ -1,12 +1,12 @@
 package com.ticketapp.bff.api;
 
 import com.ticketapp.bff.auth.AuthenticatedUser;
+import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,11 +40,12 @@ import java.util.stream.Collectors;
  * <p>Auth: every endpoint requires a Bearer session JWT, AND every
  * read/write is scoped by the authenticated user's id. Cross-tenant
  * reads return 404 (not 403) so existence itself is not leaked across
- * users. {@link com.ticketapp.bff.auth.SessionFilter} attaches the
- * resolved {@link AuthenticatedUser} to the request; this controller
- * reads it off the attribute and refuses requests without a session
- * (401). The repository enforces the same scope at the SQL layer as
- * defense in depth.
+ * users. The principal is read from
+ * {@link org.springframework.security.core.context.SecurityContextHolder}
+ * via {@link CurrentUser}; the request never carries an
+ * {@code HttpServletRequest} arg now that the custom
+ * {@code SessionFilter} is gone. The repository enforces the same
+ * scope at the SQL layer as defense in depth.
  */
 @RestController
 @RequestMapping("/api/tickets")
@@ -68,8 +69,8 @@ public class TicketController {
     private final TicketRepository repository;
 
     @GetMapping
-    public List<TicketResponse> list(HttpServletRequest req) {
-        AuthenticatedUser user = requireUser(req);
+    public List<TicketResponse> list() {
+        AuthenticatedUser user = CurrentUser.get();
         // No owner-scoped "list all" exists on the port — the
         // controller uses the status-filter overload with the user's
         // own id to cover OPEN + IN_PROGRESS + ON_ERROR + DONE +
@@ -106,8 +107,8 @@ public class TicketController {
      * tickets.
      */
     @GetMapping("/pending")
-    public List<TicketResponse> pending(HttpServletRequest req) {
-        AuthenticatedUser user = requireUser(req);
+    public List<TicketResponse> pending() {
+        AuthenticatedUser user = CurrentUser.get();
         Set<Ticket.Status> pending = Set.of(Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS);
         return repository.findByStatusIn(pending, user.id()).stream()
                 .map(TicketResponse::of)
@@ -115,8 +116,8 @@ public class TicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> get(HttpServletRequest req, @PathVariable UUID id) {
-        AuthenticatedUser user = requireUser(req);
+    public ResponseEntity<TicketResponse> get(@PathVariable UUID id) {
+        AuthenticatedUser user = CurrentUser.get();
         // Owner-scoped: returns 404 when the ticket doesn't exist OR
         // belongs to a different user. Same response shape for both
         // cases — never leak existence to another tenant.
@@ -127,12 +128,11 @@ public class TicketController {
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<TicketResponse> create(
-            HttpServletRequest req,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "title", required = false) String titleOverride,
             @RequestParam(value = "description", required = false) String description) {
 
-        AuthenticatedUser user = requireUser(req);
+        AuthenticatedUser user = CurrentUser.get();
 
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file is required");
@@ -166,8 +166,9 @@ public class TicketController {
         String desc = description == null ? "" : description;
 
         // Ownership: the ticket's owner is the authenticated user.
-        // The session id flows from the JWT through SessionFilter and
-        // is captured here so it reaches the persistence layer.
+        // The session id flows from the JWT through Spring Security's
+        // filter chain and is captured here so it reaches the
+        // persistence layer.
         Ticket created = repository.save(Ticket.open(
                 user.id(), title, desc, contentType, file.getOriginalFilename(), bytes));
         log.info("Created ticket {} for user {} (file={} {} bytes)",
@@ -194,10 +195,9 @@ public class TicketController {
      * different user.
      */
     @PatchMapping("/{id}/status")
-    public ResponseEntity<TicketResponse> changeStatus(HttpServletRequest req,
-                                                       @PathVariable UUID id,
+    public ResponseEntity<TicketResponse> changeStatus(@PathVariable UUID id,
                                                        @RequestBody ChangeStatusRequest changeReq) {
-        AuthenticatedUser user = requireUser(req);
+        AuthenticatedUser user = CurrentUser.get();
         return repository.findById(id, user.id())
                 .map(t -> ResponseEntity.ok(
                         TicketResponse.of(repository.save(t.withStatus(changeReq.status())))))
@@ -205,8 +205,8 @@ public class TicketController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(HttpServletRequest req, @PathVariable UUID id) {
-        AuthenticatedUser user = requireUser(req);
+    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+        AuthenticatedUser user = CurrentUser.get();
         // Owner-scoped delete: returns false (→ 404) when the ticket
         // doesn't exist or belongs to another user. Same response for
         // both cases — never leak existence.
@@ -214,14 +214,6 @@ public class TicketController {
         return removed
                 ? ResponseEntity.noContent().<Void>build()
                 : ResponseEntity.notFound().<Void>build();
-    }
-
-    private static AuthenticatedUser requireUser(HttpServletRequest req) {
-        AuthenticatedUser user = (AuthenticatedUser) req.getAttribute("auth.user");
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
-        }
-        return user;
     }
 
     public record ChangeStatusRequest(Ticket.Status status) {}
