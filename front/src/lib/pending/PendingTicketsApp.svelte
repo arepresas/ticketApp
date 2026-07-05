@@ -148,6 +148,24 @@
 	}
 
 	/**
+	 * Open the per-ticket detail screen for the given id. Mirrors the
+	 * `openPendingTickets` / `openNewTicket` pattern: set a body class
+	 * so the CSS gate in index.html reveals the element, set the
+	 * hash so the URL is shareable, and fire a DOM event so the
+	 * detail shell can react. The detail shell's own auth gate
+	 * handles the signed-out case (refuses to render), so we don't
+	 * re-check here.
+	 */
+	function openDetail(id: string): void {
+		document.body.classList.remove('is-pending');
+		document.body.classList.add('is-detail');
+		window.location.hash = `ticket/${id}`;
+		window.dispatchEvent(
+			new CustomEvent('detail:open', { detail: { id } })
+		);
+	}
+
+	/**
 	 * Two triggers can open this screen and need to kick off the fetch:
 	 *
 	 *  1. The user is already authenticated when they click the Header
@@ -185,6 +203,25 @@
 		if (auth.isAuthenticated && document.body.classList.contains('is-pending')) {
 			void loadTickets();
 		}
+	});
+
+	/**
+	 * When the detail screen changes a ticket's status (DONE /
+	 * CANCELLED) it dispatches `ticket:updated` and closes itself.
+	 * We're still mounted (the detail screen is a sibling, not a
+	 * child), so we refresh our own list when the user comes back.
+	 * Also refresh on first auth flip if the body class is set, to
+	 * cover the case where the user signs in cold with a deep link
+	 * to a ticket — the detail screen fetches that one ticket, and
+	 * the user returning to the list should see it gone.
+	 */
+	$effect(() => {
+		if (!auth.isAuthenticated) return;
+		const handler = (): void => {
+			void loadTickets();
+		};
+		window.addEventListener('ticket:updated', handler);
+		return () => window.removeEventListener('ticket:updated', handler);
 	});
 </script>
 
@@ -264,33 +301,41 @@
 				>
 					{#each tickets as t (t.id)}
 						<li
-							class="flex items-start gap-3 rounded-lg border border-border bg-card p-3"
+							class="flex items-start gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40"
 							data-testid="ticket-row"
 						>
-							{#if isImage(t.contentType)}
-								<div
-									class="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300"
-									aria-hidden="true"
-								>
-									<ImageIcon class="size-5" />
-								</div>
-							{:else}
-								<div
-									class="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
-									aria-hidden="true"
-								>
-									<FileText class="size-5" />
-								</div>
-							{/if}
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium">{t.title}</p>
-								{#if t.description}
-									<p class="mt-0.5 truncate text-xs text-muted-foreground">{t.description}</p>
+							<button
+								type="button"
+								onclick={() => openDetail(t.id)}
+								class="flex flex-1 items-start gap-3 text-left"
+								data-testid="ticket-row-button"
+								aria-label={`Open ticket ${t.title}`}
+							>
+								{#if isImage(t.contentType)}
+									<div
+										class="flex size-10 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300"
+										aria-hidden="true"
+									>
+										<ImageIcon class="size-5" />
+									</div>
+								{:else}
+									<div
+										class="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+										aria-hidden="true"
+									>
+										<FileText class="size-5" />
+									</div>
 								{/if}
-								<p class="mt-1 text-[11px] text-muted-foreground">
-									{t.fileName ?? 'no file'} · {humanSize(t.sizeBytes)} · {formatDate(t.createdAt)}
-								</p>
-							</div>
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-medium">{t.title}</p>
+									{#if t.description}
+										<p class="mt-0.5 truncate text-xs text-muted-foreground">{t.description}</p>
+									{/if}
+									<p class="mt-1 text-[11px] text-muted-foreground">
+										{t.fileName ?? 'no file'} · {humanSize(t.sizeBytes)} · {formatDate(t.createdAt)}
+									</p>
+								</div>
+							</button>
 							<span
 								class={[
 									'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',

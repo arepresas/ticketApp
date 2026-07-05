@@ -226,4 +226,160 @@ class TicketControllerIT {
         assertThat(response.contentType()).isEqualTo("image/png");
         assertThat(response.fileName()).isEqualTo("photo.png");
     }
+
+    @Test
+    void fileEndpointStreamsBytesWithContentType() {
+        // Upload a PNG and re-fetch it via the new file endpoint —
+        // the browser will use the Content-Type header to render it
+        // as <img> or <iframe>. Bytes must round-trip unchanged.
+        String token = loginAndGetToken();
+        byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
+        var body = pdfMultipart("photo.png", pngBytes, "image/png", null);
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(body))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        // Re-fetch via the file endpoint.
+        byte[] fetched = web().get().uri("/api/tickets/{id}/file", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType("image/png")
+                .expectHeader().valueMatches("Content-Disposition", "inline; filename=\"photo\\.png\"")
+                .expectBody(byte[].class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(fetched).isEqualTo(pngBytes);
+    }
+
+    @Test
+    void fileEndpointReturns404ForOtherUsersTicket() {
+        // Owner-scoped: another user can't pull the bytes. Same
+        // 404 (not 403) pattern as the rest of the read paths so
+        // we don't leak existence.
+        String tokenA = loginAndGetToken();
+        UUID ownerA = users.findByGoogleSub("google-sub-stub").orElseThrow().id();
+        byte[] bytes = "%PDF-1.4\n%receipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + tokenA)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart("secret.pdf", bytes, "application/pdf", null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        // Seed user B directly (no Google login round-trip needed) and
+        // mint a Bearer via the same helper the ownership IT uses.
+        com.ticketapp.bff.auth.AuthenticatedUser userB = users.upsertFromGoogle(
+                "google-sub-other", "other@example.com", "Other", null);
+        String tokenB = mintTokenFor(userB);
+
+        web().get().uri("/api/tickets/{id}/file", created.id())
+                .header("authorization", "Bearer " + tokenB)
+                .exchange()
+                .expectStatus().isNotFound();
+
+        // And the original owner still gets it normally.
+        web().get().uri("/api/tickets/{id}/file", created.id())
+                .header("authorization", "Bearer " + tokenA)
+                .exchange()
+                .expectStatus().isOk();
+
+        // Suppress unused warning on ownerA — kept for readability.
+        assertThat(ownerA).isNotNull();
+    }
+
+    @Test
+    void extractionEndpointReturns404WhenNoExtraction() {
+        // Newly-uploaded ticket has no extraction row yet (the
+        // scheduler hasn't picked it up). 404, not 200-with-empty.
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart("r.pdf", bytes, "application/pdf", null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        web().get().uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void extractionEndpointReturns404ForOtherUsersTicket() {
+        // Owner-scoped: even the existence of an extraction is
+        // hidden from a different tenant. The endpoint returns 404
+        // when the ticket belongs to someone else, not the extraction.
+        String tokenA = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + tokenA)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart("r.pdf", bytes, "application/pdf", null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        com.ticketapp.bff.auth.AuthenticatedUser userB = users.upsertFromGoogle(
+                "google-sub-other", "other@example.com", "Other", null);
+        String tokenB = mintTokenFor(userB);
+
+        web().get().uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + tokenB)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    /**
+     * Mint a BFF session JWT for the given user. Mirrors what the
+     * production login flow does — persist an {@code auth_sessions}
+     * row so the {@code SessionExistsValidator} recognises the
+     * token, then sign the matching {@code sub}/{@code jti} claims
+     * via the Spring {@code JwtEncoder}.
+     */
+    @Autowired
+    org.springframework.security.oauth2.jwt.JwtEncoder jwtEncoder;
+
+    @Autowired
+    com.ticketapp.bff.auth.SessionRepository sessionRepository;
+
+    private String mintTokenFor(com.ticketapp.bff.auth.AuthenticatedUser user) {
+        java.time.Instant now = java.time.Instant.now();
+        java.time.Instant exp = now.plus(java.time.Duration.ofHours(1));
+        java.util.UUID jti = java.util.UUID.randomUUID();
+        sessionRepository.save(new com.ticketapp.bff.auth.SessionRepository.Session(
+                jti, user.id(), now, exp, null));
+        org.springframework.security.oauth2.jwt.JwtClaimsSet claims =
+                org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
+                        .issuer("ticketapp-bff")
+                        .issuedAt(now)
+                        .expiresAt(exp)
+                        .subject(user.id().toString())
+                        .id(jti.toString())
+                        .build();
+        return jwtEncoder.encode(
+                org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
+                        org.springframework.security.oauth2.jwt.JwsHeader.with(
+                                org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build(),
+                        claims)).getTokenValue();
+    }
 }

@@ -32,6 +32,7 @@
 	<dashboard-app></dashboard-app>
 	<new-ticket-app></new-ticket-app>
 	<pending-tickets-app></pending-tickets-app>
+	<ticket-detail-app></ticket-detail-app>
 	<style>
 		/* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
 		   Toggled reactively by front/src/lib/auth/host.ts based on
@@ -68,6 +69,22 @@
 		body.is-pending landing-app,
 		body.is-pending dashboard-app,
 		body.is-pending new-ticket-app {
+			display: none;
+		}
+
+		/* <ticket-detail-app> is the per-ticket view (extraction +
+		   file preview + DONE / CANCELLED actions). Opens via a card
+		   click in PendingTicketsApp which sets `body.is-detail` +
+		   `#ticket/<id>`. Same mutual-exclusion pattern as the other
+		   overlays — hides landing, dashboard, new, pending so the
+		   detail gets the full viewport. */
+		body:not(.is-detail) ticket-detail-app {
+			display: none;
+		}
+		body.is-detail landing-app,
+		body.is-detail dashboard-app,
+		body.is-detail new-ticket-app,
+		body.is-detail pending-tickets-app {
 			display: none;
 		}
 	</style>

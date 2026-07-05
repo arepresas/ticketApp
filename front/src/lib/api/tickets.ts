@@ -109,3 +109,135 @@ export const listPendingTickets = async (token: string): Promise<CreatedTicket[]
 	}
 	return (await res.json()) as CreatedTicket[];
 };
+
+/**
+ * One row of the structured extraction (the AI-parsed product line).
+ * Mirrors the BFF's `ProductLineDto` exactly so the wire round-trips
+ * without surprise conversions.
+ */
+export type ExtractedProductLine = {
+	name: string;
+	quantity: number;
+	unit: string | null;
+	pricePerUnit: number;
+	lineTotal: number;
+};
+
+/**
+ * Full structured extraction for one ticket. Mirrors the BFF's
+ * `ExtractionResponse`. The {@code rawResponse} field is intentionally
+ * NOT exposed — the structured fields above carry the actionable
+ * data, and the raw text is verbose (multi-KB on long Lidl receipts).
+ */
+export type TicketExtraction = {
+	ticketId: string;
+	merchant: string;
+	purchaseDate: string;
+	category: string | null;
+	products: ExtractedProductLine[];
+	totalAmount: number;
+	currency: string;
+	model: string;
+	extractedAt: string;
+};
+
+/**
+ * Fetch one ticket by id. Returns the wire shape used by the BFF
+ * (same as {@link CreatedTicket}). The BFF returns 404 for missing
+ * or cross-tenant tickets; the caller decides whether to render a
+ * "ticket not found" UI or simply navigate back to the list.
+ */
+export const getTicket = async (token: string, id: string): Promise<CreatedTicket> => {
+	const res = await fetch(`${API_BASE}/${id}`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket;
+};
+
+/**
+ * Fetch the AI-extracted structured payload for one ticket. Returns
+ * {@code null} when the BFF answers 404 — the ticket either doesn't
+ * exist, belongs to someone else, or hasn't been extracted yet (still
+ * pending or marked ON_ERROR). All three cases surface as "no data
+ * yet" in the UI; the detail screen reuses the same empty state.
+ *
+ * 401 is thrown as a {@link TicketApiError} so the caller can route
+ * the user back to the login screen instead of showing empty state.
+ */
+export const getTicketExtraction = async (
+	token: string,
+	id: string
+): Promise<TicketExtraction | null> => {
+	const res = await fetch(`${API_BASE}/${id}/extraction`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+	});
+	if (res.status === 404) {
+		return null;
+	}
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as TicketExtraction;
+};
+
+/**
+ * Fetch the raw uploaded bytes for one ticket. Returns an object URL
+ * suitable for `<img src>` / `<iframe src>` / `<a href>` plus the
+ * content type the BFF reports. Caller is responsible for calling
+ * {@link URL.revokeObjectURL} when the URL is no longer needed —
+ * typically on component destroy or when re-fetching.
+ *
+ * The BFF streams the bytes with `Content-Disposition: inline` so
+ * the browser renders rather than downloads. 404 when the ticket
+ * doesn't exist, belongs to another user, or has no file attached
+ * (e.g. metadata-only tickets created before the upload feature).
+ */
+export const getTicketFile = async (
+	token: string,
+	id: string
+): Promise<{ url: string; contentType: string | null }> => {
+	const res = await fetch(`${API_BASE}/${id}/file`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}` }
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	const contentType = res.headers.get('content-type');
+	const blob = await res.blob();
+	return { url: URL.createObjectURL(blob), contentType };
+};
+
+/**
+ * Update one ticket's status. Used by the detail screen's
+ * "Mark as DONE" / "Mark as CANCELLED" actions. The BFF already
+ * supports all status transitions via PATCH; this thin wrapper keeps
+ * the wire shape off the call sites.
+ *
+ * Returns the updated ticket so the caller can refresh its local
+ * copy without a second GET.
+ */
+export const updateTicketStatus = async (
+	token: string,
+	id: string,
+	status: TicketStatus
+): Promise<CreatedTicket> => {
+	const res = await fetch(`${API_BASE}/${id}/status`, {
+		method: 'PATCH',
+		headers: {
+			authorization: `Bearer ${token}`,
+			'content-type': 'application/json',
+			accept: 'application/json'
+		},
+		body: JSON.stringify({ status })
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket;
+};
