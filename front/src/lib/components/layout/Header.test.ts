@@ -179,4 +179,53 @@ describe('Header', () => {
 		const github = container.querySelector('a[aria-label="GitHub"]');
 		expect(github).toBeNull();
 	});
+
+	it('clicking the Dashboard link clears pending/new overlay classes', () => {
+		// Regression: Dashboard used to be a plain `#main` fragment with no
+		// click handler, so clicking it while a `body.is-pending` or
+		// `body.is-new` overlay was up did nothing visually. The handler
+		// now clears both classes and the user lands back on the dashboard.
+		snapshot.user = {
+			id: 'u-1',
+			email: 'ada@example.com',
+			name: 'Ada Lovelace'
+		};
+		snapshot.isAuthenticated = true;
+		snapshot.status = 'authenticated';
+		document.body.classList.add('is-pending');
+		document.body.classList.add('is-new');
+
+		const { container } = render(Header);
+		const dashboardLink = container
+			.querySelector('nav[aria-label="Primary"]')
+			?.querySelector<HTMLAnchorElement>('a[href="#dashboard"]');
+		expect(dashboardLink).toBeTruthy();
+		dashboardLink?.click();
+
+		expect(document.body.classList.contains('is-pending')).toBe(false);
+		expect(document.body.classList.contains('is-new')).toBe(false);
+	});
+
+	it('clicking the logo clears pending/new overlay classes too', () => {
+		// The logo is the user's always-available "back to home" affordance.
+		// It must clear any overlay class so the user is never stuck behind
+		// a screen they can't dismiss via the header.
+		snapshot.user = {
+			id: 'u-1',
+			email: 'ada@example.com',
+			name: 'Ada Lovelace'
+		};
+		snapshot.isAuthenticated = true;
+		snapshot.status = 'authenticated';
+		document.body.classList.add('is-pending');
+
+		const { container } = render(Header);
+		const logo = container.querySelector<HTMLAnchorElement>(
+			'a[aria-label="TicketApp home"]'
+		);
+		expect(logo).toBeTruthy();
+		logo?.click();
+
+		expect(document.body.classList.contains('is-pending')).toBe(false);
+	});
 });
