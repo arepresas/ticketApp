@@ -45,6 +45,26 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!--
+            Spring Security with the OAuth2 resource server stack:
+              * spring-boot-starter-security pulls in the core filter
+                chain (SecurityFilterChain DSL, @PreAuthorize, etc.)
+              * spring-boot-starter-oauth2-resource-server pulls in
+                Nimbus JOSE + JWT (the codec used by JwtDecoder /
+                JwtEncoder). HMAC-SHA256 key configured in
+                SecurityConfig — same `bff.jwt.secret` the previous
+                custom SessionTokenService used, so existing tokens
+                validate unchanged.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
         <!-- Google Sign-In: verify the id_token JWT exchanged by the SPA. -->
         <dependency>
             <groupId>com.google.auth</groupId>
@@ -67,24 +87,12 @@
             <version>2.9.0</version>
         </dependency>
 
-        <!-- BFF session JWT signing (HS256). -->
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.13.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.13.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.13.0</version>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- BFF session JWT signing (HS256) used to be implemented via
+             jjwt directly — Spring Security's OAuth2 resource server
+             pulls in Nimbus JOSE+JWT (transitively, via spring-security-oauth2-jose)
+             which is what the new SecurityConfig uses. The jjwt deps
+             are dropped because nothing in this module imports them
+             anymore. -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

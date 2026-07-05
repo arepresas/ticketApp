@@ -2,7 +2,7 @@ package com.ticketapp.bff.api;
 
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.AuthenticatedUser;
-import com.ticketapp.bff.auth.SessionTokenService;
+import com.ticketapp.bff.auth.SessionRepository;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.UserRepository;
 import com.ticketapp.domain.Ticket;
@@ -15,13 +15,22 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -65,7 +74,10 @@ class TicketOwnershipIT {
     UserRepository users;
 
     @Autowired
-    SessionTokenService sessions;
+    SessionRepository sessions;
+
+    @Autowired
+    JwtEncoder jwtEncoder;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -98,12 +110,43 @@ class TicketOwnershipIT {
         return resp.token();
     }
 
-    /** Create a second user directly (bypassing Google) and mint a
-     * real session JWT for it. */
+    /**
+     * Create a second user directly (bypassing Google) and mint a
+     * real session JWT for it. Mirrors what the production login
+     * flow does in {@code AuthController#issue}: persist a row in
+     * {@code auth_sessions} (so the {@code SessionExistsValidator}
+     * recognises the token) and emit a signed JWT with the matching
+     * {@code sub} / {@code jti} claims.
+     */
     private String createUserAndGetToken(String googleSub, String email, String name) {
         AuthenticatedUser user = users.upsertFromGoogle(
                 googleSub, email, name, null);
-        return sessions.issue(user).token();
+        return tokenFor(user);
+    }
+
+    /**
+     * Mint a Bearer token for an already-persisted user. Persists a
+     * matching row in {@code auth_sessions} (so the
+     * {@code SessionExistsValidator} recognises it) and emits a
+     * signed JWT with the same {@code sub} / {@code jti} pair.
+     * Mirrors what the production login flow does in
+     * {@code AuthController#issue}.
+     */
+    private String tokenFor(AuthenticatedUser user) {
+        Instant now = Instant.now();
+        Instant exp = now.plus(Duration.ofHours(1));
+        UUID jti = UUID.randomUUID();
+        sessions.save(new SessionRepository.Session(jti, user.id(), now, exp, null));
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("ticketapp-bff")
+                .issuedAt(now)
+                .expiresAt(exp)
+                .subject(user.id().toString())
+                .id(jti.toString())
+                .build();
+        Jwt jwt = jwtEncoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(MacAlgorithm.HS256).build(), claims));
+        return jwt.getTokenValue();
     }
 
     private Ticket seedTicket(java.util.UUID ownerId, String title) {
@@ -121,7 +164,7 @@ class TicketOwnershipIT {
         // session id matches the row id used on the ticket.
         AuthenticatedUser userB = users.upsertFromGoogle(
                 "google-sub-other", "other@example.com", "Other User", null);
-        String tokenB = sessions.issue(userB).token();
+        String tokenB = tokenFor(userB);
 
         Ticket a1 = seedTicket(userA.id(), "a1.pdf");
         Ticket a2 = seedTicket(userA.id(), "a2.pdf");
@@ -158,7 +201,7 @@ class TicketOwnershipIT {
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
         AuthenticatedUser userB = users.upsertFromGoogle(
                 "google-sub-other", "other@example.com", "Other User", null);
-        String tokenB = sessions.issue(userB).token();
+        String tokenB = tokenFor(userB);
 
         Ticket aOpen = seedTicket(userA.id(), "a-open.pdf");
         Ticket bOpen = seedTicket(userB.id(), "b-open.pdf");
