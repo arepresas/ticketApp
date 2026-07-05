@@ -43,7 +43,7 @@
 		[
 			{ href: '#pending', label: 'Pending tickets', onClick: openPendingTickets },
 			{ href: '#new', label: 'New', onClick: openNewTicket },
-			{ href: '#main', label: 'Dashboard' }
+			{ href: '#dashboard', label: 'Dashboard', onClick: openDashboard }
 		];
 
 	const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
@@ -84,6 +84,46 @@
 		document.body.classList.remove('is-pending');
 	}
 
+	/**
+	 * Return to the dashboard. The dashboard subtree is always mounted
+	 * for authenticated users (the {@code is-authenticated} body class
+	 * is owned by the auth store, not this header) so the only thing
+	 * we have to do is clear the screen-gate classes — pending and new
+	 * — and let CSS reveal the dashboard again. Used by the "Dashboard"
+	 * link in the nav AND by the logo so the user always has a way to
+	 * dismiss an overlay.
+	 *
+	 * <p>{@code preventDefault} stops the browser from jumping to a
+	 * missing {@code #dashboard} anchor.</p>
+	 */
+	function openDashboard(e: MouseEvent): void {
+		e.preventDefault();
+		document.body.classList.remove('is-pending');
+		document.body.classList.remove('is-new');
+		// Clear any stale hash from a previous pending/new visit so the
+		// URL reflects the actual screen.
+		if (window.location.hash === '#dashboard' ||
+			window.location.hash === '#pending' ||
+			window.location.hash === '#new') {
+			history.replaceState(null, '', window.location.pathname + window.location.search);
+		}
+	}
+
+	/**
+	 * Logo click — same handler as the Dashboard link for authenticated
+	 * users. For signed-out visitors it falls through to the default
+	 * anchor behaviour (scroll to top of the landing page) because no
+	 * overlay classes need clearing in that mode.
+	 */
+	function onLogoClick(e: MouseEvent): void {
+		document.body.classList.remove('is-pending');
+		document.body.classList.remove('is-new');
+		if (window.location.hash) {
+			e.preventDefault();
+			history.replaceState(null, '', window.location.pathname + window.location.search);
+		}
+	}
+
 	function openMenu(): void {
 		dialog?.showModal();
 	}
@@ -98,7 +138,7 @@
 	<div
 		class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"
 	>
-		<a href="#main" class="flex items-center gap-2 font-semibold" aria-label="TicketApp home">
+		<a href="#dashboard" onclick={onLogoClick} class="flex items-center gap-2 font-semibold" aria-label="TicketApp home">
 			<span
 				class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
 			>
