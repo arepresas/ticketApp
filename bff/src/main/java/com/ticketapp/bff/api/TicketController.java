@@ -3,10 +3,13 @@ package com.ticketapp.bff.api;
 import com.ticketapp.bff.auth.AuthenticatedUser;
 import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.TicketExtraction;
+import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -67,6 +70,7 @@ public class TicketController {
     );
 
     private final TicketRepository repository;
+    private final TicketExtractionRepository extractions;
 
     @GetMapping
     public List<TicketResponse> list() {
@@ -216,7 +220,133 @@ public class TicketController {
                 : ResponseEntity.notFound().<Void>build();
     }
 
+    /**
+     * Return the AI-extracted structured payload for one ticket.
+     * Owner-scoped via the ticket lookup, then a join through
+     * {@code ticket_extractions} by ticket id — the FK enforces
+     * "extraction belongs to a ticket that exists". 404 when the
+     * ticket doesn't exist, is owned by someone else, or has no
+     * extraction row yet (still pending AI processing, or marked
+     * ON_ERROR).
+     */
+    @GetMapping("/{id}/extraction")
+    public ResponseEntity<ExtractionResponse> extraction(@PathVariable UUID id) {
+        AuthenticatedUser user = CurrentUser.get();
+        // First gate on the ticket itself — refuses cross-tenant
+        // access without leaking existence (returns 404 either way).
+        java.util.Optional<Ticket> ticket = repository.findById(id, user.id());
+        if (ticket.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return extractions.findByTicketId(id)
+                .map(e -> ResponseEntity.ok(ExtractionResponse.of(e)))
+                // 404 with no body — same shape as "ticket not
+                // found" so the front end doesn't have to distinguish
+                // "wrong id" from "not yet extracted" on the wire.
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Stream the raw uploaded bytes for the in-browser preview.
+     * Owner-scoped via the ticket lookup — same 404 rule as the rest
+     * of the read paths. {@code Content-Type} is taken from the
+     * ticket's {@code contentType} column (set at upload time from
+     * the browser's MIME) so the browser knows how to render
+     * images vs PDFs.
+     */
+    @GetMapping("/{id}/file")
+    public ResponseEntity<byte[]> file(@PathVariable UUID id) {
+        AuthenticatedUser user = CurrentUser.get();
+        java.util.Optional<Ticket> ticketOpt = repository.findById(id, user.id());
+        if (ticketOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Ticket ticket = ticketOpt.get();
+        byte[] bytes = ticket.fileData();
+        if (bytes == null || bytes.length == 0) {
+            return ResponseEntity.notFound().build();
+        }
+        // Prefer the ticket's stored content type; fall back to
+        // application/octet-stream so browsers always treat the
+        // response as a download. MediaType.parseMediaType throws
+        // on a malformed value (defensive — every column value
+        // went through the validator on upload), so we wrap.
+        MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        if (ticket.contentType() != null) {
+            try {
+                mediaType = MediaType.parseMediaType(ticket.contentType());
+            } catch (org.springframework.util.InvalidMimeTypeException e) {
+                log.warn("Ticket {} has malformed contentType '{}', falling back to octet-stream",
+                        ticket.id(), ticket.contentType());
+            }
+        }
+        // Force Content-Disposition: inline so the browser renders
+        // the file (img/iframe) instead of triggering a download.
+        // The file's own filename is forwarded for the Save As…
+        // dialog when the user does choose to download.
+        String filename = ticket.fileName() == null ? "ticket-" + ticket.id() : ticket.fileName();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(mediaType);
+        headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                "inline; filename=\"" + filename.replace("\"", "") + "\"");
+        headers.setContentLength(bytes.length);
+        return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
+    }
+
     public record ChangeStatusRequest(Ticket.Status status) {}
+
+    /**
+     * Wire response for {@code GET /api/tickets/{id}/extraction}.
+     * Mirrors {@link TicketExtraction} but flattens the {@code products}
+     * list into a plain array (it was a JSONB column on the server
+     * side). The {@code model} and {@code extractedAt} fields are
+     * surfaced for the UI's audit trail ("extracted by MiniMax-M3 on
+     * …") so the user can see when the AI did its work.
+     *
+     * <p>The full {@code rawResponse} (the model's raw reply before
+     * parsing) is NOT exposed — it's verbose and the structured
+     * fields above already convey the actionable data. It's still
+     * kept server-side for audit / debugging.</p>
+     */
+    public record ExtractionResponse(
+            java.util.UUID ticketId,
+            String merchant,
+            java.time.LocalDate purchaseDate,
+            String category,
+            java.util.List<ProductLineDto> products,
+            java.math.BigDecimal totalAmount,
+            String currency,
+            String model,
+            java.time.Instant extractedAt) {
+
+        static ExtractionResponse of(TicketExtraction e) {
+            java.util.List<ProductLineDto> products = e.products().stream()
+                    .map(p -> new ProductLineDto(
+                            p.name(),
+                            p.quantity(),
+                            p.unit(),
+                            p.pricePerUnit(),
+                            p.lineTotal()))
+                    .toList();
+            return new ExtractionResponse(
+                    e.ticketId(),
+                    e.merchant(),
+                    e.purchaseDate(),
+                    e.category(),
+                    products,
+                    e.totalAmount(),
+                    e.currency(),
+                    e.model(),
+                    e.extractedAt());
+        }
+    }
+
+    public record ProductLineDto(
+            String name,
+            java.math.BigDecimal quantity,
+            String unit,
+            java.math.BigDecimal pricePerUnit,
+            java.math.BigDecimal lineTotal) { }
 
     /**
      * Wire response. Excludes {@code fileData} so the bytes don't round-trip
