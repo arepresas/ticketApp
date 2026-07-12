@@ -1,5 +1,5 @@
 /**
- * Host-side auth gate.
+ * Host-side auth gate + history bridge.
  *
  * Side-effect module imported eagerly from front/src/index.ts. On load:
  *  1. Calls `initAuth()` to bootstrap the store from sessionStorage.
@@ -8,6 +8,10 @@
  *     effect toggles `document.body.classList` with `is-authenticated`,
  *     which the index.html stylesheet reads to show/hide the
  *     `<landing-app>` vs `<dashboard-app>` siblings.
+ *  3. Calls `setupHistoryBridge()` from `../navigation.ts` so the
+ *     popstate listener is installed before any user-triggered
+ *     history.pushState. The bridge syncs body classes from the URL
+ *     hash on every back / forward event.
  *
  * Why a host module instead of running the effect inside DashboardApp?
  * The landing page MUST hide the instant auth flips to true, even before
@@ -21,6 +25,7 @@
 import { mount, unmount } from 'svelte';
 
 import { initAuth } from './store.svelte';
+import { setupHistoryBridge } from '../navigation';
 import EffectHost from './EffectHost.svelte';
 
 const target = document.createElement('div');
@@ -34,6 +39,10 @@ const instance = mount(EffectHost, { target });
 // scoped promise), so calling it again from host.ts is safe even if
 // DashboardApp also calls it on its own mount.
 void initAuth();
+
+// Hash-router side effect: install the popstate listener and sync
+// the body class to whatever hash the page loaded with.
+setupHistoryBridge();
 
 export const dispose = (): void => {
 	unmount(instance);

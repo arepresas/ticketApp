@@ -2,50 +2,37 @@
 
 <script lang="ts">
 	/**
-	 * TicketDetailApp — custom element shell for the per-ticket detail
-	 * screen.
+	 * TicketDetailApp — per-ticket detail screen.
 	 *
-	 * Why a custom element (not a plain Svelte component)?
-	 * The host page (index.html) mounts this as `<ticket-detail-app>`. Shadow
-	 * DOM isolates Tailwind utilities inside this subtree — we inject
-	 * the compiled stylesheet via {@html} so utility classes reach the
-	 * DOM. Same pattern as the other app shells.
+	 * What it shows:
+	 *  - Structured extraction (merchant, products, total, category) on the
+	 *    left, file preview (image zoom + PDF iframe) on the right.
+	 *  - Terminal-state actions ("Mark as DONE" / "Mark as cancelled")
+	 *    in the footer.
 	 *
-	 * Visibility:
-	 * Driven by the `is-detail` body class toggled from the
-	 * PendingTicketsApp card click (see index.html CSS gate). The
-	 * route is encoded in the URL hash as `#ticket/<id>` so a deep
-	 * link to a specific ticket works once the user is signed in.
-	 * This element always mounts once but is `display: none` until
-	 * the class flips.
+	 * Editing model (the seamless bit):
+	 *  - Every field is an always-editable input styled to look like
+	 *    text by default. There is no Edit / Save / Cancel ceremony —
+	 *    changes are saved on a debounced timer per save group (title +
+	 *    description = one batch; everything else = one batch). Saves
+	 *    report inline via a small "Saving… / Saved" indicator next to
+	 *    the title; errors briefly flash a "Couldn't save" hint.
+	 *  - This replaces the previous Edit/Save/Cancel modal flow that
+	 *    blocked the screen with a dialog and required the user to
+	 *    click through every change.
 	 *
-	 * Data flow:
-	 *  - The fetch fires on either:
-	 *      a) the `detail:open` CustomEvent dispatched from
-	 *         PendingTicketsApp when a card is clicked, or
-	 *      b) the `$effect` re-running when `auth.isAuthenticated`
-	 *         flips to true while the body class is already set (deep
-	 *         link from an email, signed in cold).
-	 *  - Both routes land in `load(id)` which fetches the ticket,
-	 *    its extraction, and its file in parallel. The blob URL is
-	 *    revoked on the next load (or unmount) so we don't leak
-	 *    memory.
-	 *  - Errors: a missing extraction renders an "Awaiting AI" empty
-	 *    state (the scheduler hasn't picked it up yet, or it failed
-	 *    and is sitting in ON_ERROR). Missing file renders a "No
-	 *    preview" placeholder.
-	 *
-	 * Actions:
-	 *  - "Mark as DONE" — PATCH the status, fire `ticket:updated` so
-	 *    the pending list reloads, then close the screen.
-	 *  - "Mark as CANCELLED" — same shape. Both buttons are
-	 *    optimistic-free: if the PATCH fails, we surface the error
-	 *    inline and leave the screen open so the user can retry.
+	 * Navigation (the other seamless bit):
+	 *  - The X close button is gone. The browser's back button is the
+	 *    only way out — `close()` is now `history.back()` and the URL
+	 *    hash `#ticket/<id>` always reflects the open ticket so reload
+	 *    restores the same view.
+	 *  - On popstate the body class flips (handled centrally in
+	 *    `lib/navigation.ts`); we clean up the object URL + clear the
+	 *    ticket + extraction so memory doesn't leak across screens.
 	 */
 	import tailwindCss from '../../app.css?inline';
 
 	import {
-		X,
 		Download,
 		FileText,
 		Image as ImageIcon,
@@ -55,7 +42,11 @@
 		XCircle,
 		ZoomIn,
 		ZoomOut,
-		RotateCcw
+		RotateCcw,
+		Plus,
+		Trash2,
+		Check as CheckIcon,
+		Save
 	} from '@lucide/svelte';
 
 	import { auth } from '../auth/store.svelte';
@@ -64,10 +55,14 @@
 		getTicketExtraction,
 		getTicketFile,
 		updateTicketStatus,
+		updateTicketMetadata,
+		replaceTicketExtraction,
 		TicketApiError,
 		type CreatedTicket,
-		type TicketExtraction
+		type TicketExtraction,
+		type ExtractedProductLine
 	} from '../api/tickets';
+	import { navigateBack } from '../navigation';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -85,7 +80,7 @@
 	/** Parse `#ticket/<uuid>` out of the URL. Null when malformed. */
 	function parseTicketIdFromHash(): string | null {
 		const h = window.location.hash;
-		const m = /^#ticket\/([0-9a-fA-F-]{36})$/.exec(h);
+		const m = /^#?ticket\/([0-9a-fA-F-]{36})$/.exec(h);
 		return m ? m[1] : null;
 	}
 
@@ -243,9 +238,7 @@
 
 	const fmtDate = (iso: string): string => {
 		try {
-			return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-				new Date(iso)
-			);
+			return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso));
 		} catch {
 			return iso;
 		}
@@ -262,11 +255,8 @@
 		}
 	};
 
-	const isImagePreview = (ct: string | null): boolean =>
-		!!ct && ct.startsWith('image/');
-
-	const isPdfPreview = (ct: string | null): boolean =>
-		ct === 'application/pdf';
+	const isImagePreview = (ct: string | null): boolean => !!ct && ct.startsWith('image/');
+	const isPdfPreview = (ct: string | null): boolean => ct === 'application/pdf';
 
 	async function load(id: string): Promise<void> {
 		const token = readSessionToken();
@@ -285,10 +275,6 @@
 		loading = true;
 		errorMessage = null;
 		try {
-			// Fan-out fetch — ticket + extraction + file in parallel.
-			// The file is best-effort: tickets created before the
-			// upload feature landed (or uploaded with a missing
-			// content type) have no bytes to preview.
 			const [t, ex, file] = await Promise.all([
 				getTicket(token, id),
 				getTicketExtraction(token, id),
@@ -308,8 +294,7 @@
 			extraction = null;
 			if (err instanceof TicketApiError) {
 				if (err.status === 404) {
-					errorMessage =
-						'This ticket is no longer available — it may have been deleted.';
+					errorMessage = 'This ticket is no longer available — it may have been deleted.';
 				} else {
 					errorMessage = `Failed to load ticket (${err.status}): ${err.message}`;
 				}
@@ -321,14 +306,156 @@
 		}
 	}
 
+	/** Browser-back the user. The navigation module's popstate listener
+	 * will sync the body class to whatever the URL ends up at. */
 	function close(): void {
-		document.body.classList.remove('is-detail');
-		if (fileUrl) {
-			URL.revokeObjectURL(fileUrl);
-			fileUrl = null;
-		}
-		history.replaceState(null, '', window.location.pathname + window.location.search);
+		navigateBack();
 	}
+
+	// ---------------------------------------------------------------------
+	// Resizable preview pane — width + height, independent.
+	//
+	// The detail screen renders the extraction card on the left and the
+	// file preview on the right. Two drag handles give the user full
+	// control over the preview's footprint without forcing an aspect
+	// ratio:
+	//
+	//   1. Vertical handle on the LEFT side of the preview — resizes
+	//      the preview's WIDTH (extraction section compensates).
+	//   2. Horizontal handle on the BOTTOM of the preview — resizes the
+	//      preview's HEIGHT independently of the width.
+	//
+	// Both axes are clamped to a sensible min/max range so neither
+	// dimension collapses to 0 or pushes the page footer off-screen.
+	// State is component-local (no persistence — re-opening the detail
+	// screen starts at the default), matching the rest of the
+	// transient UI state on this screen.
+	//
+	// Mouse-move / mouse-up are bound to `window` for the duration of
+	// the drag so the user can release the mouse anywhere — including
+	// over the iframe-backed PDF preview where mouseup wouldn't reach
+	// the handle itself. The active-drag cursor is also applied to
+	// `document.body` so the resize cursor stays consistent when the
+	// pointer briefly leaves the handle.
+	// ---------------------------------------------------------------------
+	const PREVIEW_WIDTH_MIN = 320;
+	const PREVIEW_WIDTH_MAX = 760;
+	const PREVIEW_WIDTH_DEFAULT = 480;
+	const PREVIEW_HEIGHT_MIN = 240;
+	const PREVIEW_HEIGHT_MAX = 720;
+	const PREVIEW_HEIGHT_DEFAULT = 480;
+
+	let previewWidth = $state(PREVIEW_WIDTH_DEFAULT);
+	let previewHeight = $state(PREVIEW_HEIGHT_DEFAULT);
+	let widthDrag = $state<{ startX: number; startWidth: number } | null>(null);
+	let heightDrag = $state<{ startY: number; startHeight: number } | null>(null);
+
+	function clampWidth(w: number): number {
+		return Math.max(PREVIEW_WIDTH_MIN, Math.min(PREVIEW_WIDTH_MAX, w));
+	}
+	function clampHeight(h: number): number {
+		return Math.max(PREVIEW_HEIGHT_MIN, Math.min(PREVIEW_HEIGHT_MAX, h));
+	}
+
+	function onWidthHandleMouseDown(e: MouseEvent): void {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		widthDrag = { startX: e.clientX, startWidth: previewWidth };
+	}
+
+	function onHeightHandleMouseDown(e: MouseEvent): void {
+		if (e.button !== 0) return;
+		e.preventDefault();
+		heightDrag = { startY: e.clientY, startHeight: previewHeight };
+	}
+
+	function onWidthHandleKeydown(e: KeyboardEvent): void {
+		const STEP = 24;
+		switch (e.key) {
+			case 'ArrowLeft':
+				e.preventDefault();
+				previewWidth = clampWidth(previewWidth - STEP);
+				break;
+			case 'ArrowRight':
+				e.preventDefault();
+				previewWidth = clampWidth(previewWidth + STEP);
+				break;
+			case 'Home':
+				e.preventDefault();
+				previewWidth = PREVIEW_WIDTH_MIN;
+				break;
+			case 'End':
+				e.preventDefault();
+				previewWidth = PREVIEW_WIDTH_MAX;
+				break;
+		}
+	}
+
+	function onHeightHandleKeydown(e: KeyboardEvent): void {
+		const STEP = 24;
+		switch (e.key) {
+			case 'ArrowUp':
+				e.preventDefault();
+				previewHeight = clampHeight(previewHeight - STEP);
+				break;
+			case 'ArrowDown':
+				e.preventDefault();
+				previewHeight = clampHeight(previewHeight + STEP);
+				break;
+			case 'Home':
+				e.preventDefault();
+				previewHeight = PREVIEW_HEIGHT_MIN;
+				break;
+			case 'End':
+				e.preventDefault();
+				previewHeight = PREVIEW_HEIGHT_MAX;
+				break;
+		}
+	}
+
+	$effect(() => {
+		if (!widthDrag) return;
+		const onMove = (e: MouseEvent): void => {
+			if (!widthDrag) return;
+			const dx = e.clientX - widthDrag.startX;
+			previewWidth = clampWidth(widthDrag.startWidth + dx);
+		};
+		const onUp = (): void => {
+			widthDrag = null;
+		};
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+		return () => {
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+	});
+
+	$effect(() => {
+		if (!heightDrag) return;
+		const onMove = (e: MouseEvent): void => {
+			if (!heightDrag) return;
+			const dy = e.clientY - heightDrag.startY;
+			previewHeight = clampHeight(heightDrag.startHeight + dy);
+		};
+		const onUp = (): void => {
+			heightDrag = null;
+		};
+		document.body.style.cursor = 'row-resize';
+		document.body.style.userSelect = 'none';
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+		return () => {
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+	});
 
 	async function setStatus(status: 'DONE' | 'CANCELLED'): Promise<void> {
 		if (!ticketId || acting) return;
@@ -338,8 +465,6 @@
 		errorMessage = null;
 		try {
 			await updateTicketStatus(token, ticketId, status);
-			// Refresh the pending list (if it's mounted). The shell
-			// listens for this and re-fetches.
 			window.dispatchEvent(new CustomEvent('ticket:updated'));
 			close();
 		} catch (err: unknown) {
@@ -353,19 +478,177 @@
 		}
 	}
 
+	// ---------------------------------------------------------------------
+	// Seamless autosave — replaces the previous Edit / Save / Cancel flow.
+	//
+	// Two save groups:
+	//   - Metadata: PATCH /api/tickets/{id} for title + description.
+	//   - Extraction: PUT /api/tickets/{id}/extraction for the editable
+	//     AI-derived fields (merchant, purchaseDate, category, products,
+	//     totalAmount, currency). The AI's audit fields (model,
+	//     extractedAt, rawResponse, extractionPayload) stay server-side
+	//     and are not in the send payload.
+	//
+	// Each group debounces (metadata 500ms, extraction 800ms — extractions
+	// hold longer because the products array can be large). Only one
+	// in-flight save per group; the most recent debounced fire is the
+	// one that runs. Saves re-read local state at commit time so the
+	// payload always matches the latest typing.
+	//
+	// Local editing only — no autosave. Every input mutates the
+	// ticket / extraction state in place through `bind:value`, but
+	// nothing hits the network until the user clicks the Save button.
+	// A single boolean `dirty` flag tracks whether anything has
+	// changed since the last successful save; the Save button's
+	// enabled state is bound to it.
+	//
+	// Save sequence: on click, fire `PATCH /tickets/{id}` for the
+	// metadata first; only on success fire `PUT /tickets/{id}/extraction`
+	// for the extraction (if one exists). Failing fast on the
+	// metadata PATCH means the user doesn't end up with a half-saved
+	// state where the products table updated but the title didn't.
+	//
+	// The `lineTotal` field is no longer user-editable; computedLineTotal
+	// derives it on save so the wire shape stays the same without ever
+	// reading from `product.lineTotal`.
+	// ---------------------------------------------------------------------
+
 	/**
-	 * Two triggers can open this screen:
-	 *  1. PendingTicketsApp card click — fires `detail:open` with the
-	 *     ticket id in {@code CustomEvent.detail}.
-	 *  2. Auth flip while the body class is already set + hash is
-	 *     {@code #ticket/<id>} (deep link from an email, signed in
-	 *     cold).
+	 * Compute the line total as qty × €/unit. Used both for the
+	 * read-only column in the products table and for the save
+	 * payload. Treats null / NaN inputs as 0 so a partially-typed
+	 * row renders as 0.00 rather than NaN.
+	 */
+	function computedLineTotal(p: ExtractedProductLine): number {
+		const q = Number(p.quantity);
+		const unit = Number(p.pricePerUnit);
+		if (!Number.isFinite(q) || !Number.isFinite(unit)) return 0;
+		return q * unit;
+	}
+
+	/** Anything changed since the last successful save? Drives the
+	 * Save button's enabled state and the visual "Unsaved" hint. */
+	let dirty = $state(false);
+
+	/** Save in-flight; disables the Save button. */
+	let savingChanges = $state(false);
+
+	/** Most-recent save outcome, drives the small status pill next
+	 * to the Save button. Fades after a couple of seconds. */
+	type SaveOutcome = 'idle' | 'saved' | 'error';
+	let saveOutcome = $state<SaveOutcome>('idle');
+	let saveOutcomeFade: ReturnType<typeof setTimeout> | null = null;
+
+	function setSaveOutcome(next: SaveOutcome, holdMs = 0): void {
+		if (saveOutcomeFade) clearTimeout(saveOutcomeFade);
+		saveOutcome = next;
+		if (holdMs > 0) {
+			saveOutcomeFade = setTimeout(() => {
+				saveOutcome = 'idle';
+			}, holdMs);
+		}
+	}
+
+	function markDirty(): void {
+		if (!savingChanges) dirty = true;
+	}
+
+	async function saveChanges(): Promise<void> {
+		if (!ticket || !dirty || savingChanges) return;
+		const token = readSessionToken();
+		if (!token) {
+			errorMessage = 'Session expired. Sign in again to save changes.';
+			setSaveOutcome('error', 3000);
+			return;
+		}
+		savingChanges = true;
+		errorMessage = null;
+		try {
+			// 1) metadata first — `await` so a failure here stops
+			// the extraction PUT (no half-saves).
+			const updatedTicket = await updateTicketMetadata(token, ticket.id, {
+				title: ticket.title,
+				description: ticket.description
+			});
+			ticket = updatedTicket;
+
+			// 2) extraction only if the AI has produced a row to
+			// update. Same PUT maps products so lineTotal is always
+			// the product of qty × €/unit regardless of stale state.
+			if (extraction) {
+				const updatedEx = await replaceTicketExtraction(token, ticket.id, {
+					merchant: extraction.merchant,
+					purchaseDate: extraction.purchaseDate,
+					category: extraction.category,
+					products: extraction.products.map((p) => ({
+						name: p.name,
+						quantity: p.quantity ?? 1,
+						unit: p.unit,
+						pricePerUnit: p.pricePerUnit ?? 0,
+						lineTotal: computedLineTotal(p)
+					})),
+					totalAmount: extraction.totalAmount,
+					currency: extraction.currency
+				});
+				extraction = updatedEx;
+			}
+
+			dirty = false;
+			setSaveOutcome('saved', 2000);
+			window.dispatchEvent(new CustomEvent('ticket:updated'));
+		} catch (err) {
+			console.warn('TicketDetailApp: save failed', err);
+			if (err instanceof TicketApiError) {
+				errorMessage = `Save failed (${err.status}): ${err.message}`;
+			} else {
+				errorMessage = `Save failed: ${err instanceof Error ? err.message : 'unknown error'}`;
+			}
+			setSaveOutcome('error', 3000);
+		} finally {
+			savingChanges = false;
+		}
+	}
+
+	/**
+	 * If the user navigates away while there are unsaved changes,
+	 * the local edits evaporate (popstate clears state on the
+	 * cleanup branch). That's the trade-off chosen here over a more
+	 * elaborate "you have unsaved changes, are you sure?" guard:
+	 * the screen is for quick edits, and the Save button is the
+	 * only way to persist. No shadow buffer.
+	 */
+
+	function addProductRow(): void {
+		if (!extraction) return;
+		const next: ExtractedProductLine = {
+			name: '',
+			quantity: 1,
+			unit: null,
+			pricePerUnit: 0,
+			lineTotal: 0
+		};
+		extraction = {
+			...extraction,
+			products: [...extraction.products, next]
+		};
+		markDirty();
+	}
+
+	function removeProductRow(index: number): void {
+		if (!extraction) return;
+		const products = extraction.products.filter((_, i) => i !== index);
+		extraction = { ...extraction, products };
+		markDirty();
+	}
+
+	/**
+	 * Re-sync the id from the hash on every effect tick. Also fires
+	 * the initial load when the user opens a deep link while signed
+	 * in. The hash re-parsing makes the back / forward buttons
+	 * usable: going from `#ticket/A` to `#ticket/B` re-fetches B
+	 * without a full reload.
 	 */
 	$effect(() => {
-		// Re-sync the id from the hash on every effect tick. Cheap
-		// (regex parse) and makes the back button usable — going back
-		// to #ticket/A then forward to #ticket/B re-fetches the right
-		// one without a full reload.
 		const next = parseTicketIdFromHash();
 		if (next !== ticketId) {
 			ticketId = next;
@@ -378,15 +661,18 @@
 			ticketId &&
 			document.body.classList.contains('is-detail')
 		) {
-			// Path 2 only — first load is triggered by the event
-			// listener below. We guard so we don't double-fetch on
-			// the first open.
 			if (!ticket || ticket.id !== ticketId) {
 				void load(ticketId);
 			}
 		}
 	});
 
+	/**
+	 * `detail:open` is dispatched by the shared router when the
+	 * user navigates into a ticket via pushState. Mirrors the
+	 * hash-driven path above so the deep-link and click-to-open
+	 * flows converge in the same loader.
+	 */
 	$effect(() => {
 		const handler = (e: Event): void => {
 			const detail = (e as CustomEvent<{ id: string }>).detail;
@@ -397,10 +683,36 @@
 		window.addEventListener('detail:open', handler);
 		return () => {
 			window.removeEventListener('detail:open', handler);
-			// Revoke the blob URL on unmount.
-			if (fileUrl) URL.revokeObjectURL(fileUrl);
 		};
 	});
+
+	/**
+	 * Cleanup the object URL + local state when the detail screen
+	 * stops being the active route (user navigated away via back /
+	 * forward). The body class is the single source of truth —
+	 * after `popstate` runs in lib/navigation.ts the class flips
+	 * off, so we listen for that and drop the blob URL.
+	 */
+	$effect(() => {
+		const handler = (): void => {
+			if (!document.body.classList.contains('is-detail')) {
+				if (fileUrl) {
+					URL.revokeObjectURL(fileUrl);
+					fileUrl = null;
+				}
+				ticket = null;
+				extraction = null;
+				errorMessage = null;
+			}
+		};
+		window.addEventListener('popstate', handler);
+		return () => window.removeEventListener('popstate', handler);
+	});
+
+	/** Cosmetic helper: cap currency client-side to 3 ISO 4217 letters. */
+	function sanitiseCurrency(v: string): string {
+		return (v ?? '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+	}
 </script>
 
 <svelte:element this={'style'}>{@html tailwindCss}</svelte:element>
@@ -413,24 +725,109 @@
 		<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
 			<header class="flex items-start justify-between gap-4">
 				<div class="min-w-0 flex-1">
-					<h1 class="truncate text-2xl font-bold tracking-tight sm:text-3xl">
-						{ticket?.title ?? 'Ticket'}
-					</h1>
 					{#if ticket}
-						<p class="mt-1 truncate text-sm text-muted-foreground">
-							Created {fmtDateTime(ticket.createdAt)}
-							{#if ticket.description}· {ticket.description}{/if}
+						<!--
+							Title edit: always a text-styled input.
+							bind:value writes through the $state proxy
+							straight into ticket.title; `markDirty`
+							flips the dirty flag that drives the Save
+							button. Nothing is sent to the server until
+							the user clicks Save — see the comment
+							block at the script header for the save
+							model.
+						-->
+						<input
+							type="text"
+							bind:value={ticket.title}
+							oninput={markDirty}
+							maxlength="255"
+							required
+							data-testid="ticket-title"
+							aria-label="Ticket title"
+							class="block w-full truncate border-0 bg-transparent px-0 text-2xl font-bold tracking-tight outline-none focus:ring-0 sm:text-3xl"
+						/>
+						<p class="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+							<span class="truncate">
+								Created {fmtDateTime(ticket.createdAt)}
+							</span>
+							{#if dirty}
+								<span
+									class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+									data-testid="dirty-indicator"
+								>
+									Unsaved changes
+								</span>
+							{:else if saveOutcome === 'saved'}
+								<span
+									class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"
+									data-testid="save-outcome"
+								>
+									<CheckIcon class="size-3" />
+									Saved
+								</span>
+							{:else if saveOutcome === 'error'}
+								<span
+									class="inline-flex items-center gap-1 text-xs text-destructive"
+									data-testid="save-outcome"
+								>
+									Couldn't save
+								</span>
+							{/if}
 						</p>
+						<!--
+							Description: same pattern as title. Inline,
+							seamless, no modal. Empty placeholder keeps
+							the input visible when the user clears the
+							field.
+						-->
+						<input
+							type="text"
+							bind:value={ticket.description}
+							oninput={markDirty}
+							maxlength="2000"
+							placeholder="Add a description…"
+							aria-label="Ticket description"
+							data-testid="ticket-description"
+							class="mt-2 block w-full border-0 bg-transparent px-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:ring-0"
+						/>
+					{:else}
+						<h1 class="truncate text-2xl font-bold tracking-tight sm:text-3xl">
+							Ticket
+						</h1>
 					{/if}
 				</div>
+				<!--
+					Save button: enabled only when there are unsaved
+					changes (`dirty` flag), disabled while saving. The
+					label cycles through "Save changes" / "Saving…"
+					/ "Saved" so the user gets the same "did it work?"
+					signal as the autosave variant, except persisted
+					through an explicit click rather than a timer.
+				-->
 				<button
 					type="button"
-					onclick={close}
-					aria-label="Close"
-					data-testid="detail-close"
-					class="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+					onclick={saveChanges}
+					disabled={!dirty || savingChanges || !ticket}
+					data-testid="save-changes"
+					aria-label="Save changes"
+					class={[
+						'inline-flex h-9 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium shadow-sm transition-colors',
+						dirty
+							? 'bg-primary text-primary-foreground hover:bg-primary/90'
+							: 'border border-input bg-background text-muted-foreground',
+						'disabled:cursor-not-allowed disabled:opacity-70'
+					].join(' ')}
 				>
-					<X class="size-4" />
+					{#if savingChanges}
+						<Loader2 class="size-3.5 animate-spin" />
+						Saving…
+					{:else if !dirty}
+						<CheckIcon class="size-3.5" />
+						Saved
+					{:else}
+						<Save class="size-3.5" />
+						Save changes
+					{/if}
 				</button>
 			</header>
 
@@ -451,24 +848,86 @@
 					<span>{errorMessage}</span>
 				</div>
 			{:else if ticket}
-				<div class="grid gap-6 lg:grid-cols-[1fr_1fr]">
+				<!--
+					Resizable split: extraction on the left (flex-1
+					takes what the preview doesn't claim), drag divider
+					in the middle (lg+ only — single column on small
+					screens stays as it was), preview on the right
+					with a fixed pixel width that the user controls.
+				-->
+				<div class="flex flex-col gap-6 lg:flex-row">
 					<!-- Left: structured extraction -->
-					<section class="flex flex-col gap-4">
+					<section class="flex min-w-0 flex-1 flex-col gap-4">
 						<div
 							class="rounded-xl border border-border bg-card p-5 shadow-sm"
 							data-testid="extraction-card"
 						>
 							<header class="mb-4 flex items-start justify-between gap-3">
-								<div>
-									<h2 class="text-lg font-semibold">
-										{extraction?.merchant ?? 'Awaiting AI extraction'}
-									</h2>
+								<div class="min-w-0 flex-1">
 									{#if extraction}
-										<p class="mt-0.5 text-xs text-muted-foreground">
-											{extraction.category ?? 'uncategorised'} · {fmtDate(extraction.purchaseDate)}
-											· extracted by {extraction.model} on {fmtDateTime(extraction.extractedAt)}
-										</p>
+										<!--
+											Merchant: styled-as-text input. Sits
+											where the H2 used to be so the
+											visual hierarchy matches the read
+											view (h2 size + weight).
+										-->
+										<input
+											type="text"
+											bind:value={extraction.merchant}
+											oninput={markDirty}
+											maxlength="255"
+											required
+											aria-label="Merchant"
+											data-testid="extraction-merchant"
+											class="block w-full border-0 bg-transparent px-0 text-lg font-semibold outline-none focus:ring-0"
+										/>
+										<div class="mt-2 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+											<label class="flex flex-col gap-1">
+												<span class="uppercase tracking-wide">Purchase date</span>
+												<input
+													type="date"
+													bind:value={extraction.purchaseDate}
+													oninput={markDirty}
+													required
+													aria-label="Purchase date"
+													data-testid="extraction-purchase-date"
+													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+												/>
+											</label>
+											<label class="flex flex-col gap-1">
+												<span class="uppercase tracking-wide">Category</span>
+												<input
+													type="text"
+													value={extraction.category ?? ''}
+													oninput={(e) => {
+														// Explicit annotation pins the
+														// spread to the full
+														// TicketExtraction type — without
+														// it, TypeScript widens the
+														// spread to a partial and drops
+														// required fields like
+														// ticketId.
+														if (!extraction) return;
+														const next: TicketExtraction = {
+															...extraction,
+															category:
+																e.currentTarget.value === ''
+																	? null
+																	: e.currentTarget.value
+														};
+														extraction = next;
+												markDirty();
+													}}
+													maxlength="64"
+													placeholder="food, pharmacy…"
+													aria-label="Category"
+													data-testid="extraction-category"
+													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+												/>
+											</label>
+										</div>
 									{:else}
+										<h2 class="text-lg font-semibold">Awaiting AI extraction</h2>
 										<p class="mt-0.5 text-xs text-muted-foreground">
 											The AI hasn't run on this ticket yet. Check back in a moment.
 										</p>
@@ -476,49 +935,176 @@
 								</div>
 								{#if extraction}
 									<div class="text-right">
-										<div class="text-xs uppercase tracking-wide text-muted-foreground">
+										<label class="block text-xs uppercase tracking-wide text-muted-foreground" for="extraction-currency">
+											Currency
+										</label>
+										<input
+											id="extraction-currency"
+											type="text"
+											value={extraction.currency}
+											oninput={(e) => {
+												// Same explicit-annotation
+												// pattern as the category
+												// input — the spread otherwise
+												// widens to Partial.
+												if (!extraction) return;
+												const v = sanitiseCurrency(e.currentTarget.value);
+												const next: TicketExtraction = {
+													...extraction,
+													currency: v
+												};
+												extraction = next;
+																markDirty();
+											}}
+											maxlength="3"
+											required
+											placeholder="EUR"
+											aria-label="Currency"
+											data-testid="extraction-currency"
+											class="mt-1 w-20 rounded-md border border-input bg-background px-2 py-1 text-center text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring"
+										/>
+										<label class="mt-2 block text-xs uppercase tracking-wide text-muted-foreground" for="extraction-total">
 											Total
-										</div>
-										<div class="text-xl font-bold tabular-nums" data-testid="extraction-total">
-											{fmtAmount(extraction.totalAmount, extraction.currency)}
-										</div>
+										</label>
+										<input
+											id="extraction-total"
+											type="number"
+											step="0.01"
+											min="0"
+											bind:value={extraction.totalAmount}
+											oninput={markDirty}
+											required
+											aria-label="Total"
+											data-testid="extraction-total-input"
+											class="mt-1 w-28 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+										/>
 									</div>
 								{/if}
 							</header>
 
-							{#if extraction && extraction.products.length > 0}
+							{#if extraction}
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
 										<thead class="text-left text-xs uppercase tracking-wide text-muted-foreground">
 											<tr>
-												<th class="py-2 pr-3 font-medium">Item</th>
-												<th class="py-2 pr-3 text-right font-medium">Qty</th>
-												<th class="py-2 pr-3 font-medium">Unit</th>
-												<th class="py-2 pr-3 text-right font-medium">€/unit</th>
-												<th class="py-2 text-right font-medium">Line</th>
+												<th class="py-2 pr-2 font-medium">Item</th>
+												<th class="py-2 pr-2 text-right font-medium">Qty</th>
+												<th class="py-2 pr-2 font-medium">Unit</th>
+												<th class="py-2 pr-2 text-right font-medium">€/unit</th>
+												<th class="py-2 pr-2 text-right font-medium">Line</th>
+												<th class="py-2 font-medium"></th>
 											</tr>
 										</thead>
 										<tbody class="divide-y divide-border">
-											{#each extraction.products as line, i (i)}
+											{#each extraction.products as product, i (i)}
 												<tr data-testid="product-line">
-													<td class="py-2 pr-3 font-medium">{line.name}</td>
-													<td class="py-2 pr-3 text-right tabular-nums">
-														{line.quantity}
+													<td class="py-1.5 pr-2">
+														<input
+															type="text"
+															bind:value={product.name}
+															oninput={markDirty}
+															maxlength="255"
+															required
+															placeholder="Item name"
+															aria-label="Item name"
+															data-testid="product-name-input"
+															class="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+														/>
 													</td>
-													<td class="py-2 pr-3 text-muted-foreground">
-														{line.unit ?? '—'}
+													<td class="py-1.5 pr-2">
+														<input
+															type="number"
+															step="0.01"
+															min="0"
+															bind:value={product.quantity}
+															oninput={markDirty}
+															required
+															aria-label="Quantity"
+															data-testid="product-qty-input"
+															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+														/>
 													</td>
-													<td class="py-2 pr-3 text-right tabular-nums">
-														{line.pricePerUnit.toFixed(2)}
+													<td class="py-1.5 pr-2">
+														<input
+															type="text"
+															value={product.unit ?? ''}
+															oninput={(e) => {
+																product.unit =
+																	e.currentTarget.value === ''
+																		? null
+																		: e.currentTarget.value;
+														markDirty();
+															}}
+															maxlength="16"
+															placeholder="kg"
+															aria-label="Unit"
+															data-testid="product-unit-input"
+															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+														/>
 													</td>
-													<td class="py-2 text-right tabular-nums">
-														{line.lineTotal.toFixed(2)}
+													<td class="py-1.5 pr-2">
+														<input
+															type="number"
+															step="0.01"
+															bind:value={product.pricePerUnit}
+															oninput={markDirty}
+															aria-label="Price per unit"
+															data-testid="product-price-per-unit-input"
+															class="w-24 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+														/>
+													</td>
+													<!--
+														Line total is derived
+														(qty × €/unit) and not
+														user-editable. Discounts
+														are modelled as a row with
+														a negative value (see the
+														domain ProductLine
+														Javadoc) — never as an
+														override here. The
+														display updates instantly
+														when qty or €/unit change;
+														the autosave picks up the
+														payload from the save
+														mapper below (not from
+														product.lineTotal itself,
+														since the editable column
+														is gone).
+													-->
+													<td class="py-1.5 pr-2 text-right tabular-nums">
+														<span
+															aria-label="Line total"
+															data-testid="product-line-total"
+															class="block w-24 px-2 py-1 text-sm text-muted-foreground"
+														>
+															{(computedLineTotal(product)).toFixed(2)}
+														</span>
+													</td>
+													<td class="py-1.5 text-right">
+														<button
+															type="button"
+															onclick={() => removeProductRow(i)}
+															aria-label="Remove row"
+															data-testid="product-row-remove"
+															class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+														>
+															<Trash2 class="size-3.5" />
+														</button>
 													</td>
 												</tr>
 											{/each}
 										</tbody>
 									</table>
 								</div>
+								<button
+									type="button"
+									onclick={addProductRow}
+									data-testid="product-row-add"
+									class="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent"
+								>
+									<Plus class="size-3.5" />
+									Add row
+								</button>
 							{:else if !extraction}
 								<div
 									class="rounded-md border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground"
@@ -526,12 +1112,6 @@
 								>
 									<FileText class="mx-auto mb-2 size-6 opacity-60" />
 									Waiting for the AI to extract the structured data.
-								</div>
-							{:else}
-								<div
-									class="rounded-md border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground"
-								>
-									This receipt has no product lines.
 								</div>
 							{/if}
 						</div>
@@ -547,8 +1127,53 @@
 						{/if}
 					</section>
 
+					<!--
+						Width handle. Hidden below lg — on small screens
+						the layout is single column (parent's `flex-col
+						lg:flex-row`) and the preview already takes the
+						full width, so there's nothing to resize.
+
+						role="separator" + aria-orientation + aria-valuenow
+						let screen readers announce the live width and
+						let keyboard users resize via the arrow / Home /
+						End handlers.
+					-->
+<!--
+	role="separator" with aria-orientation + handlers is the canonical
+	interactive ARIA pattern for resize splitters; Svelte's a11y taxonomy
+	doesn't recognise it, hence the suppressions — same shape as the
+	image-pan element above.
+-->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+						role="separator"
+						aria-orientation="vertical"
+						aria-label="Resize preview width"
+						aria-valuenow={previewWidth}
+						aria-valuemin={PREVIEW_WIDTH_MIN}
+						aria-valuemax={PREVIEW_WIDTH_MAX}
+						tabindex="0"
+						data-testid="preview-width-handle"
+						onmousedown={onWidthHandleMouseDown}
+						onkeydown={onWidthHandleKeydown}
+						class={[
+							'hidden lg:flex lg:shrink-0 lg:select-none lg:cursor-col-resize lg:items-center lg:justify-center lg:self-stretch lg:py-0',
+							widthDrag ? 'lg:bg-primary/20' : 'lg:hover:bg-accent'
+						].join(' ')}
+						style:width="6px"
+					>
+						<div
+							aria-hidden="true"
+							class="h-12 w-1 rounded-full bg-border"
+						></div>
+					</div>
+
 					<!-- Right: file preview -->
-					<section class="flex flex-col gap-4">
+					<section
+						class="flex flex-col lg:shrink-0"
+						style:width="{previewWidth}px"
+					>
 						<div
 							class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
 							data-testid="preview-card"
@@ -573,8 +1198,19 @@
 									</a>
 								{/if}
 							</header>
+							<!--
+								Content area. No aspect ratio — height
+								is driven by the user-controlled
+								`previewHeight` so width resize and
+								height resize are independent (the previous
+								aspect-ratio lock forced them to move
+								together). `overflow-auto` keeps the
+								zoom controls and the pan/zoom transform
+								behaving the same as before.
+							-->
 							<div
-								class="relative flex aspect-[3/4] items-center justify-center bg-muted/30 sm:aspect-[4/3]"
+								class="relative flex items-center justify-center overflow-hidden bg-muted/30"
+								style:height="{previewHeight}px"
 							>
 								{#if !fileUrl}
 									<div
@@ -636,12 +1272,6 @@
 											/>
 										</div>
 									</div>
-									<!--
-										Floating zoom controls (glass effect
-										so they stay readable over any image
-										color). aria-live="polite" announces
-										the new zoom level to screen readers.
-									-->
 									<div
 										class="absolute top-2 right-2 flex flex-col items-center gap-0.5 rounded-lg border border-border/60 bg-background/85 p-1 shadow-lg backdrop-blur"
 										role="toolbar"
@@ -707,6 +1337,42 @@
 										</a>
 									</div>
 								{/if}
+							</div>
+							<!--
+								Height handle. Inside the preview card so
+								the drag affordance stays attached to the
+								content it controls — the user sees the
+								bottom of the card and the bar below it
+								in one glance. cursor: row-resize drag
+								resizes `previewHeight` independently of
+								width (no aspect-ratio link); keyboard
+								users use the same arrow / Home / End
+								pattern as the width handle, just
+								mapped to up/down.
+							-->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div
+								role="separator"
+								aria-orientation="horizontal"
+								aria-label="Resize preview height"
+								aria-valuenow={previewHeight}
+								aria-valuemin={PREVIEW_HEIGHT_MIN}
+								aria-valuemax={PREVIEW_HEIGHT_MAX}
+								tabindex="0"
+								data-testid="preview-height-handle"
+								onmousedown={onHeightHandleMouseDown}
+								onkeydown={onHeightHandleKeydown}
+								class={[
+									'flex shrink-0 cursor-row-resize select-none items-center justify-center self-stretch touch-none',
+									heightDrag ? 'bg-primary/20' : 'hover:bg-accent'
+								].join(' ')}
+								style:height="6px"
+							>
+								<div
+									aria-hidden="true"
+									class="h-1 w-12 rounded-full bg-border"
+								></div>
 							</div>
 						</div>
 					</section>

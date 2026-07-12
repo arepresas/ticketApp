@@ -241,3 +241,92 @@ export const updateTicketStatus = async (
 	}
 	return (await res.json()) as CreatedTicket;
 };
+
+/**
+ * Patchable subset of {@link CreatedTicket}. Either field is
+ * optional in the payload — the BFF only updates the fields the
+ * caller actually sent. Used by the detail screen's "Save edits"
+ * action.
+ */
+export type TicketMetadataPatch = {
+	title?: string;
+	description?: string;
+};
+
+/**
+ * Update a ticket's user-editable fields (title + description).
+ * PATCH {@code /api/tickets/{id}} on the BFF. Returns the full
+ * updated ticket; the caller replaces its local copy with this so
+ * the `updatedAt` reflects the patch.
+ *
+ * Throws {@link TicketApiError} on 4xx / 5xx; 404 when the ticket
+ * doesn't exist or belongs to another user (mirrors the read paths —
+ * never leak existence across tenants).
+ */
+export const updateTicketMetadata = async (
+	token: string,
+	id: string,
+	patch: TicketMetadataPatch
+): Promise<CreatedTicket> => {
+	const res = await fetch(`${API_BASE}/${id}`, {
+		method: 'PATCH',
+		headers: {
+			authorization: `Bearer ${token}`,
+			'content-type': 'application/json',
+			accept: 'application/json'
+		},
+		body: JSON.stringify(patch)
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket;
+};
+
+/**
+ * Editable subset of {@link TicketExtraction}. The AI's audit fields
+ * (`model`, `extractedAt`, `rawResponse`, `extractionPayload`) are
+ * not in this shape — the BFF's `replace` keeps them server-side
+ * untouched so the "extracted by X on Y" attribution stays
+ * truthful even after the user corrects a line item.
+ */
+export type EditableExtraction = {
+	merchant: string;
+	purchaseDate: string;
+	category: string | null;
+	products: ExtractedProductLine[];
+	totalAmount: number;
+	currency: string;
+};
+
+/**
+ * Replace the editable portion of a ticket's extraction via
+ * {@code PUT /api/tickets/{id}/extraction}. Full replacement (not
+ * patch) because the fields are deeply interleaved — partial PATCH
+ * would need a merge strategy that the AI layer never has to deal
+ * with. The wire carries the user-friendly shape; the BFF preserves
+ * the AI-only fields.
+ *
+ * Returns the persisted extraction so the caller can refresh the
+ * `model`/`extractedAt` fields too (the BFF re-reads the row and
+ * serialises the full shape).
+ */
+export const replaceTicketExtraction = async (
+	token: string,
+	id: string,
+	next: EditableExtraction
+): Promise<TicketExtraction> => {
+	const res = await fetch(`${API_BASE}/${id}/extraction`, {
+		method: 'PUT',
+		headers: {
+			authorization: `Bearer ${token}`,
+			'content-type': 'application/json',
+			accept: 'application/json'
+		},
+		body: JSON.stringify(next)
+	});
+	if (!res.ok) {
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as TicketExtraction;
+};
