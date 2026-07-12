@@ -30,6 +30,24 @@ public interface TicketExtractionRepository {
     TicketExtraction save(TicketExtraction extraction);
 
     /**
+     * User-driven edit through the detail screen. The caller supplies
+     * the new mutable fields ({@code merchant}, {@code purchaseDate},
+     * {@code category}, {@code products}, {@code totalAmount},
+     * {@code currency}); the AI's audit fields ({@code model},
+     * {@code extractedAt}, {@code rawResponse},
+     * {@code extractionPayload}) are preserved server-side so the
+     * "extracted by X on Y" attribution stays accurate even when the
+     * user corrects a line item or price.
+     *
+     * <p>Refuses when no row exists for the ticket — the detail
+     * screen disables edit when the AI hasn't run yet, and
+     * silently turning a missing extraction into one would mask
+     * that condition. Throws an unchecked exception on the
+     * not-found path; the BFF translates to 404.
+     */
+    TicketExtraction replace(TicketExtraction extraction);
+
+    /**
      * Return the ticket ids of all tickets that already have an
      * extraction. Used by the scheduler to filter its candidate set
      * in a single round-trip instead of N point lookups.

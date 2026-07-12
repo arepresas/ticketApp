@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -208,6 +209,141 @@ public class TicketController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * User-driven metadata edit (detail screen's "Save" button on
+     * the title / description fields). Both fields are optional in
+     * the payload — only the fields the caller actually sends get
+     * updated. {@link Ticket#withTitle(String)} rejects blank
+     * input; {@link Ticket#withDescription(String)} normalises
+     * {@code null} → {@code ""} to keep the wire shape canonical.
+     *
+     * <p>Validation is done manually here (no Bean Validation on
+     * the controller, matching the rest of this class) and
+     * surfaces as 400 via {@link ResponseStatusException}.
+     *
+     * <p>Owner-scoped: same 404 rule as the read paths.
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<TicketResponse> update(@PathVariable UUID id,
+                                                 @RequestBody UpdateTicketRequest body) {
+        if (body == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        if (body.title() != null && body.title().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
+        }
+        AuthenticatedUser user = CurrentUser.get();
+        return repository.findById(id, user.id())
+                .map(t -> {
+                    Ticket next = t;
+                    if (body.title() != null) {
+                        next = next.withTitle(body.title());
+                    }
+                    if (body.description() != null) {
+                        next = next.withDescription(body.description());
+                    }
+                    return ResponseEntity.ok(TicketResponse.of(repository.save(next)));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * User-driven edit of the AI-extracted fields (merchant,
+     * purchaseDate, category, products, totalAmount, currency). The
+     * detail screen sends the full editable payload — the BFF
+     * preserves the AI-only fields ({@code model}, {@code extractedAt},
+     * {@code rawResponse}, {@code extractionPayload}) server-side so
+     * "extracted by X on Y" stays truthful. Full replacement
+     * (PUT, not PATCH) because the fields are deeply interleaved;
+     * partial PATCH would need a merge strategy the AI pipeline
+     * doesn't have to reason about.
+     *
+     * <p>Rejects editing when no extraction row exists yet
+     * (extraction not run, or status {@code ON_ERROR}); the
+     * repository {@code replace} throws on zero rows updated,
+     * which we translate to 404 so the dashboard's edit affordance
+     * stays honest about its preconditions.
+     *
+     * <p>Owner-scoped: same 404 rule as the read paths.
+     */
+    @PutMapping("/{id}/extraction")
+    public ResponseEntity<ExtractionResponse> replaceExtraction(@PathVariable UUID id,
+                                                                @RequestBody UpdateExtractionRequest body) {
+        if (body == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
+        }
+        if (body.merchant() == null || body.merchant().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "merchant must not be blank");
+        }
+        if (body.purchaseDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purchaseDate is required");
+        }
+        if (body.totalAmount() == null || body.totalAmount().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "totalAmount must be >= 0");
+        }
+        if (body.currency() == null || body.currency().length() != 3) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "currency must be an ISO 4217 code (3 letters)");
+        }
+        java.util.List<ProductLineDto> products = body.products() == null
+                ? java.util.List.of()
+                : body.products();
+        for (int i = 0; i < products.size(); i++) {
+            ProductLineDto p = products.get(i);
+            if (p.name() == null || p.name().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].name must not be blank");
+            }
+            if (p.quantity() == null || p.quantity().signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].quantity must be > 0");
+            }
+        }
+
+        AuthenticatedUser user = CurrentUser.get();
+        java.util.Optional<Ticket> ticketOpt = repository.findById(id, user.id());
+        if (ticketOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        // Refuse silently when no extraction exists yet — let the
+        // AI finish first, then edit. The detail screen is
+        // already aligned: it disables the edit affordance while
+        // extraction is null.
+        java.util.Optional<TicketExtraction> existing = extractions.findByTicketId(id);
+        if (existing.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        TicketExtraction current = existing.get();
+        java.util.List<TicketExtraction.ProductLine> domainProducts = products.stream()
+                .map(p -> new TicketExtraction.ProductLine(
+                        p.name(), p.quantity(), p.unit(),
+                        p.pricePerUnit() == null ? java.math.BigDecimal.ZERO : p.pricePerUnit(),
+                        p.lineTotal() == null ? java.math.BigDecimal.ZERO : p.lineTotal()))
+                .toList();
+        TicketExtraction updated = new TicketExtraction(
+                current.ticketId(),
+                body.merchant(),
+                body.purchaseDate(),
+                body.category(),
+                domainProducts,
+                body.totalAmount(),
+                body.currency(),
+                current.model(),
+                current.extractedAt(),
+                current.rawResponse(),
+                current.extractionPayload());
+        try {
+            extractions.replace(updated);
+        } catch (IllegalStateException e) {
+            // Race: row vanished between findByTicketId and replace
+            // (a concurrent delete). Surface as 404 — the row is
+            // gone from the operator's POV either way.
+            log.warn("replaceExtraction raced with delete for ticket {}: {}", id, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(ExtractionResponse.of(updated));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         AuthenticatedUser user = CurrentUser.get();
@@ -294,6 +430,32 @@ public class TicketController {
     }
 
     public record ChangeStatusRequest(Ticket.Status status) {}
+
+    /**
+     * Wire shape for {@code PATCH /api/tickets/{id}}. Both fields
+     * are optional — the controller only updates the fields the
+     * caller actually sent. {@code title} is validated non-blank
+     * by {@link Ticket#withTitle(String)}; {@code description} is
+     * normalised to {@code ""} by {@link Ticket#withDescription(String)}
+     * when {@code null}.
+     */
+    public record UpdateTicketRequest(String title, String description) {}
+
+    /**
+     * Wire shape for {@code PUT /api/tickets/{id}/extraction}.
+     * Carries the user-editable portion of the extraction; the
+     * AI's audit fields ({@code model}, {@code extractedAt},
+     * {@code rawResponse}, {@code extractionPayload}) are not
+     * part of this DTO — the controller preserves them
+     * server-side by reading the existing row.
+     */
+    public record UpdateExtractionRequest(
+            String merchant,
+            java.time.LocalDate purchaseDate,
+            String category,
+            java.util.List<ProductLineDto> products,
+            java.math.BigDecimal totalAmount,
+            String currency) {}
 
     /**
      * Wire response for {@code GET /api/tickets/{id}/extraction}.

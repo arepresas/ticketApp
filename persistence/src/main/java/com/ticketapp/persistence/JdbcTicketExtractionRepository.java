@@ -51,6 +51,23 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, NULL, ?, ?::jsonb)
             """;
 
+    /**
+     * Update path for user-driven edits through the detail screen.
+     * Touches only the mutable columns — {@code model},
+     * {@code extracted_at}, {@code raw_response_text}, and
+     * {@code extraction_payload} keep the AI's audit
+     * ("extracted by MiniMax-M3 on …") so the dashboard's audit
+     * trail stays truthful after the user corrects a line item.
+     * The legacy {@code raw_response} JSONB column is not touched
+     * (stays NULL on writes since V5).
+     */
+    private static final String UPDATE_SQL = """
+            UPDATE ticket_extractions SET
+                merchant = ?, purchase_date = ?, category = ?,
+                products = ?::jsonb, total_amount = ?, currency = ?
+            WHERE ticket_id = ?
+            """;
+
     private final JdbcTemplate jdbc;
     private final ExtractionRowMapper mapper;
 
@@ -75,6 +92,36 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             bindInsert(ps, extraction);
             return ps;
         });
+        return extraction;
+    }
+
+    @Override
+    public TicketExtraction replace(TicketExtraction extraction) {
+        // Caller is expected to load the existing row first (the
+        // detail screen does); on the empty-row path an UPDATE
+        // quietly updates 0 rows. We surface that as a 404 at the
+        // BFF layer rather than turning it into a silent insert,
+        // so the operator can spot "edit before AI finished" cases
+        // instead of overwriting the genuine extraction flow.
+        int rows = jdbc.update(con -> {
+            PreparedStatement ps = con.prepareStatement(UPDATE_SQL);
+            ps.setString(1, extraction.merchant());
+            ps.setObject(2, extraction.purchaseDate());
+            if (extraction.category() == null) {
+                ps.setNull(3, Types.VARCHAR);
+            } else {
+                ps.setString(3, extraction.category());
+            }
+            ps.setObject(4, JsonbSupport.toJsonb(mapper.writeProducts(extraction.products())));
+            ps.setBigDecimal(5, extraction.totalAmount());
+            ps.setString(6, extraction.currency());
+            ps.setObject(7, extraction.ticketId());
+            return ps;
+        });
+        if (rows == 0) {
+            throw new IllegalStateException(
+                    "No extraction row to replace for ticket " + extraction.ticketId());
+        }
         return extraction;
     }
 
