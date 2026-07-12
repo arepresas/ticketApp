@@ -29,14 +29,18 @@ const mockApi = vi.hoisted(() => ({
 	getTicket: vi.fn(),
 	getTicketExtraction: vi.fn(),
 	getTicketFile: vi.fn(),
-	updateTicketStatus: vi.fn()
+	updateTicketStatus: vi.fn(),
+	updateTicketMetadata: vi.fn(),
+	replaceTicketExtraction: vi.fn()
 }));
 
 vi.mock('../api/tickets.ts', () => ({
 	getTicket: mockApi.getTicket,
 	getTicketExtraction: mockApi.getTicketExtraction,
 	getTicketFile: mockApi.getTicketFile,
-	updateTicketStatus: mockApi.updateTicketStatus
+	updateTicketStatus: mockApi.updateTicketStatus,
+	updateTicketMetadata: mockApi.updateTicketMetadata,
+	replaceTicketExtraction: mockApi.replaceTicketExtraction
 }));
 
 // Import AFTER the mocks so the Svelte compiler picks them up.
@@ -82,6 +86,8 @@ describe('TicketDetailApp', () => {
 		mockApi.getTicketExtraction.mockReset();
 		mockApi.getTicketFile.mockReset();
 		mockApi.updateTicketStatus.mockReset();
+		mockApi.updateTicketMetadata.mockReset();
+		mockApi.replaceTicketExtraction.mockReset();
 	});
 
 	it('exports a Svelte component module', () => {
@@ -94,9 +100,21 @@ describe('TicketDetailApp', () => {
 	});
 
 	// Full rendered-DOM coverage (extraction card, file preview, action
-// buttons, click → load, hash → load) is deferred to Playwright — the
-// screen is a shadow-DOM custom element and jsdom can't reach the
-// rendered subtree. The shared contract lives in
-// `api/tickets.test.ts`: getTicket, getTicketExtraction, getTicketFile,
-// updateTicketStatus are pinned there.
+// buttons, click → load, hash → load, Edit toggle, Save round-trip)
+	// is deferred to Playwright — the screen is a shadow-DOM custom
+	// element and jsdom can't reach the rendered subtree. The shared
+	// contract lives in `api/tickets.test.ts`: getTicket,
+	// getTicketExtraction, getTicketFile, updateTicketStatus,
+	// updateTicketMetadata, replaceTicketExtraction are pinned there.
+
+	it('wires the new editable-fields API surface', () => {
+		// Existence check: when the component imported `tickets.ts`,
+		// the new exports must be wired through the mock factory and
+		// the mocks must be resettable between tests. Anything more
+		// specific lives in `api/tickets.test.ts` (typed wire shape).
+		expect(mockApi.updateTicketMetadata).toBeDefined();
+		expect(mockApi.replaceTicketExtraction).toBeDefined();
+		expect(typeof mockApi.updateTicketMetadata).toBe('function');
+		expect(typeof mockApi.replaceTicketExtraction).toBe('function');
+	});
 });

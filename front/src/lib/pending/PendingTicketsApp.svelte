@@ -38,7 +38,7 @@
 	import tailwindCss from '../../app.css?inline';
 
 	import { onMount } from 'svelte';
-	import { RefreshCcw, X, FileText, Image as ImageIcon } from '@lucide/svelte';
+	import { RefreshCcw, FileText, Image as ImageIcon } from '@lucide/svelte';
 
 	import { auth } from '../auth/store.svelte';
 	import {
@@ -47,6 +47,7 @@
 		type CreatedTicket,
 		type TicketStatus
 	} from '../api/tickets';
+	import { navigate } from '../navigation';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -142,27 +143,16 @@
 		}
 	}
 
-	function exit(): void {
-		document.body.classList.remove('is-pending');
-		window.location.hash = '';
-	}
-
 	/**
-	 * Open the per-ticket detail screen for the given id. Mirrors the
-	 * `openPendingTickets` / `openNewTicket` pattern: set a body class
-	 * so the CSS gate in index.html reveals the element, set the
-	 * hash so the URL is shareable, and fire a DOM event so the
-	 * detail shell can react. The detail shell's own auth gate
-	 * handles the signed-out case (refuses to render), so we don't
-	 * re-check here.
+	 * Open the per-ticket detail screen for the given id. Goes
+	 * through `navigate(...)` so the body class swap, hash push,
+	 * and `detail:open` dispatch all stay in lock-step with the
+	 * shared router. Browser back is then the natural way to
+	 * return here — the popstate listener in `lib/navigation.ts`
+	 * re-applies the `is-pending` body class.
 	 */
 	function openDetail(id: string): void {
-		document.body.classList.remove('is-pending');
-		document.body.classList.add('is-detail');
-		window.location.hash = `ticket/${id}`;
-		window.dispatchEvent(
-			new CustomEvent('detail:open', { detail: { id } })
-		);
+		navigate({ kind: 'detail', ticketId: id });
 	}
 
 	/**
@@ -240,14 +230,6 @@
 						Every receipt that hasn't reached a terminal state — newest first.
 					</p>
 				</div>
-				<button
-					type="button"
-					onclick={exit}
-					aria-label="Close"
-					class="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-				>
-					<X class="size-4" />
-				</button>
 			</header>
 
 			<div class="flex items-center justify-between gap-3">

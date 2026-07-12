@@ -13,14 +13,12 @@
 	 *    theme toggle + the user avatar / sign-out menu provided by
 	 *    `GoogleLoginButton` (which already branches on the same store).
 	 *
-	 * Anchors:
-	 *  - Public links use fragment ids (`#features`, …) that exist on the
-	 *    landing page. They resolve to top-of-page when the user is
-	 *    authenticated and the landing subtree isn't mounted, which is the
-	 *    expected no-op behaviour for those routes.
-	 *  - Authenticated links point at `#main` (the dashboard wrapper's main
-	 *    scroll target) for now. Concrete routes will replace them once the
-	 *    router exists.
+	 * Navigation:
+	 * Every screen transition goes through `navigate(...)` from
+	 * `lib/navigation.ts` so the body class stays in sync with the URL
+	 * hash and the browser's back / forward buttons do what users
+	 * expect. The X buttons that used to live on each screen are gone
+	 * — back is the only escape.
 	 */
 	import { Menu, X } from '@lucide/svelte';
 	import ReceiptText from '@lucide/svelte/icons/receipt-text';
@@ -28,6 +26,7 @@
 	import { auth } from '../../auth/store.svelte';
 	import GoogleLoginButton from '../../auth/GoogleLoginButton.svelte';
 	import ThemeToggle from '../../landing/ThemeToggle.svelte';
+	import { navigate } from '../../navigation';
 
 	// Public mode — marketing anchors. Order matters; rendered left-to-right.
 	const publicLinks: ReadonlyArray<{ href: string; label: string; onClick?: (e: MouseEvent) => void }> =
@@ -41,9 +40,9 @@
 	// Authenticated mode — app anchors. Replace with router routes later.
 	const appLinks: ReadonlyArray<{ href: string; label: string; onClick?: (e: MouseEvent) => void }> =
 		[
-			{ href: '#pending', label: 'Pending tickets', onClick: openPendingTickets },
-			{ href: '#new', label: 'New', onClick: openNewTicket },
-			{ href: '#dashboard', label: 'Dashboard', onClick: openDashboard }
+			{ href: '#pending', label: 'Pending tickets', onClick: (e) => go(e, { kind: 'pending' }) },
+			{ href: '#new', label: 'New', onClick: (e) => go(e, { kind: 'new' }) },
+			{ href: '#dashboard', label: 'Dashboard', onClick: (e) => go(e, { kind: 'dashboard' }) }
 		];
 
 	const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
@@ -53,75 +52,12 @@
 	const links = $derived(auth.isAuthenticated ? appLinks : publicLinks);
 
 	/**
-	 * Open the "Pending tickets" list by setting `body.is-pending`.
-	 * Mirrors `openNewTicket` — the hash gives us a bookmarkable URL
-	 * and `preventDefault` keeps the browser from scrolling to a
-	 * missing anchor. Also fires a `pending:open` CustomEvent so the
-	 * `<pending-tickets-app>` shell can react — the body class toggle
-	 * alone is invisible to Svelte's reactivity (the DOM classList is
-	 * not a reactive source), so the screen needs a DOM-level signal
-	 * to trigger its initial fetch.
+	 * Prevent the browser's hash-jump on click, then navigate via
+	 * the centralised router (push + body class + custom event).
 	 */
-	function openPendingTickets(e: MouseEvent): void {
+	function go(e: MouseEvent, target: Parameters<typeof navigate>[0]): void {
 		e.preventDefault();
-		window.location.hash = 'pending';
-		document.body.classList.add('is-pending');
-		document.body.classList.remove('is-new');
-		window.dispatchEvent(new CustomEvent('pending:open'));
-	}
-
-	/**
-	 * Open the "New ticket" upload screen by setting `body.is-new`. The
-	 * hash gives us a real URL the user can bookmark/back-button to; the
-	 * body class is what the index.html CSS gate reads. `preventDefault`
-	 * stops the browser from jumping the scroll position to a missing
-	 * `#new` anchor.
-	 */
-	function openNewTicket(e: MouseEvent): void {
-		e.preventDefault();
-		window.location.hash = 'new';
-		document.body.classList.add('is-new');
-		document.body.classList.remove('is-pending');
-	}
-
-	/**
-	 * Return to the dashboard. The dashboard subtree is always mounted
-	 * for authenticated users (the {@code is-authenticated} body class
-	 * is owned by the auth store, not this header) so the only thing
-	 * we have to do is clear the screen-gate classes — pending and new
-	 * — and let CSS reveal the dashboard again. Used by the "Dashboard"
-	 * link in the nav AND by the logo so the user always has a way to
-	 * dismiss an overlay.
-	 *
-	 * <p>{@code preventDefault} stops the browser from jumping to a
-	 * missing {@code #dashboard} anchor.</p>
-	 */
-	function openDashboard(e: MouseEvent): void {
-		e.preventDefault();
-		document.body.classList.remove('is-pending');
-		document.body.classList.remove('is-new');
-		// Clear any stale hash from a previous pending/new visit so the
-		// URL reflects the actual screen.
-		if (window.location.hash === '#dashboard' ||
-			window.location.hash === '#pending' ||
-			window.location.hash === '#new') {
-			history.replaceState(null, '', window.location.pathname + window.location.search);
-		}
-	}
-
-	/**
-	 * Logo click — same handler as the Dashboard link for authenticated
-	 * users. For signed-out visitors it falls through to the default
-	 * anchor behaviour (scroll to top of the landing page) because no
-	 * overlay classes need clearing in that mode.
-	 */
-	function onLogoClick(e: MouseEvent): void {
-		document.body.classList.remove('is-pending');
-		document.body.classList.remove('is-new');
-		if (window.location.hash) {
-			e.preventDefault();
-			history.replaceState(null, '', window.location.pathname + window.location.search);
-		}
+		navigate(target);
 	}
 
 	function openMenu(): void {
@@ -138,7 +74,12 @@
 	<div
 		class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"
 	>
-		<a href="#dashboard" onclick={onLogoClick} class="flex items-center gap-2 font-semibold" aria-label="TicketApp home">
+		<a
+			href="#dashboard"
+			onclick={(e) => go(e, { kind: 'dashboard' })}
+			class="flex items-center gap-2 font-semibold"
+			aria-label="TicketApp home"
+		>
 			<span
 				class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
 			>

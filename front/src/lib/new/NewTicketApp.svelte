@@ -37,6 +37,7 @@
 	import { auth } from '../auth/store.svelte';
 	import { createTicket, TicketApiError } from '../api/tickets';
 	import { MAX_BYTES, fileSizeError, humanSize, isAcceptedFile } from './validation';
+	import { navigateBack } from '../navigation';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -136,9 +137,15 @@
 		clearPreview();
 	}
 
+	/**
+	 * Leave the upload screen. Goes through the browser's history so
+	 * the back / forward buttons stay consistent — re-entering the
+	 * screen via the header link pushes a new entry. The popstate
+	 * listener in `lib/navigation.ts` removes the `is-new` body
+	 * class when the URL is no longer `#new`.
+	 */
 	function exit(): void {
-		document.body.classList.remove('is-new');
-		window.location.hash = '';
+		navigateBack();
 	}
 
 	async function onSubmit(e: SubmitEvent): Promise<void> {
@@ -198,14 +205,6 @@ const ab = new ArrayBuffer(preview.bytes.byteLength);
 						Upload a receipt — a photo or a PDF. We'll handle the rest.
 					</p>
 				</div>
-				<button
-					type="button"
-					onclick={exit}
-					aria-label="Close"
-					class="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-				>
-					<X class="size-4" />
-				</button>
 			</header>
 
 			<form onsubmit={onSubmit} class="flex flex-col gap-4" novalidate>
