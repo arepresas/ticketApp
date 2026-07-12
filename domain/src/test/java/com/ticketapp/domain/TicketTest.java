@@ -230,4 +230,48 @@ class TicketTest {
         assertTrue(t.toString().contains(OWNER.toString()),
                 "expected ownerId in toString: " + t);
     }
+
+    @Test
+    void withTitleUpdatesTitleAndPreservesIdentity() {
+        // User-driven edit through the detail screen. The id,
+        // owner, status, file columns, and error state must all
+        // survive — only the title swaps and updatedAt bumps.
+        Ticket t = Ticket.open(OWNER, "old", "desc")
+                .markError("previous failure");
+        Ticket renamed = t.withTitle("new");
+
+        assertEquals("new", renamed.title());
+        assertEquals(t.id(), renamed.id());
+        assertEquals(t.ownerId(), renamed.ownerId());
+        assertEquals(t.description(), renamed.description());
+        assertEquals(t.status(), renamed.status());
+        assertEquals(t.errorMessage(), renamed.errorMessage());
+        assertEquals(t.createdAt(), renamed.createdAt());
+        assertFalse(renamed.updatedAt().isBefore(t.updatedAt()),
+                "updatedAt must not move backwards");
+    }
+
+    @Test
+    void withTitleRejectsBlank() {
+        // The BFF controller enforces this on the wire too — the
+        // domain-level guard is the last line of defence so a
+        // future caller that skips validation cannot persist a
+        // blank title.
+        Ticket t = Ticket.open(OWNER, "x", "");
+        assertThrows(IllegalArgumentException.class, () -> t.withTitle(""));
+        assertThrows(IllegalArgumentException.class, () -> t.withTitle("   "));
+        assertThrows(IllegalArgumentException.class, () -> t.withTitle(null));
+    }
+
+    @Test
+    void withDescriptionNormalisesNullToEmpty() {
+        // The user clearing the description field sends null; the
+        // record canonicalises that to "" on the way through so
+        // the wire shape never carries a null description.
+        Ticket t = Ticket.open(OWNER, "x", "old");
+        Ticket cleared = t.withDescription(null);
+
+        assertEquals("", cleared.description());
+        assertEquals(t.title(), cleared.title());
+    }
 }

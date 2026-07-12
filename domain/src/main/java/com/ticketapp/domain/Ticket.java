@@ -83,6 +83,35 @@ public record Ticket(
     }
 
     /**
+     * User-driven title edit (detail screen "Edit" affordance).
+     * Bumps {@code updatedAt} so the UI can show "just edited" via
+     * the existing sort/order logic. The new title must be
+     * non-blank — the BFF controller enforces this on the way in,
+     * and the invariant here guarantees we never persist a ticket
+     * with a {@code null}/empty title even if a future caller skips
+     * validation.
+     */
+    public Ticket withTitle(String newTitle) {
+        if (newTitle == null || newTitle.isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
+        }
+        return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
+                contentType, fileName, fileData, errorMessage);
+    }
+
+    /**
+     * User-driven description edit. {@code null} is normalised to
+     * the canonical empty string (matches the record's compact
+     * constructor) so the wire shape never carries a {@code null}
+     * description even when the user cleared the field.
+     */
+    public Ticket withDescription(String newDescription) {
+        String sanitized = newDescription == null ? "" : newDescription;
+        return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
+                contentType, fileName, fileData, errorMessage);
+    }
+
+    /**
      * Mark the ticket as failed. Sets status to {@link Status#ON_ERROR}
      * and stores the supplied message so the dashboard and operators
      * can see why the scheduled extraction did not succeed. ON_ERROR

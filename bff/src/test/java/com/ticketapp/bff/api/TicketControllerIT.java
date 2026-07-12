@@ -382,4 +382,260 @@ class TicketControllerIT {
                                 org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build(),
                         claims)).getTokenValue();
     }
+
+    // ---------------------------------------------------------------------
+    // User-driven edits: PATCH /api/tickets/{id} + PUT /api/tickets/{id}/extraction
+    // ---------------------------------------------------------------------
+    //
+    // Two endpoints ship together because the detail screen sends them
+    // sequentially on Save: metadata first, then extraction when one
+    // exists. They share auth (Bearer JWT), ownership scope (404 on
+    // cross-tenant), and validation surface (manual 400s — no Bean
+    // Validation on the controller).
+
+    /**
+     * Seed an extraction row directly (skipping the orchestrator)
+     * so the PUT path has a row to update. Mirrors the JSONB shape
+     * the persistence layer expects.
+     */
+    private void seedExtraction(UUID ticketId, String merchant, String category,
+                                java.math.BigDecimal total, String currency) {
+        jdbc.update("""
+                INSERT INTO ticket_extractions
+                  (ticket_id, merchant, purchase_date, category, products,
+                   total_amount, currency, model, extracted_at,
+                   raw_response, raw_response_text, extraction_payload)
+                VALUES (?, ?, '2026-07-03', ?, ?::jsonb, ?, ?, 'test-model',
+                        now(), NULL, 'seeded', NULL)
+                """,
+                ticketId, merchant, category, "[{\"name\":\"x\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1,\"lineTotal\":1}]",
+                total, currency);
+    }
+
+    @Test
+    void patchTicketUpdatesTitleAndDescription() {
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, "old desc")))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        var patchBody = new java.util.HashMap<String, String>();
+        patchBody.put("title", "Renamed");
+        patchBody.put("description", "New description");
+
+        TicketController.TicketResponse patched = web().patch().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(patchBody)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(patched).isNotNull();
+        assertThat(patched.title()).isEqualTo("Renamed");
+        assertThat(patched.description()).isEqualTo("New description");
+
+        // Sanity check: GET round-trips the edited fields too.
+        TicketController.TicketResponse fetched = web().get().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(fetched.title()).isEqualTo("Renamed");
+        assertThat(fetched.description()).isEqualTo("New description");
+    }
+
+    @Test
+    void patchTicketRejectsBlankTitle() {
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        web().patch().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("title", "   "))
+                .exchange()
+                .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void patchTicketReturns404ForOtherUsersTicket() {
+        String tokenA = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + tokenA)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        var userB = users.upsertFromGoogle(
+                "google-sub-other", "other@example.com", "Other", null);
+        String tokenB = mintTokenFor(userB);
+
+        web().patch().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + tokenB)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("title", "Hostile"))
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void putExtractionUpdatesEditableFieldsAndPreservesAiAudit() {
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+        seedExtraction(created.id(), "Mercadona", "food",
+                new java.math.BigDecimal("3.00"), "EUR");
+
+        var products = java.util.List.of(java.util.Map.of(
+                "name", "Bread",
+                "quantity", 2,
+                "unit", "unit",
+                "pricePerUnit", "1.50",
+                "lineTotal", "3.00"));
+        var payload = java.util.Map.of(
+                "merchant", "Mercadona corrected",
+                "purchaseDate", "2026-07-03",
+                "category", "groceries",
+                "products", products,
+                "totalAmount", "3.00",
+                "currency", "EUR");
+
+        TicketController.ExtractionResponse updated = web().put()
+                .uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(TicketController.ExtractionResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(updated).isNotNull();
+        assertThat(updated.merchant()).isEqualTo("Mercadona corrected");
+        assertThat(updated.category()).isEqualTo("groceries");
+        // AI audit preserved: model + extractedAt unchanged.
+        assertThat(updated.model()).isEqualTo("test-model");
+        assertThat(updated.totalAmount()).isEqualByComparingTo("3.00");
+        assertThat(updated.products()).hasSize(1);
+        assertThat(updated.products().get(0).name()).isEqualTo("Bread");
+    }
+
+    @Test
+    void putExtractionReturns404WhenNoExtractionExists() {
+        // Refusing silently when the AI hasn't run yet — the detail
+        // screen disables editing until the row exists. A PUT on a
+        // missing row must NOT silently insert one.
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        // HashMap because Map.of rejects null values — we want to
+        // exercise the nullable `category` field too.
+        var payload = new java.util.HashMap<String, Object>();
+        payload.put("merchant", "x");
+        payload.put("purchaseDate", "2026-07-03");
+        payload.put("category", null);
+        payload.put("products", java.util.List.of());
+        payload.put("totalAmount", "0");
+        payload.put("currency", "EUR");
+
+        web().put()
+                .uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
+
+    @Test
+    void putExtractionReturns404ForOtherUsersTicket() {
+        String tokenA = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketController.TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + tokenA)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketController.TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+        seedExtraction(created.id(), "Mercadona", "food",
+                new java.math.BigDecimal("3.00"), "EUR");
+
+        var userB = users.upsertFromGoogle(
+                "google-sub-other", "other@example.com", "Other", null);
+        String tokenB = mintTokenFor(userB);
+
+        var payload = new java.util.HashMap<String, Object>();
+        payload.put("merchant", "Hostile");
+        payload.put("purchaseDate", "2026-07-03");
+        payload.put("category", null);
+        payload.put("products", java.util.List.of());
+        payload.put("totalAmount", "0");
+        payload.put("currency", "EUR");
+
+        web().put()
+                .uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + tokenB)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isNotFound();
+    }
 }
