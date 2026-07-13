@@ -57,10 +57,12 @@
 		updateTicketStatus,
 		updateTicketMetadata,
 		replaceTicketExtraction,
+		getTicketCatalogue,
 		TicketApiError,
 		type CreatedTicket,
 		type TicketExtraction,
-		type ExtractedProductLine
+		type ExtractedProductLine,
+		type CatalogueLine
 	} from '../api/tickets';
 	import { navigateBack } from '../navigation';
 
@@ -87,11 +89,59 @@
 	let ticketId = $state<string | null>(parseTicketIdFromHash());
 	let ticket = $state<CreatedTicket | null>(null);
 	let extraction = $state<TicketExtraction | null>(null);
+	// Validated read view. Populated only when `ticket.status === 'DONE'`
+	// — the normaliser writes the catalogue tables on the mark-as-done
+	// transition and we re-read them here, so the detail screen's
+	// product lines stop mirroring the editable JSONB extraction once
+	// a ticket locks.
+	let catalogue = $state<import('../api/tickets').TicketCatalogue | null>(null);
 	let fileUrl = $state<string | null>(null);
 	let fileContentType = $state<string | null>(null);
 	let loading = $state(false);
 	let errorMessage = $state<string | null>(null);
 	let acting = $state(false);
+
+	/**
+	 * DONE tickets are read-only everywhere: the user can't keep
+	 * editing after they've validated the receipt. The Save
+	 * button's full branch hides once this flips false; every
+	 * editable field picks up `readonly`; the mark-as-done / mark-as-cancelled
+	 * footer actions hide (the ticket is already terminal).
+	 */
+	const editable = $derived(
+		ticket?.status !== 'DONE' && ticket?.status !== 'CANCELLED'
+	);
+	const isDone = $derived(ticket?.status === 'DONE');
+
+	/**
+	 * One row per line item. Switches source based on status:
+	 * validated tickets render the catalogue rows (line_tickets joined
+	 * with products + prices), others render the JSONB extraction
+	 * (still editable). Same shape ({@link ExtractedProductLine})
+	 * downstream so the template doesn't branch.
+	 */
+	interface DisplayLine {
+		name: string;
+		quantity: number | null;
+		unit: string | null;
+		pricePerUnit: number | null;
+		lineTotal: number | null;
+	}
+	const displayLines = $derived.by((): DisplayLine[] => {
+		if (isDone && catalogue) {
+			return catalogue.lines.map((l: CatalogueLine): DisplayLine => ({
+				name: l.productName ?? '',
+				quantity: l.quantity,
+				unit: l.unit,
+				pricePerUnit: l.pricePerUnit,
+				lineTotal: l.lineTotal
+			}));
+		}
+		if (extraction) {
+			return extraction.products;
+		}
+		return [];
+	});
 
 	/**
 	 * Image-preview zoom + pan state. Only meaningful when the
@@ -264,6 +314,7 @@
 			errorMessage = 'Session expired. Sign in again to view this ticket.';
 			ticket = null;
 			extraction = null;
+			catalogue = null;
 			return;
 		}
 		// Revoke the previous blob URL so we don't leak memory across
@@ -272,6 +323,7 @@
 			URL.revokeObjectURL(fileUrl);
 			fileUrl = null;
 		}
+		catalogue = null;
 		loading = true;
 		errorMessage = null;
 		try {
@@ -289,9 +341,22 @@
 				fileUrl = null;
 				fileContentType = null;
 			}
+			// Validated tickets read their line data from the
+			// catalogue tables (line_tickets joined with products
+			// + prices), not from the JSONB extraction. We still
+			// load the extraction above — its merchant / date /
+			// category / total / currency fields drive the
+			// card-level header that the catalogue doesn't carry.
+			if (t.status === 'DONE') {
+				const cat = await getTicketCatalogue(token, id).catch(
+					() => null
+				);
+				catalogue = cat;
+			}
 		} catch (err: unknown) {
 			ticket = null;
 			extraction = null;
+			catalogue = null;
 			if (err instanceof TicketApiError) {
 				if (err.status === 404) {
 					errorMessage = 'This ticket is no longer available — it may have been deleted.';
@@ -331,6 +396,15 @@
 	// screen starts at the default), matching the rest of the
 	// transient UI state on this screen.
 	//
+	// Height = max(userDrag, listHeight): the row's left side carries
+	// the products list. A ResizeObserver watches the extraction
+	// section so the preview grows to match when the list is taller
+	// than the user's chosen floor; otherwise the floor (or the
+	// implicit fit-to-image height, never less than the floor) wins.
+	// The image inside the pane always renders at its natural size —
+	// no `object-cover` stretching — so a small image in a tall pane
+	// leaves whitespace rather than getting distorted.
+	//
 	// Mouse-move / mouse-up are bound to `window` for the duration of
 	// the drag so the user can release the mouse anywhere — including
 	// over the iframe-backed PDF preview where mouseup wouldn't reach
@@ -339,16 +413,44 @@
 	// pointer briefly leaves the handle.
 	// ---------------------------------------------------------------------
 	const PREVIEW_WIDTH_MIN = 320;
-	const PREVIEW_WIDTH_MAX = 760;
-	const PREVIEW_WIDTH_DEFAULT = 480;
+	const PREVIEW_WIDTH_MAX = 960;
+	const PREVIEW_WIDTH_DEFAULT = 600;
 	const PREVIEW_HEIGHT_MIN = 240;
 	const PREVIEW_HEIGHT_MAX = 720;
 	const PREVIEW_HEIGHT_DEFAULT = 480;
+
+	/**
+	 * Approx. chrome height (card header + drag handle + borders) that
+	 * sits above + below the preview's content area. Subtracted from
+	 * the measured extraction card so the preview pane ends at the
+	 * same baseline as the list, not somewhere below it.
+	 */
+	const PREVIEW_CHROME_HEIGHT = 50;
 
 	let previewWidth = $state(PREVIEW_WIDTH_DEFAULT);
 	let previewHeight = $state(PREVIEW_HEIGHT_DEFAULT);
 	let widthDrag = $state<{ startX: number; startWidth: number } | null>(null);
 	let heightDrag = $state<{ startY: number; startHeight: number } | null>(null);
+
+	/**
+	 * Live height of the extraction section, observed via
+	 * ResizeObserver. Used as the floor for the preview pane when the
+	 * user's `previewHeight` would otherwise leave the preview shorter
+	 * than the products list.
+	 */
+	let extractionHeight = $state(0);
+	let extractionSection: HTMLElement | undefined = $state(undefined);
+
+	/**
+	 * Effective content-area height: max(userDrag, listHeight - chrome).
+	 * The derive re-runs whenever either input changes — user drag
+	 * (debounced via $effect events), extraction height from the
+	 * ResizeObserver callback. Both flow through Svelte reactivity
+	 * without any extra plumbing.
+	 */
+	const previewContentHeight = $derived(
+		clampHeight(Math.max(previewHeight, extractionHeight - PREVIEW_CHROME_HEIGHT))
+	);
 
 	function clampWidth(w: number): number {
 		return Math.max(PREVIEW_WIDTH_MIN, Math.min(PREVIEW_WIDTH_MAX, w));
@@ -457,6 +559,29 @@
 		};
 	});
 
+	/**
+	 * Live height of the extraction section (the column that
+	 * carries the products list). A ResizeObserver pushes the height
+	 * into `extractionHeight` so the `$derived` preview content
+	 * height can grow to match when the list exceeds the user's
+	 * chosen floor. Lazily instantiated once the extraction
+	 * `bind:this` element is resolved.
+	 */
+	$effect(() => {
+		const el = extractionSection;
+		if (!el) return;
+		// Seed once so the preview doesn't render at 0 height on first
+		// paint before the observer fires.
+		extractionHeight = el.offsetHeight;
+		const observer = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				extractionHeight = entry.contentRect.height;
+			}
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
 	async function setStatus(status: 'DONE' | 'CANCELLED'): Promise<void> {
 		if (!ticketId || acting) return;
 		const token = readSessionToken();
@@ -518,8 +643,16 @@
 	 * read-only column in the products table and for the save
 	 * payload. Treats null / NaN inputs as 0 so a partially-typed
 	 * row renders as 0.00 rather than NaN.
+	 *
+	 * Accepts any value with {@code quantity} + {@code pricePerUnit}
+	 * fields so it works for both the editable {@code ExtractedProductLine}
+	 * (from JSONB extraction) and the read-only {@code DisplayLine}
+	 * (from the catalogue for DONE tickets).
 	 */
-	function computedLineTotal(p: ExtractedProductLine): number {
+	function computedLineTotal(p: {
+		quantity: number | null;
+		pricePerUnit: number | null;
+	}): number {
 		const q = Number(p.quantity);
 		const unit = Number(p.pricePerUnit);
 		if (!Number.isFinite(q) || !Number.isFinite(unit)) return 0;
@@ -722,7 +855,7 @@
 		class="min-h-screen bg-background text-foreground font-sans antialiased"
 		data-testid="ticket-detail-screen"
 	>
-		<main class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+		<main class="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
 			<header class="flex items-start justify-between gap-4">
 				<div class="min-w-0 flex-1">
 					{#if ticket}
@@ -742,9 +875,10 @@
 							oninput={markDirty}
 							maxlength="255"
 							required
+							readonly={!editable}
 							data-testid="ticket-title"
 							aria-label="Ticket title"
-							class="block w-full truncate border-0 bg-transparent px-0 text-2xl font-bold tracking-tight outline-none focus:ring-0 sm:text-3xl"
+							class="block w-full truncate border-0 bg-transparent px-0 text-2xl font-bold tracking-tight outline-none focus:ring-0 read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default sm:text-3xl"
 						/>
 						<p class="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
 							<span class="truncate">
@@ -756,6 +890,14 @@
 									data-testid="dirty-indicator"
 								>
 									Unsaved changes
+								</span>
+							{:else if isDone}
+								<span
+									class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300"
+									data-testid="validated-badge"
+								>
+									<CheckIcon class="size-3" />
+									Validated · read-only
 								</span>
 							{:else if saveOutcome === 'saved'}
 								<span
@@ -785,10 +927,11 @@
 							bind:value={ticket.description}
 							oninput={markDirty}
 							maxlength="2000"
+							readonly={!editable}
 							placeholder="Add a description…"
 							aria-label="Ticket description"
 							data-testid="ticket-description"
-							class="mt-2 block w-full border-0 bg-transparent px-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:ring-0"
+							class="mt-2 block w-full border-0 bg-transparent px-0 text-sm text-muted-foreground outline-none placeholder:text-muted-foreground/60 focus:ring-0 read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 						/>
 					{:else}
 						<h1 class="truncate text-2xl font-bold tracking-tight sm:text-3xl">
@@ -797,13 +940,15 @@
 					{/if}
 				</div>
 				<!--
-					Save button: enabled only when there are unsaved
-					changes (`dirty` flag), disabled while saving. The
-					label cycles through "Save changes" / "Saving…"
-					/ "Saved" so the user gets the same "did it work?"
-					signal as the autosave variant, except persisted
-					through an explicit click rather than a timer.
+					Save button: hidden entirely once the ticket is
+					validated. DONE tickets render their data from the
+					catalogue tables, not from the editable extraction,
+					and the user's "no se puede modificar" rule means
+					there's nothing to save. The Validated badge in
+					the meta row above carries the same UX signal — the
+					user sees they're in read-only mode.
 				-->
+				{#if editable}
 				<button
 					type="button"
 					onclick={saveChanges}
@@ -829,6 +974,7 @@
 						Save changes
 					{/if}
 				</button>
+				{/if}
 			</header>
 
 			{#if loading && !ticket}
@@ -857,7 +1003,17 @@
 				-->
 				<div class="flex flex-col gap-6 lg:flex-row">
 					<!-- Left: structured extraction -->
-					<section class="flex min-w-0 flex-1 flex-col gap-4">
+					<!--
+						Bind to `extractionSection` so the
+						ResizeObserver above can read its height.
+						The ref is set after the mount paints;
+						the observer effect guards on `el` being
+						defined.
+					-->
+					<section
+						bind:this={extractionSection}
+						class="flex min-w-0 flex-1 flex-col gap-4"
+					>
 						<div
 							class="rounded-xl border border-border bg-card p-5 shadow-sm"
 							data-testid="extraction-card"
@@ -877,29 +1033,32 @@
 											oninput={markDirty}
 											maxlength="255"
 											required
+											readonly={!editable}
 											aria-label="Merchant"
 											data-testid="extraction-merchant"
-											class="block w-full border-0 bg-transparent px-0 text-lg font-semibold outline-none focus:ring-0"
+											class="block w-full border-0 bg-transparent px-0 text-lg font-semibold outline-none focus:ring-0 read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 										/>
 										<div class="mt-2 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
 											<label class="flex flex-col gap-1">
 												<span class="uppercase tracking-wide">Purchase date</span>
-												<input
-													type="date"
-													bind:value={extraction.purchaseDate}
-													oninput={markDirty}
-													required
-													aria-label="Purchase date"
-													data-testid="extraction-purchase-date"
-													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-												/>
-											</label>
-											<label class="flex flex-col gap-1">
-												<span class="uppercase tracking-wide">Category</span>
-												<input
-													type="text"
-													value={extraction.category ?? ''}
-													oninput={(e) => {
+											<input
+												type="date"
+												bind:value={extraction.purchaseDate}
+												oninput={markDirty}
+												required
+												readonly={!editable}
+												aria-label="Purchase date"
+												data-testid="extraction-purchase-date"
+												class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
+											/>
+										</label>
+										<label class="flex flex-col gap-1">
+											<span class="uppercase tracking-wide">Category</span>
+											<input
+												type="text"
+												value={extraction.category ?? ''}
+												readonly={!editable}
+												oninput={(e) => {
 														// Explicit annotation pins the
 														// spread to the full
 														// TicketExtraction type — without
@@ -922,7 +1081,7 @@
 													placeholder="food, pharmacy…"
 													aria-label="Category"
 													data-testid="extraction-category"
-													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0"
 												/>
 											</label>
 										</div>
@@ -942,6 +1101,7 @@
 											id="extraction-currency"
 											type="text"
 											value={extraction.currency}
+											readonly={!editable}
 											oninput={(e) => {
 												// Same explicit-annotation
 												// pattern as the category
@@ -961,7 +1121,7 @@
 											placeholder="EUR"
 											aria-label="Currency"
 											data-testid="extraction-currency"
-											class="mt-1 w-20 rounded-md border border-input bg-background px-2 py-1 text-center text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring"
+											class="mt-1 w-20 rounded-md border border-input bg-background px-2 py-1 text-center text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 										/>
 										<label class="mt-2 block text-xs uppercase tracking-wide text-muted-foreground" for="extraction-total">
 											Total
@@ -974,44 +1134,67 @@
 											bind:value={extraction.totalAmount}
 											oninput={markDirty}
 											required
+											readonly={!editable}
 											aria-label="Total"
 											data-testid="extraction-total-input"
-											class="mt-1 w-28 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+											class="mt-1 w-28 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 										/>
 									</div>
 								{/if}
 							</header>
 
 							{#if extraction}
+								<!--
+									Compact products table: Item column
+									claims a min-width so the row's
+									descriptive name is what eats the
+									available horizontal space first;
+									inter-column padding is trimmed
+									(pr-1 = 4px instead of 8px) so the
+									fixed-width numeric cells (qty, unit,
+									€/unit, line) sit tighter.
+								-->
 								<div class="overflow-x-auto">
 									<table class="w-full text-sm">
 										<thead class="text-left text-xs uppercase tracking-wide text-muted-foreground">
 											<tr>
-												<th class="py-2 pr-2 font-medium">Item</th>
-												<th class="py-2 pr-2 text-right font-medium">Qty</th>
-												<th class="py-2 pr-2 font-medium">Unit</th>
-												<th class="py-2 pr-2 text-right font-medium">€/unit</th>
-												<th class="py-2 pr-2 text-right font-medium">Line</th>
+												<th class="min-w-[12rem] py-2 pr-1 font-medium">Item</th>
+												<th class="py-2 pr-1 text-right font-medium">Qty</th>
+												<th class="py-2 pr-1 font-medium">Unit</th>
+												<th class="py-2 pr-1 text-right font-medium">€/unit</th>
+												<th class="py-2 pr-1 text-right font-medium">Line</th>
 												<th class="py-2 font-medium"></th>
 											</tr>
 										</thead>
 										<tbody class="divide-y divide-border">
-											{#each extraction.products as product, i (i)}
+											<!--
+												Loop source follows the ticket's
+												validation state: pre-DONE
+												tickets iterate the JSONB
+												extraction (editable);
+												validated tickets iterate the
+												catalogue rows (read-only).
+												The common {@code DisplayLine}
+												shape keeps the row template
+												identical for both.
+											-->
+											{#each displayLines as product, i (i)}
 												<tr data-testid="product-line">
-													<td class="py-1.5 pr-2">
+													<td class="min-w-[12rem] py-1.5 pr-1">
 														<input
 															type="text"
 															bind:value={product.name}
 															oninput={markDirty}
 															maxlength="255"
 															required
+															readonly={!editable}
 															placeholder="Item name"
 															aria-label="Item name"
 															data-testid="product-name-input"
-															class="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+															class="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 														/>
 													</td>
-													<td class="py-1.5 pr-2">
+													<td class="py-1.5 pr-1">
 														<input
 															type="number"
 															step="0.01"
@@ -1019,38 +1202,41 @@
 															bind:value={product.quantity}
 															oninput={markDirty}
 															required
+															readonly={!editable}
 															aria-label="Quantity"
 															data-testid="product-qty-input"
-															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 														/>
 													</td>
-													<td class="py-1.5 pr-2">
+													<td class="py-1.5 pr-1">
 														<input
 															type="text"
 															value={product.unit ?? ''}
+															readonly={!editable}
 															oninput={(e) => {
 																product.unit =
 																	e.currentTarget.value === ''
 																		? null
 																		: e.currentTarget.value;
-														markDirty();
+																markDirty();
 															}}
 															maxlength="16"
 															placeholder="kg"
 															aria-label="Unit"
 															data-testid="product-unit-input"
-															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 														/>
 													</td>
-													<td class="py-1.5 pr-2">
+													<td class="py-1.5 pr-1">
 														<input
 															type="number"
 															step="0.01"
 															bind:value={product.pricePerUnit}
 															oninput={markDirty}
+															readonly={!editable}
 															aria-label="Price per unit"
 															data-testid="product-price-per-unit-input"
-															class="w-24 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring"
+															class="w-24 rounded-md border border-transparent bg-transparent px-2 py-1 text-right text-sm tabular-nums hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 														/>
 													</td>
 													<!--
@@ -1071,7 +1257,7 @@
 														since the editable column
 														is gone).
 													-->
-													<td class="py-1.5 pr-2 text-right tabular-nums">
+													<td class="py-1.5 pr-1 text-right tabular-nums">
 														<span
 															aria-label="Line total"
 															data-testid="product-line-total"
@@ -1081,30 +1267,34 @@
 														</span>
 													</td>
 													<td class="py-1.5 text-right">
-														<button
-															type="button"
-															onclick={() => removeProductRow(i)}
-															aria-label="Remove row"
-															data-testid="product-row-remove"
-															class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-														>
-															<Trash2 class="size-3.5" />
-														</button>
+														{#if editable}
+															<button
+																type="button"
+																onclick={() => removeProductRow(i)}
+																aria-label="Remove row"
+																data-testid="product-row-remove"
+																class="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+															>
+																<Trash2 class="size-3.5" />
+															</button>
+														{/if}
 													</td>
 												</tr>
 											{/each}
 										</tbody>
 									</table>
 								</div>
-								<button
-									type="button"
-									onclick={addProductRow}
-									data-testid="product-row-add"
-									class="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent"
-								>
-									<Plus class="size-3.5" />
-									Add row
-								</button>
+								{#if editable}
+									<button
+										type="button"
+										onclick={addProductRow}
+										data-testid="product-row-add"
+										class="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent"
+									>
+										<Plus class="size-3.5" />
+										Add row
+									</button>
+								{/if}
 							{:else if !extraction}
 								<div
 									class="rounded-md border border-dashed border-border bg-muted/30 p-8 text-center text-sm text-muted-foreground"
@@ -1174,8 +1364,23 @@
 						class="flex flex-col lg:shrink-0"
 						style:width="{previewWidth}px"
 					>
+						<!--
+							Preview card. `flex flex-col` so the
+							header / content / height-handle stack
+							inside. The card's own height is set by
+							its content (header + content area +
+							handle) — no flex-stretch here. The
+							content area's effective height is
+							`previewContentHeight` (a `$derived`
+							that bumps up to match the products list
+							when the user drags the floor below it),
+							so the pane only grows when needed; a
+							tall list + a short user drag ends up
+							tall, but a tall user drag + a short
+							list stays at the user's choice.
+						-->
 						<div
-							class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+							class="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
 							data-testid="preview-card"
 						>
 							<header class="flex items-center justify-between gap-3 border-b border-border p-3">
@@ -1199,18 +1404,21 @@
 								{/if}
 							</header>
 							<!--
-								Content area. No aspect ratio — height
-								is driven by the user-controlled
-								`previewHeight` so width resize and
-								height resize are independent (the previous
-								aspect-ratio lock forced them to move
-								together). `overflow-auto` keeps the
-								zoom controls and the pan/zoom transform
-								behaving the same as before.
+								Content area. Explicit height from the
+								`previewContentHeight` derived (which is
+								max(userDrag, listHeight − chrome)). Image
+								renders at its natural size and is
+								centered — no `object-cover` stretching,
+								no flex-grow absorbing empty space; if
+								the image is smaller than the pane the
+								background colour shows around it,
+								matching the original behaviour. If the
+								image is bigger than the pane the pan
+								+ zoom wrapper scrolls (unchanged).
 							-->
 							<div
 								class="relative flex items-center justify-center overflow-hidden bg-muted/30"
-								style:height="{previewHeight}px"
+								style:height="{previewContentHeight}px"
 							>
 								{#if !fileUrl}
 									<div
@@ -1378,6 +1586,15 @@
 					</section>
 				</div>
 
+				<!--
+					Status actions hide once the ticket reaches a terminal
+					state — DONE (already validated) or CANCELLED
+					(deliberately dismissed by the user, not coming back).
+					ON_ERROR tickets still expose both buttons so the
+					user can retry (mark as done) or abandon (mark as
+					cancelled) after a failed AI extraction.
+				-->
+				{#if editable}
 				<footer class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
 					<button
 						type="button"
@@ -1400,6 +1617,7 @@
 						Mark as done
 					</button>
 				</footer>
+				{/if}
 			{/if}
 		</main>
 	</div>

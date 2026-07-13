@@ -77,7 +77,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
         return namedJdbc.query(
                 FIND_BY_TICKET_SQL,
                 new MapSqlParameterSource("ticket", ticketId),
-                (rs, n) -> mapLine(rs));
+                (rs, _) -> mapLine(rs));
     }
 
     @Override

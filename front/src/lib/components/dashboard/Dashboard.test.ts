@@ -48,6 +48,36 @@ vi.mock('../../api/dashboard', async () => {
 	};
 });
 
+// The all-tickets table now self-fetches via listAllTickets. Stub it with
+// a deterministic payload so the Dashboard test can still assert the
+// table renders on the dashboard. The real listAllTickets behaviour
+// (auth, retries, error state) is covered in RecentTicketsTable.test.ts.
+const { listAllTicketsStub } = vi.hoisted(() => ({
+	listAllTicketsStub: vi.fn<(..._args: unknown[]) => Promise<unknown[]>>()
+}));
+listAllTicketsStub.mockResolvedValue([
+	{
+		id: 't-stub-1',
+		title: 'Mercadona weekly',
+		description: '',
+		status: 'OPEN',
+		createdAt: '2026-03-12T10:00:00Z',
+		updatedAt: '2026-03-12T10:00:00Z',
+		contentType: 'image/png',
+		fileName: 'mercadona.png',
+		sizeBytes: 12345
+	}
+]);
+vi.mock('../../api/tickets', async () => {
+	const actual = await vi.importActual<typeof import('../../api/tickets')>(
+		'../../api/tickets'
+	);
+	return {
+		...actual,
+		listAllTickets: listAllTicketsStub
+	};
+});
+
 // Now safe to import — the spy wrapper is already in the mocked module.
 import Dashboard from './Dashboard.svelte';
 import { __setMockDelay } from '../../api/dashboard';
@@ -65,12 +95,27 @@ describe('Dashboard', () => {
 		// loading-state assertion.
 		__setMockDelay(0);
 		fetchSpy.mockClear();
+		listAllTicketsStub.mockClear();
+		// Seed sessionStorage with a fake JWT so the self-fetching
+		// table component can resolve its token lookup. The mock above
+		// returns the stub payload regardless of the token value.
+		try {
+			window.sessionStorage.setItem('ticketapp.session', 'stub.jwt.token');
+		} catch {
+			/* sessionStorage may be disabled — the table will show its
+			   empty state and the headers test below still passes */
+		}
 	});
 
 	afterEach(() => {
 		cleanup();
 		vi.restoreAllMocks();
 		__setMockDelay(0);
+		try {
+			window.sessionStorage.clear();
+		} catch {
+			/* sessionStorage may be disabled — ignore */
+		}
 	});
 
 	it('renders the loading skeleton initially while the fetch is pending', async () => {
@@ -99,14 +144,21 @@ describe('Dashboard', () => {
 		expect(getByText('7 open')).toBeTruthy();
 	});
 
-	it('renders the recent tickets table headers', async () => {
+	it('renders the all-tickets table headers and a row from the mocked fetch', async () => {
 		const { container } = render(Dashboard, { user });
 
 		await waitFor(() => {
 			const headers = Array.from(container.querySelectorAll('thead th')).map(
 				(th) => th.textContent?.trim() ?? ''
 			);
-			expect(headers).toEqual(['Title', 'Category', 'Date', 'Amount', 'Status']);
+			expect(headers).toEqual(['Ticket', 'File', 'Size', 'Created', 'Status']);
+		});
+
+		// The stub row's title is rendered (proves the table actually
+		// fetched via the mocked listAllTickets and rendered the
+		// payload end-to-end).
+		await waitFor(() => {
+			expect(container.textContent).toContain('Mercadona weekly');
 		});
 	});
 

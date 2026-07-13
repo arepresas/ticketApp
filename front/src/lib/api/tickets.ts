@@ -1,14 +1,18 @@
 /**
  * HTTP client for the BFF ticket endpoints.
  *
- * Pure module — no shared state, no DOM access, no console. The store
- * (auth.svelte.ts) owns the session token; callers pass it in. This
- * module never reads sessionStorage itself.
- *
  * Mirrors the `auth/api.ts` conventions: typed errors with `{status}`,
  * shared `parseError` helper for non-2xx responses. The wire contract
  * matches `TicketController.TicketResponse` on the BFF side — bytes are
  * deliberately omitted.
+ *
+ * 401 handling: every protected call funnels through
+ * {@link bubbleAuthExpired} before throwing, which fires the
+ * {@code auth:expired} DOM event for `auth/host.ts` to react to. The
+ * listener there clears the local session + navigates to dashboard
+ * (which hides under the auth gate and reveals the landing page).
+ * Without this pass-through, an expired-session 401 would leave the
+ * user staring at a stale detail / pending screen with no recovery.
  */
 const API_BASE = '/api/tickets';
 
@@ -22,7 +26,7 @@ export class TicketApiError extends Error {
 	}
 }
 
-export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';
 
 export type CreatedTicket = {
 	id: string;
@@ -43,6 +47,17 @@ const parseError = async (res: Response): Promise<string> => {
 	} catch {
 		return `HTTP ${res.status}`;
 	}
+};
+
+/**
+ * Surface a 401 to the auth host so the local session can be cleared
+ * and the user redirected to the landing. No-op when the response
+ * isn't 401; safe to call from any path.
+ */
+const bubbleAuthExpired = (res: Response): void => {
+	if (res.status !== 401) return;
+	if (typeof window === 'undefined') return; // unit tests in jsdom should still hit this; only guard SSR
+	window.dispatchEvent(new CustomEvent('auth:expired'));
 };
 
 /**
@@ -82,6 +97,7 @@ export const createTicket = async (
 		body: fd
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket;
@@ -105,6 +121,30 @@ export const listPendingTickets = async (token: string): Promise<CreatedTicket[]
 		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket[];
+};
+
+/**
+ * Fetch every ticket owned by the authenticated user — any status,
+ * newest first. Backed by {@code GET /api/tickets} on the BFF; the
+ * filter happens server-side so the response stays small regardless
+ * of total ticket count.
+ *
+ * Used by the dashboard's all-tickets table (replaces the
+ * recent-only view that was driven by mock data).
+ *
+ * @param token BFF session JWT. The endpoint returns 401 without one.
+ */
+export const listAllTickets = async (token: string): Promise<CreatedTicket[]> => {
+	const res = await fetch(`${API_BASE}`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+	});
+	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket[];
@@ -153,6 +193,7 @@ export const getTicket = async (token: string, id: string): Promise<CreatedTicke
 		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket;
@@ -180,6 +221,7 @@ export const getTicketExtraction = async (
 		return null;
 	}
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as TicketExtraction;
@@ -206,6 +248,7 @@ export const getTicketFile = async (
 		headers: { authorization: `Bearer ${token}` }
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	const contentType = res.headers.get('content-type');
@@ -237,6 +280,7 @@ export const updateTicketStatus = async (
 		body: JSON.stringify({ status })
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket;
@@ -278,6 +322,7 @@ export const updateTicketMetadata = async (
 		body: JSON.stringify(patch)
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket;
@@ -326,7 +371,46 @@ export const replaceTicketExtraction = async (
 		body: JSON.stringify(next)
 	});
 	if (!res.ok) {
+		bubbleAuthExpired(res);
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as TicketExtraction;
+};
+
+/**
+ * Validated read view: shop + lines for a DONE ticket, joined from
+ * the catalogue tables ({@code shops}, {@code products},
+ * {@code prices}, {@code line_tickets}). Returns {@code null} when
+ * the BFF answers 404 — the caller falls through to the JSONB
+ * extraction view (ticket exists but isn't validated yet, or
+ * the normaliser hasn't run).
+ */
+export type CatalogueLine = {
+	productName: string | null;
+	unit: string | null;
+	quantity: number | null;
+	pricePerUnit: number | null;
+	lineTotal: number | null;
+};
+
+export type TicketCatalogue = {
+	shopId: string;
+	shopName: string;
+	lines: CatalogueLine[];
+};
+
+export const getTicketCatalogue = async (
+	token: string,
+	id: string
+): Promise<TicketCatalogue | null> => {
+	const res = await fetch(`${API_BASE}/${id}/catalogue`, {
+		method: 'GET',
+		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+	});
+	if (res.status === 404) return null;
+	if (!res.ok) {
+		bubbleAuthExpired(res);
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as TicketCatalogue;
 };

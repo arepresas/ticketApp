@@ -73,6 +73,7 @@
 	const STATUS_LABEL: Record<TicketStatus, string> = {
 		OPEN: 'Open',
 		IN_PROGRESS: 'In progress',
+		ON_ERROR: 'Error',
 		DONE: 'Done',
 		CANCELLED: 'Cancelled'
 	};
@@ -83,6 +84,8 @@
 				return 'bg-blue-500/10 text-blue-700 dark:text-blue-300 ring-blue-500/20';
 			case 'IN_PROGRESS':
 				return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-amber-500/20';
+			case 'ON_ERROR':
+				return 'bg-red-500/10 text-red-700 dark:text-red-300 ring-red-500/20';
 			case 'DONE':
 				return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-emerald-500/20';
 			case 'CANCELLED':
