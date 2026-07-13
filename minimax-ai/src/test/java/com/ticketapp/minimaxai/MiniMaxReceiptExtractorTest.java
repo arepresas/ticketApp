@@ -360,4 +360,90 @@ class MiniMaxReceiptExtractorTest {
                 new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class);
     }
+
+    @Test
+    void shopObjectInResponseIsIgnoredByParserButPreservedInRaw() throws Exception {
+        // The updated prompt asks the model to emit a top-level
+        // "shop" object with address/contact fields. The provider
+        // parser doesn't read those fields (they live in
+        // extraction_payload JSONB for the BFF normaliser to pick
+        // up); it only parses the typed fields. The raw reply is
+        // returned to the caller verbatim so the JSONB write keeps
+        // the shop object intact.
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"Mercadona",
+                 "purchase_date":"2026-07-04",
+                 "category":"food",
+                 "shop":{"address":"Calle Mayor 1","city":"Madrid","country":"ES"},
+                 "products":[{"name":"Bread","quantity":1,"unit":null,
+                              "price_per_unit":1.20,"line_total":1.20}],
+                 "total_amount":1.20,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().merchant()).isEqualTo("Mercadona");
+        assertThat(result.result().products()).hasSize(1);
+        assertThat(result.rawReply()).contains("\"shop\"")
+                .contains("Calle Mayor 1");
+    }
+
+    @Test
+    void lineLevelDiscountIsReflectedInPricePerUnit() throws Exception {
+        // The prompt instructs the AI to apply line-level discounts
+        // (loyalty / promo / member card) to the line's
+        // price_per_unit rather than emit a separate discount line.
+        // The parser captures price_per_unit as-is; the test pins
+        // the expected effective value to lock the prompt's
+        // behaviour. If a future prompt regression makes the AI
+        // emit the printed (pre-discount) price again, this test
+        // catches it before the change reaches production.
+        //
+        // Receipt scenario: 2 × 1.20€ bread = 2.40€, with a 5%
+        // loyalty discount applied to that line (-0.12€). The model
+        // should emit the discounted effective per-unit price:
+        //   price_per_unit = (2.40 - 0.12) / 2 = 1.14
+        //   line_total     = 2 × 1.14 = 2.28
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"Mercadona",
+                 "purchase_date":"2026-07-04",
+                 "category":"food",
+                 "shop":{"city":"Madrid"},
+                 "products":[{"name":"Bread","quantity":2,"unit":null,
+                              "price_per_unit":1.14,"line_total":2.28}],
+                 "total_amount":2.28,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        var line = result.result().products().get(0);
+        assertThat(line.pricePerUnit()).isEqualByComparingTo("1.14");
+        assertThat(line.lineTotal()).isEqualByComparingTo("2.28");
+        assertThat(result.result().totalAmount()).isEqualByComparingTo("2.28");
+    }
+
+    @Test
+    void missingShopObjectDoesNotBreakParsing() throws Exception {
+        // Backwards compat: payloads from older prompts (pre-update)
+        // don't carry the shop object. The parser must parse them
+        // exactly as before — merchant / products / total all
+        // populate normally, no exception, no log noise about the
+        // missing optional field.
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"Dia",
+                 "purchase_date":"2026-07-04",
+                 "category":"food",
+                 "products":[{"name":"Milk","quantity":1,"unit":"L",
+                              "price_per_unit":0.90,"line_total":0.90}],
+                 "total_amount":0.90,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().merchant()).isEqualTo("Dia");
+        assertThat(result.result().products()).hasSize(1);
+    }
 }

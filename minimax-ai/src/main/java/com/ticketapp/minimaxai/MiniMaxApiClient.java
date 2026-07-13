@@ -93,19 +93,21 @@ public final class MiniMaxApiClient {
                 .model(input.model())
                 .addSystemMessage(EXTRACTION_PROMPT)
                 .temperature(0.0)      // deterministic JSON
-                // 8192 tokens covers a Lidl-style ticket with ~10
-                // products, ~6 discount lines, and a long `think`
-                // block. The upstream default (~1024) cuts off
-                // mid-JSON and yields finish_reason="length" — the
-                // parser then sees a truncated object and warns
-                // "invalid JSON". 4096 was previously enough but
-                // MiniMax-M3 occasionally burns the entire budget on
-                // chain-of-thought before emitting JSON (see
-                // 2026-07-05 incident — receipt c57f2dc9...). 8192
-                // is generous; dial this down if per-ticket cost
-                // becomes a concern, once the prompt stops producing
-                // long reasoning blocks.
-                .maxCompletionTokens(8192)
+                // 16384 covers complex receipts (~15 products with
+                // multiple discount lines each) on MiniMax-M3, which
+                // is a thinking-style model — it burns a non-trivial
+                // share of its budget on chain-of-thought before
+                // emitting JSON. The upstream default (~1024) cuts
+                // off mid-JSON. 4096 was too tight (2026-07-05
+                // incident — receipt c57f2dc9...). 8192 was the
+                // previous default and handles ~10 products
+                // comfortably. Bumping to 16384 covers the worst
+                // observed case (Lidl receipt, 7+ products with
+                // per-line loyalty discounts, 2026-07-13) where
+                // 8192 was exhausted in the thinking block alone.
+                // Dial down if per-ticket cost becomes a concern,
+                // once the prompt stops producing long reasoning.
+                .maxCompletionTokens(16384)
                 // Constrain the model to emit a JSON object. Without
                 // this, MiniMax-M3 occasionally wraps the reply in
                 // markup (<output>...</output>, <|refusal|>...) which
@@ -311,9 +313,14 @@ public final class MiniMaxApiClient {
                commentary before it.
             2. Do NOT include any reasoning, chain-of-thought,
                analysis, or thinking blocks. In particular, do NOT
-               emit a <think>...</think> block. If you find yourself
-               wanting to reason internally, do it silently and emit
-               only the final JSON.
+               emit a <think>...</think> block. CRITICAL: every
+               token you spend inside a <think>...</think> block
+               is a token you cannot spend on the JSON reply. On
+               long receipts with many discounted lines the model
+               runs out of budget mid-thinking and never emits any
+               JSON, which makes the whole extraction fail. If you
+               find yourself wanting to reason internally, do it
+               silently and emit only the final JSON.
             3. Output ONLY the JSON object. No prose, no markdown
                fences (no ```), no trailing text, no "Here is the
                result:" preamble.
@@ -322,16 +329,25 @@ public final class MiniMaxApiClient {
             Schema (return exactly this shape):
 
             {
-              "merchant": string,                    // store name as printed
+              "merchant": string,                    // store name as printed on the receipt
               "purchase_date": "YYYY-MM-DD",         // ISO date of the purchase
               "category": "food|pharmacy|restaurant|fuel|other",
+              "shop": {                              // optional — omit fields you can't read from the receipt
+                "address": string,                   // street + number
+                "postal_code": string,
+                "city": string,
+                "country": string,                   // ISO 3166-1 alpha-2 (ES, FR, PT...)
+                "phone": string,
+                "tax_id": string,                    // CIF (ES), SIRET (FR), VAT number, etc.
+                "website": string
+              },
               "products": [
                 {
                   "name": string,
                   "quantity": number,
                   "unit": string,                    // e.g. "kg", "L", "unit"
-                  "price_per_unit": number,
-                  "line_total": number
+                  "price_per_unit": number,          // EFFECTIVE per-unit price AFTER any line-level discount
+                  "line_total": number               // EFFECTIVE line total = quantity * price_per_unit, rounded to 2 decimals
                 }
               ],
               "total_amount": number,
@@ -340,7 +356,10 @@ public final class MiniMaxApiClient {
 
             Field rules:
             - quantity and prices are decimals, not strings.
-            - line_total should equal quantity * price_per_unit, rounded to 2 decimals.
+            - price_per_unit MUST reflect the EFFECTIVE price the customer actually paid for that line — after any line-level discount is applied (loyalty card, member discount, promo, etc.). If a discount appears on the receipt as a separate line, attribute it to the products it applies to and reduce price_per_unit accordingly. DO NOT emit a separate discount line: apply discounts to the lines they belong to.
+            - line_total must equal quantity * price_per_unit, rounded to 2 decimals.
+            - The sum of every product's line_total must equal total_amount.
             - currency defaults to EUR if no symbol is visible.
+            - shop fields: include only what you can read from the receipt header or footer (address printed at the top, phone/tax id printed at the bottom of a Spanish or French receipt). Omit any field you can't read; never guess.
             """;
 }

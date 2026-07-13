@@ -31,8 +31,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The endpoint must:
  * <ul>
  *   <li>Return only the authenticated user's
- *       {@link Ticket.Status#OPEN} and {@link Ticket.Status#IN_PROGRESS}
- *       tickets, newest first.</li>
+ *       {@link Ticket.Status#OPEN}, {@link Ticket.Status#IN_PROGRESS},
+ *       and {@link Ticket.Status#ON_ERROR} tickets, newest first.
+ *       ON_ERROR is included so a failed ticket is visible on the
+ *       operator's work queue — it needs manual retry or
+ *       cancellation, both surfaced via the same UI.</li>
  *   <li>Exclude tickets in terminal states
  *       ({@link Ticket.Status#DONE},
  *       {@link Ticket.Status#CANCELLED}).</li>
@@ -152,19 +155,22 @@ class PendingTicketsIT {
     }
 
     @Test
-    void returnsOnlyOwnersOpenAndInProgressTickets() {
+    void returnsOwnersOpenInProgressAndOnErrorTickets() {
         String token = loginAndGetToken();
         UUID owner = ownerId();
         Ticket openOld = tickets.save(Ticket.open(owner, "old-open.pdf", "first",
                 "application/pdf", "old.pdf", new byte[]{1}));
         Ticket inProgress = tickets.save(Ticket.open(owner, "wip.pdf", "second",
                 "application/pdf", "wip.pdf", new byte[]{2}));
-        Ticket done = tickets.save(Ticket.open(owner, "done.pdf", "third",
-                "application/pdf", "done.pdf", new byte[]{3}));
-        Ticket cancelled = tickets.save(Ticket.open(owner, "cancelled.pdf", "fourth",
-                "application/pdf", "cancelled.pdf", new byte[]{4}));
+        Ticket errored = tickets.save(Ticket.open(owner, "broken.pdf", "third",
+                "application/pdf", "broken.pdf", new byte[]{3}));
+        Ticket done = tickets.save(Ticket.open(owner, "done.pdf", "fourth",
+                "application/pdf", "done.pdf", new byte[]{4}));
+        Ticket cancelled = tickets.save(Ticket.open(owner, "cancelled.pdf", "fifth",
+                "application/pdf", "cancelled.pdf", new byte[]{5}));
 
         tickets.save(inProgress.withStatus(Ticket.Status.IN_PROGRESS));
+        tickets.save(errored.markError("MiniMax returned 500"));
         tickets.save(done.withStatus(Ticket.Status.DONE));
         tickets.save(cancelled.withStatus(Ticket.Status.CANCELLED));
 
@@ -178,10 +184,13 @@ class PendingTicketsIT {
 
         assertThat(body).isNotNull();
         assertThat(body).extracting(TicketController.TicketResponse::id)
-                .containsExactlyInAnyOrder(openOld.id(), inProgress.id())
+                .containsExactlyInAnyOrder(openOld.id(), inProgress.id(), errored.id())
                 .doesNotContain(done.id(), cancelled.id());
         assertThat(body).extracting(TicketController.TicketResponse::status)
-                .containsOnly(Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS);
+                .containsOnly(
+                        Ticket.Status.OPEN,
+                        Ticket.Status.IN_PROGRESS,
+                        Ticket.Status.ON_ERROR);
         // Bytes never leave the wire — sizeBytes is the only signal.
         assertThat(body).allSatisfy(t -> assertThat(t.sizeBytes()).isPositive());
 
@@ -191,20 +200,21 @@ class PendingTicketsIT {
                 t -> assertThat(t.status()).isEqualTo(Ticket.Status.OPEN));
         assertThat(tickets.findById(inProgress.id(), owner)).hasValueSatisfying(
                 t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
+        assertThat(tickets.findById(errored.id(), owner)).hasValueSatisfying(
+                t -> assertThat(t.status()).isEqualTo(Ticket.Status.ON_ERROR));
     }
 
     @Test
-    void excludesOnErrorTicketsFromPending() {
-        // ON_ERROR is terminal from the scheduler's POV and not
-        // pending work — it must not appear under /pending, otherwise
-        // the dashboard would surface a "failed" ticket next to the
-        // genuine work queue. The full GET /api/tickets still shows
-        // it (covered separately).
+    void onErrorTicketsAppearInPending() {
+        // ON_ERROR needs manual action (retry via PATCH, or cancel),
+        // so it surfaces in the work queue next to the genuine
+        // pending tickets. The error_message travels in the response
+        // so the operator can read why without opening detail.
         String token = loginAndGetToken();
         UUID owner = ownerId();
-        Ticket open = tickets.save(Ticket.open(owner, "open.pdf", "still pending",
-                "application/pdf", "open.pdf", new byte[]{1}));
-        tickets.save(open.markError("MiniMax returned 500"));
+        Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "still pending",
+                "application/pdf", "broken.pdf", new byte[]{1})
+                .markError("MiniMax returned 500: bad gateway"));
 
         List<TicketController.TicketResponse> body = web().get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
@@ -214,7 +224,11 @@ class PendingTicketsIT {
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(body).isEmpty();
+        assertThat(body).isNotNull();
+        assertThat(body).hasSize(1);
+        assertThat(body.get(0).id()).isEqualTo(failed.id());
+        assertThat(body.get(0).status()).isEqualTo(Ticket.Status.ON_ERROR);
+        assertThat(body.get(0).errorMessage()).isEqualTo("MiniMax returned 500: bad gateway");
     }
 
     @Test
