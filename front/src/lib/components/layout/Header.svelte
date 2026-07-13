@@ -72,7 +72,7 @@
 	class="sticky top-0 z-40 w-full border-b border-border/60 bg-background/80 backdrop-blur-md"
 >
 	<div
-		class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"
+		class="mx-auto flex h-14 w-full max-w-screen-2xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8"
 	>
 		<a
 			href="#dashboard"

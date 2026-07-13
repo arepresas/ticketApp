@@ -69,9 +69,18 @@ public class TicketController {
             "image/heic",
             "image/heif"
     );
-
     private final TicketRepository repository;
+
     private final TicketExtractionRepository extractions;
+
+    private final com.ticketapp.domain.ProductRepository products;
+    private final com.ticketapp.domain.PriceRepository prices;
+    private final com.ticketapp.domain.LineTicketRepository lineTickets;
+    private final com.ticketapp.domain.ShopRepository shops;
+
+    private final com.ticketapp.bff.extraction.TicketExtractionNormaliser normaliser;
+
+    private final com.ticketapp.bff.ai.TicketExtractionService extractionService;
 
     @GetMapping
     public List<TicketResponse> list() {
@@ -89,22 +98,27 @@ public class TicketController {
     }
 
     /**
-     * Return the caller's tickets that haven't reached a terminal
-     * state. Used by the dashboard's "Pending tickets" view — backed
-     * by a single SQL query so the wire response stays cheap
-     * regardless of the total ticket count.
+     * Return the caller's tickets that still need attention from
+     * either the scheduler or the user. Used by the dashboard's
+     * "Pending tickets" view — backed by a single SQL query so the
+     * wire response stays cheap regardless of the total ticket
+     * count.
+     *
+     * <p>Statuses returned:
+     * <ul>
+     *   <li>{@code OPEN}: queued for the scheduler.</li>
+     *   <li>{@code IN_PROGRESS}: the AI is working on it.</li>
+     *   <li>{@code ON_ERROR}: the AI provider failed and the
+     *       scheduler won't auto-retry. The ticket sits here until
+     *       the user retries (PATCH → OPEN) or cancels it. Surfacing
+     *       it under "pending" is deliberate: it's not done, and the
+     *       operator's attention is what moves it forward.</li>
+     * </ul>
      *
      * <p>Terminal statuses excluded:
      * <ul>
      *   <li>{@code DONE}: extracted successfully.</li>
      *   <li>{@code CANCELLED}: dismissed by the user.</li>
-     *   <li>{@code ON_ERROR}: the AI provider failed and the ticket
-     *       is not retrying automatically. Surfacing it under
-     *       "pending" would be misleading — the user has to act
-     *       (retry via PATCH or cancel) before it moves again. The
-     *       full {@code GET /api/tickets} still includes ON_ERROR
-     *       rows so the dashboard's failed list view can show them
-     *       with their {@code errorMessage}.</li>
      * </ul>
      *
      * <p>Auth: requires a valid session. The query is owner-scoped
@@ -114,7 +128,8 @@ public class TicketController {
     @GetMapping("/pending")
     public List<TicketResponse> pending() {
         AuthenticatedUser user = CurrentUser.get();
-        Set<Ticket.Status> pending = Set.of(Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS);
+        Set<Ticket.Status> pending = Set.of(
+                Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS, Ticket.Status.ON_ERROR);
         return repository.findByStatusIn(pending, user.id()).stream()
                 .map(TicketResponse::of)
                 .collect(Collectors.toList());
@@ -182,14 +197,34 @@ public class TicketController {
     }
 
     /**
-     * Manual status change. Used for two flows:
+     * Manual status change. Used for three flows:
      * <ul>
      *   <li>Retry: PATCH a ticket in {@code ON_ERROR} back to
      *       {@code OPEN}. {@link Ticket#withStatus(Status)} clears
      *       the stored {@code errorMessage} on the way through, so
      *       the next scheduler tick re-extracts from a clean slate.</li>
      *   <li>Cancel: any pending ticket → {@code CANCELLED}.</li>
+     *   <li>Validate: any pending ticket → {@code DONE} triggers the
+     *       {@link com.ticketapp.bff.extraction.TicketExtractionNormaliser}
+     *       which snapshots each line into the products catalogue.
+     *       The normalisation runs in the same controller method;
+     *       a normaliser failure logs a WARN but does not roll back
+     *       the status change (the next mark-as-done is a
+     *       no-op idempotent refresh).</li>
      * </ul>
+     *
+     * <p><b>Mark-as-done triggers extraction when missing.</b> A
+     * ticket that reached {@code ON_ERROR} without ever producing an
+     * extraction row (e.g. the AI provider timed out before emitting
+     * JSON, or the user's previous mark-as-done raced the scheduler
+     * and skipped the queue) has nothing for the normaliser to
+     * snapshot. Treating "mark as done" as "extract now, then
+     * normalise" makes the button do what the user expects: a failed
+     * ticket they retry by clicking "Mark as done" either lands in
+     * {@code DONE} with a populated catalogue or bounces back to
+     * {@code ON_ERROR} with the new failure reason. Without this
+     * fallback the ticket silently flips to {@code DONE} with an
+     * empty catalogue — the bug this method documents.
      *
      * <p>Transitioning to {@code ON_ERROR} via this endpoint is
      * supported (mirrors what the orchestrator does on failure) but
@@ -204,8 +239,41 @@ public class TicketController {
                                                        @RequestBody ChangeStatusRequest changeReq) {
         AuthenticatedUser user = CurrentUser.get();
         return repository.findById(id, user.id())
-                .map(t -> ResponseEntity.ok(
-                        TicketResponse.of(repository.save(t.withStatus(changeReq.status())))))
+                .map(t -> {
+                    Ticket target = t;
+                    if (changeReq.status() == Ticket.Status.DONE) {
+                        // If the ticket has no extraction row yet
+                        // (typical for ON_ERROR retries, or any
+                        // ticket that landed in DONE before the
+                        // scheduler could pick it up), trigger the
+                        // AI pipeline synchronously. processTicket
+                        // sets the status to IN_PROGRESS at start,
+                        // marks ON_ERROR on failure, and leaves the
+                        // row ready for the normaliser on success.
+                        // We re-read the ticket afterwards so the
+                        // response reflects whatever status the
+                        // pipeline actually landed on.
+                        if (extractions.findByTicketId(id).isEmpty()) {
+                            Ticket fresh = repository.findById(id, user.id()).orElse(t);
+                            extractionService.processTicket(fresh);
+                            target = repository.findById(id, user.id()).orElse(t);
+                        }
+                    }
+                    Ticket updated = repository.save(target.withStatus(changeReq.status()));
+                    if (changeReq.status() == Ticket.Status.DONE) {
+                        try {
+                            normaliser.normaliseOnDone(updated.id());
+                        } catch (RuntimeException ex) {
+                            // Best-effort: don't fail the status flip
+                            // because of a catalogue hiccup. The next
+                            // mark-as-done is idempotent and re-runs
+                            // the normaliser.
+                            log.warn("normaliseOnDone failed for ticket {}: {}",
+                                    updated.id(), ex.getMessage());
+                        }
+                    }
+                    return ResponseEntity.ok(TicketResponse.of(updated));
+                })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -383,6 +451,74 @@ public class TicketController {
     }
 
     /**
+     * Read the normalised view of a ticket. Populated by
+     * {@code TicketExtractionNormaliser} when a ticket transitions
+     * to {@code DONE}; falls through with 404 when the ticket either
+     * doesn't belong to the caller or hasn't been validated yet.
+     *
+     * <p>Used by the detail screen once a ticket is in {@code DONE}
+     * — the JSONB extraction becomes the AI's provenance record
+     * at that point, and the catalogue is the source of truth for
+     * what the user actually bought. The detail screen freezes
+     * editing when this endpoint is in play (see the frontend's
+     * ticket-status-driven branch in {@code TicketDetailApp.svelte}).
+     *
+     * <p>Three round trips total: one for the lines, one each for
+     * the joined products and prices via IN-list batch. Acceptable
+     * because line counts per ticket are small (single-digit to a
+     * few dozen at worst) and the JOIN keeps the SQL understandable
+     * without resorting to a wide denormalised read view.
+     */
+    @GetMapping("/{id}/catalogue")
+    public ResponseEntity<CatalogueResponse> catalogue(@PathVariable UUID id) {
+        AuthenticatedUser user = CurrentUser.get();
+        if (repository.findById(id, user.id()).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        java.util.List<com.ticketapp.domain.LineTicket> lines =
+                lineTickets.findByTicketId(id);
+        if (lines.isEmpty()) {
+            // No normalised lines yet — ticket wasn't validated or
+            // the normaliser hasn't run for some reason. Caller
+            // treats 404 as "show the JSONB extraction view".
+            return ResponseEntity.notFound().build();
+        }
+        java.util.Set<UUID> productIds = lines.stream()
+                .map(com.ticketapp.domain.LineTicket::productId)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Set<UUID> priceIds = lines.stream()
+                .map(com.ticketapp.domain.LineTicket::priceId)
+                .collect(java.util.stream.Collectors.toSet());
+        java.util.Map<UUID, com.ticketapp.domain.Product> productMap =
+                products.findAllByIds(productIds);
+        java.util.Map<UUID, com.ticketapp.domain.Price> priceMap =
+                prices.findAllByIds(priceIds);
+        // All line_tickets for one ticket share the same shop row
+        // (the normaliser resolves the shop once per ticket), so
+        // picking the first is safe. Returning Optional.empty()
+        // only happens if a row is deleted out from under us; we
+        // surface that as a 500-class failure (shouldn't reach prod).
+        com.ticketapp.domain.Shop shop = shops.findById(lines.get(0).shopId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "catalogue line " + lines.get(0).id()
+                                + " references missing shop " + lines.get(0).shopId()));
+        java.util.List<CatalogueLine> wireLines = lines.stream()
+                .map(lt -> {
+                    com.ticketapp.domain.Product p = productMap.get(lt.productId());
+                    com.ticketapp.domain.Price pr = priceMap.get(lt.priceId());
+                    return new CatalogueLine(
+                            p != null ? p.name() : null,
+                            p != null ? p.unit() : null,
+                            lt.quantity(),
+                            pr != null ? pr.amount() : null,
+                            lt.lineTotal());
+                })
+                .toList();
+        return ResponseEntity.ok(new CatalogueResponse(
+                shop.id(), shop.name(), wireLines));
+    }
+
+    /**
      * Stream the raw uploaded bytes for the in-browser preview.
      * Owner-scoped via the ticket lookup — same 404 rule as the rest
      * of the read paths. {@code Content-Type} is taken from the
@@ -507,6 +643,35 @@ public class TicketController {
             String name,
             java.math.BigDecimal quantity,
             String unit,
+            java.math.BigDecimal pricePerUnit,
+            java.math.BigDecimal lineTotal) { }
+
+    /**
+     * Wire response for {@code GET /api/tickets/{id}/catalogue}.
+     *
+     * <p>The catalogue view is what the user sees after
+     * {@code DONE}: shop + lines joined from {@code shops},
+     * {@code products} and {@code prices}, fanned out through
+     * {@code line_tickets}. The endpoint is a read-only mirror of
+     * what the normaliser wrote; there's intentionally no edit
+     * surface — validated tickets are immutable.
+     *
+     * <p>{@code lineTotal} comes from {@code line_tickets.line_total}
+     * (the exact value the AI or the user finalised). The
+     * {@code pricePerUnit} comes from the price snapshot the
+     * normaliser captured; a ticket with two distinct amounts for
+     * the same product (e.g. loyalty discount variant) keeps both
+     * rows here.
+     */
+    public record CatalogueResponse(
+            java.util.UUID shopId,
+            String shopName,
+            java.util.List<CatalogueLine> lines) { }
+
+    public record CatalogueLine(
+            String productName,
+            String unit,
+            java.math.BigDecimal quantity,
             java.math.BigDecimal pricePerUnit,
             java.math.BigDecimal lineTotal) { }
 

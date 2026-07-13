@@ -24,8 +24,8 @@
  */
 import { mount, unmount } from 'svelte';
 
-import { initAuth } from './store.svelte';
-import { setupHistoryBridge } from '../navigation';
+import { clearSession, initAuth } from './store.svelte';
+import { setupHistoryBridge, navigate } from '../navigation';
 import EffectHost from './EffectHost.svelte';
 
 const target = document.createElement('div');
@@ -43,6 +43,32 @@ void initAuth();
 // Hash-router side effect: install the popstate listener and sync
 // the body class to whatever hash the page loaded with.
 setupHistoryBridge();
+
+/**
+ * Session-expired bridge. Every protected BFF call funnels through
+ * a 401 check in `lib/api/tickets.ts`, which fires the
+ * {@code auth:expired} DOM event when the BFF rejects the token.
+ * Here we react: drop the local session (so the auth listener in
+ * `EffectHost` removes `is-authenticated` and the CSS gate reveals
+ * the landing) and force a clean URL push so the user doesn't stay
+ * on the now-broken detail / pending / new screen.
+ *
+ * `navigate({kind: 'dashboard'})` is a deliberate no-op for the
+ * signed-out user: the dashboard overlay hides behind
+ * `body.is-authenticated`, so the body class flips back to "no
+ * overlay active" and the landing page shows. The user re-logs in
+ * from there.
+ */
+window.addEventListener('auth:expired', () => {
+	clearSession();
+	try {
+		navigate({ kind: 'dashboard' });
+	} catch {
+		// Outside a browser (unit tests with no real router) —
+		// best-effort; clearing the session alone is the meaningful
+		// half of the contract.
+	}
+});
 
 export const dispose = (): void => {
 	unmount(instance);

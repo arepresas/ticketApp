@@ -1,121 +1,308 @@
+<svelte:options customElement="tickets-table" />
+
 <script lang="ts">
-  /**
-   * RecentTicketsTable
-   *
-   * Pure presentational table of the user's most recent tickets.
-   * No fetching, no side effects — the parent passes already-loaded data.
-   *
-   * Columns: Title · Category · Date · Amount · Status.
-   * Empty state: single full-width row "No recent tickets.".
-   *
-   * Date formatting uses `Intl.DateTimeFormat` so the displayed string
-   * matches the user's locale. Amount uses `Intl.NumberFormat` with EUR.
-   */
-  import type { RecentTicket, TicketCategory, TicketStatus } from '../../api/dashboard';
-  import { cn } from '../../utils';
+	/**
+	 * All-tickets table for the authenticated user's dashboard.
+	 *
+	 * Self-fetching: the component reads the session token from
+	 * sessionStorage, calls `listAllTickets(token)` on mount, and
+	 * re-fetches when an `auth:expired` event fires (token cleared
+	 * remotely → table goes back to the loading state until the
+	 * user re-authenticates and the dashboard remounts). Also
+	 * re-fetches on `ticket:updated` so the row the user just
+	 * edited / status-changed shows up to date without a manual
+	 * refresh when they return from the detail view.
+	 *
+	 * Why self-fetching instead of receiving `tickets` as a prop:
+	 *   * the parent (Dashboard.svelte) still needs the chart data
+	 *     via its own `fetchDashboard()` mock — coupling the table
+	 *     to that mock would require either mock gymnastics in the
+	 *     test or threading a second fetch through the parent.
+	 *   * the table's data shape ({@code CreatedTicket}[]) is much
+	 *     narrower than the dashboard's `Dashboard` payload, so
+	 *     the two endpoints can evolve independently.
+	 *
+	 * Status badges cover every {@link TicketStatus} value (matches
+	 * the pending list's colour scheme).
+	 */
+	import { onMount } from 'svelte';
+	import { RefreshCcw, FileText, Image as ImageIcon } from '@lucide/svelte';
 
-  type Props = {
-    tickets: RecentTicket[];
-  };
+	import {
+		listAllTickets,
+		TicketApiError,
+		type CreatedTicket,
+		type TicketStatus
+	} from '../../api/tickets';
+	import { navigate } from '../../navigation';
 
-  const { tickets }: Props = $props();
+	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
-  // Locale-aware formatters — constructed once, reused on every render.
-  // `undefined` locale follows the runtime default; safe in jsdom + browser.
-  const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-  const amountFmt = new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'EUR'
-  });
+	function readSessionToken(): string | null {
+		const s = (globalThis as { window?: { sessionStorage?: Storage } }).window
+			?.sessionStorage;
+		if (!s) return null;
+		try {
+			return s.getItem(SESSION_STORAGE_KEY);
+		} catch {
+			return null;
+		}
+	}
 
-  // Category → pill class map. 4 keys, exhaustive over `TicketCategory`.
-  const categoryPillClass: Record<TicketCategory, string> = {
-    transport:
-      'bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30',
-    food: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
-    lodging:
-      'bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/30',
-    other:
-      'bg-zinc-100 text-zinc-700 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-500/15 dark:text-zinc-300 dark:ring-zinc-500/30'
-  };
+	let tickets = $state<CreatedTicket[]>([]);
+	let loading = $state(true);
+	let errorMessage = $state<string | null>(null);
 
-  // Status → badge class map. green=closed, amber=open (matches task spec).
-  const statusBadgeClass: Record<TicketStatus, string> = {
-    open: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
-    closed:
-      'bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30'
-  };
+	// Status → readable label. Mirrors PendingTicketsApp so the user
+	// sees the same word on both screens.
+	const STATUS_LABEL: Record<TicketStatus, string> = {
+		OPEN: 'Open',
+		IN_PROGRESS: 'In progress',
+		ON_ERROR: 'Error',
+		DONE: 'Done',
+		CANCELLED: 'Cancelled'
+	};
 
-  // Display labels — capitalize category/status for readability.
-  const categoryLabel: Record<TicketCategory, string> = {
-    transport: 'Transport',
-    food: 'Food',
-    lodging: 'Lodging',
-    other: 'Other'
-  };
+	// Status → pill colours. Open/In progress keep their "needs
+	// attention" amber/sky; Error stands out in red so the operator
+	// notices it; terminal states (Done, Cancelled) get emerald/zinc
+	// so the table scannability matches the rest of the dashboard.
+	const statusBadgeClass: Record<TicketStatus, string> = {
+		OPEN: 'bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/20 dark:text-blue-300',
+		IN_PROGRESS:
+			'bg-amber-500/10 text-amber-700 ring-1 ring-inset ring-amber-500/20 dark:text-amber-300',
+		ON_ERROR:
+			'bg-red-500/10 text-red-700 ring-1 ring-inset ring-red-500/20 dark:text-red-300',
+		DONE: 'bg-emerald-500/10 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300',
+		CANCELLED:
+			'bg-zinc-500/10 text-zinc-700 ring-1 ring-inset ring-zinc-500/20 dark:text-zinc-300'
+	};
 
-  // Helpers — wrap Intl formatters and accept the string fields from the API.
-  // We trust the API contract here: invalid dates fall back to the raw string
-  // so we never render "Invalid Date".
-  const formatDate = (iso: string): string => {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d);
-  };
+	const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+	const dtFmt = new Intl.DateTimeFormat(undefined, {
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	});
 
-  const formatAmount = (eur: number): string => amountFmt.format(eur);
+	function formatSize(bytes: number | null): string {
+		if (bytes == null || bytes <= 0) return '—';
+		const units = ['B', 'KB', 'MB', 'GB'];
+		let value = bytes;
+		let unit = 0;
+		while (value >= 1024 && unit < units.length - 1) {
+			value /= 1024;
+			unit++;
+		}
+		const rounded = value >= 100 || unit === 0 ? Math.round(value) : value.toFixed(1);
+		return `${rounded} ${units[unit]}`;
+	}
+
+	const isImage = (contentType: string | null): boolean =>
+		!!contentType && contentType.startsWith('image/');
+
+	async function load(): Promise<void> {
+		const token = readSessionToken();
+		if (!token) {
+			// No session = nothing to render. The dashboard's auth
+			// gate should already have hidden this component, but
+			// staying defensive keeps the contract tight.
+			tickets = [];
+			loading = false;
+			errorMessage = null;
+			return;
+		}
+		loading = true;
+		errorMessage = null;
+		try {
+			tickets = await listAllTickets(token);
+		} catch (err: unknown) {
+			tickets = [];
+			if (err instanceof TicketApiError) {
+				errorMessage = `Failed to load tickets (${err.status}): ${err.message}`;
+			} else {
+				errorMessage = `Failed to load tickets: ${err instanceof Error ? err.message : 'unknown error'}`;
+			}
+		} finally {
+			loading = false;
+		}
+	}
+
+	function openDetail(id: string): void {
+		navigate({ kind: 'detail', ticketId: id });
+	}
+
+	onMount(() => {
+		void load();
+		const onAuthExpired = (): void => {
+			// Token cleared while the dashboard is mounted. Drop the
+			// local copy and skip showing an error — the parent
+			// will remount after re-authentication.
+			tickets = [];
+			errorMessage = null;
+		};
+		// The detail screen dispatches `ticket:updated` after a
+		// successful status change / metadata edit. We're still
+		// mounted as a sibling, so refresh the table so the new
+		// status / row appears without the user clicking refresh.
+		// Same hook as PendingTicketsApp.
+		const onTicketUpdated = (): void => {
+			void load();
+		};
+		// Belt-and-braces: `ticket:updated` fires while the
+		// dashboard is still hidden (the detail screen closes via
+		// history.back right after). The fetch promise resolves
+		// before the dashboard is visible, and Svelte's reactive
+		// update inside a hidden subtree can be skipped on the
+		// first paint after the body class flips. Re-running
+		// `load()` when the document transitions back to visible
+		// guarantees a fresh paint. Cheap — the request is
+		// idempotent and the server returns the same payload.
+		const onVisibilityChange = (): void => {
+			if (document.visibilityState === 'visible') {
+				void load();
+			}
+		};
+		window.addEventListener('auth:expired', onAuthExpired);
+		window.addEventListener('ticket:updated', onTicketUpdated);
+		document.addEventListener('visibilitychange', onVisibilityChange);
+		return () => {
+			window.removeEventListener('auth:expired', onAuthExpired);
+			window.removeEventListener('ticket:updated', onTicketUpdated);
+			document.removeEventListener('visibilitychange', onVisibilityChange);
+		};
+	});
 </script>
 
-<div class="overflow-x-auto rounded-lg border border-border">
-  <table class="w-full text-sm">
-    <thead class="border-b border-border bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
-      <tr>
-        <th scope="col" class="px-4 py-3 text-left font-medium">Title</th>
-        <th scope="col" class="px-4 py-3 text-left font-medium">Category</th>
-        <th scope="col" class="px-4 py-3 text-left font-medium">Date</th>
-        <th scope="col" class="px-4 py-3 text-right font-medium">Amount</th>
-        <th scope="col" class="px-4 py-3 text-left font-medium">Status</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-border">
-      {#if tickets.length === 0}
-        <tr>
-          <td colspan={5} class="px-4 py-8 text-center text-sm text-muted-foreground">
-            No recent tickets.
-          </td>
-        </tr>
-      {:else}
-        {#each tickets as t (t.id)}
-          <tr class="transition-colors hover:bg-muted/40">
-            <td class="px-4 py-3 font-medium text-foreground">{t.title}</td>
-            <td class="px-4 py-3">
-              <span
-                class={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                  categoryPillClass[t.category]
-                )}
-              >
-                {categoryLabel[t.category]}
-              </span>
-            </td>
-            <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-              {formatDate(t.date)}
-            </td>
-            <td class="px-4 py-3 text-right font-mono tabular-nums text-foreground">
-              {formatAmount(t.amountEur)}
-            </td>
-            <td class="px-4 py-3">
-              <span
-                class={cn(
-                  'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize',
-                  statusBadgeClass[t.status]
-                )}
-              >
-                {t.status}
-              </span>
-            </td>
-          </tr>
-        {/each}
-      {/if}
-    </tbody>
-  </table>
+<div
+	class="overflow-x-auto rounded-lg border border-border"
+	data-testid="tickets-table"
+>
+	<header class="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
+		<!--
+			Title doubles as a refresh trigger: clicking it re-runs
+			load(). cursor-pointer + role="button" + tabindex give
+			discoverability and keyboard access (Enter / Space) so the
+			affordance works for mouse and keyboard users alike. The
+			dedicated Refresh button on the right is kept for clarity
+			— both call the same `load()`.
+		-->
+		<h2
+			class="cursor-pointer text-sm font-semibold tracking-tight select-none hover:text-foreground/80"
+			role="button"
+			tabindex="0"
+			data-testid="tickets-title"
+			onclick={() => void load()}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					void load();
+				}
+			}}
+		>
+			All tickets
+		</h2>
+		<button
+			type="button"
+			onclick={load}
+			disabled={loading}
+			aria-label="Refresh"
+			data-testid="tickets-refresh"
+			class="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+		>
+			<RefreshCcw class="size-3.5" />
+			Refresh
+		</button>
+	</header>
+
+	{#if errorMessage}
+		<div
+			role="alert"
+			data-testid="tickets-error"
+			class="rounded-b-lg border-t border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+		>
+			{errorMessage}
+		</div>
+	{/if}
+
+	{#if loading && tickets.length === 0}
+		<!-- Loading: rows skeleton so layout doesn't jump when data lands. -->
+		<div class="space-y-2 p-4" aria-busy="true">
+			{#each Array(4) as _, i (i)}
+				<div class="h-12 animate-pulse rounded bg-muted/40"></div>
+			{/each}
+			<p class="sr-only">Loading tickets…</p>
+		</div>
+	{:else if tickets.length === 0}
+		<div
+			class="px-4 py-8 text-center text-sm text-muted-foreground"
+			data-testid="tickets-empty"
+		>
+			No tickets yet — upload a receipt to get started.
+		</div>
+	{:else}
+		<table class="w-full text-sm">
+			<thead
+				class="border-b border-border bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground"
+			>
+				<tr>
+					<th scope="col" class="px-4 py-3 text-left font-medium">Ticket</th>
+					<th scope="col" class="px-4 py-3 text-left font-medium">File</th>
+					<th scope="col" class="px-4 py-3 text-right font-medium">Size</th>
+					<th scope="col" class="px-4 py-3 text-left font-medium">Created</th>
+					<th scope="col" class="px-4 py-3 text-left font-medium">Status</th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-border">
+				{#each tickets as t (t.id)}
+					<tr
+						class="cursor-pointer transition-colors hover:bg-muted/40"
+						data-testid="ticket-row"
+						onclick={() => openDetail(t.id)}
+					>
+						<td class="px-4 py-3">
+							<p class="truncate font-medium text-foreground">{t.title}</p>
+							{#if t.description}
+								<p class="mt-0.5 truncate text-xs text-muted-foreground">
+									{t.description}
+								</p>
+							{/if}
+						</td>
+						<td class="px-4 py-3">
+							<div class="flex items-center gap-2 text-xs text-muted-foreground">
+								{#if isImage(t.contentType)}
+									<ImageIcon class="size-3.5 shrink-0" aria-hidden="true" />
+								{:else}
+									<FileText class="size-3.5 shrink-0" aria-hidden="true" />
+								{/if}
+								<span class="truncate">{t.fileName ?? 'no file'}</span>
+							</div>
+						</td>
+						<td
+							class="px-4 py-3 text-right font-mono tabular-nums text-xs text-muted-foreground"
+						>
+							{formatSize(t.sizeBytes)}
+						</td>
+						<td
+							class="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground"
+						>
+							<span title={dtFmt.format(new Date(t.createdAt))}>
+								{dateFmt.format(new Date(t.createdAt))}
+							</span>
+						</td>
+						<td class="px-4 py-3">
+							<span
+								class={[
+									'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+									statusBadgeClass[t.status]
+								].join(' ')}
+								data-testid="status-badge"
+							>
+								{STATUS_LABEL[t.status]}
+							</span>
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/if}
 </div>

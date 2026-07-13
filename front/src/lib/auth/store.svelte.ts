@@ -86,10 +86,30 @@ const doInit = async (): Promise<void> => {
     state.user = await fetchMe(token);
     state.status = 'authenticated';
   } catch {
-    writeToken(null);
-    state.user = null;
-    state.status = 'idle';
+    // Token couldn't be validated (likely 401). Drop it and let
+    // the user re-authenticate. The auth listener in host.ts will
+    // pick up isAuthenticated === false and hide the dashboard
+    // overlays via the CSS gate.
+    clearSession();
   }
+};
+
+/**
+ * Drop the local session without round-tripping the BFF. Used when
+ * an API client observes a 401 response — the token is already
+ * invalid on the server, so calling `/api/auth/logout` would just
+ * bounce back 401. The navigation half of "where does the user go?"
+ * lives in `host.ts` next to the rest of the auth listener wiring,
+ * so the API client can stay side-effect-free w.r.t. routing.
+ *
+ * Idempotent — calling twice is a no-op. Safe to call from any
+ * auth-aware code path.
+ */
+export const clearSession = (): void => {
+  writeToken(null);
+  state.user = null;
+  state.status = 'idle';
+  state.error = null;
 };
 
 /**

@@ -76,7 +76,7 @@
 	});
 </script>
 
-<section class="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+<section class="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 	<!-- Header: greeting + user identity. No logout here — the existing
 	     GoogleLoginButton flow owns the auth UI; duplicating it would split
 	     the source of truth. -->
@@ -180,6 +180,12 @@
 			</div>
 		</div>
 
-		<RecentTicketsTable tickets={data.recentTickets} />
+		<!--
+			All-tickets table is now self-fetching (talks to the BFF
+			directly via `listAllTickets`). Charts/KPI cards stay on
+			the mocked `fetchDashboard()` until we wire them to a real
+			endpoint — that data path is out of scope here.
+		-->
+		<RecentTicketsTable />
 	{/if}
 </section>
