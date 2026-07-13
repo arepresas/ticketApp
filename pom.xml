@@ -32,13 +32,13 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <postgresql.version>42.7.12</postgresql.version>
+        <postgresql.version>42.7.13</postgresql.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <liquibase.version>5.0.3</liquibase.version>
         <spring-boot.version>4.1.0</spring-boot.version>
         <jacoco.version>0.8.15</jacoco.version>
-        <pdfbox.version>3.0.7</pdfbox.version>
-        <openai-java.version>4.41.0</openai-java.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
+        <openai-java.version>4.42.0</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
