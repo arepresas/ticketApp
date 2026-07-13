@@ -23,3 +23,9 @@ databaseChangeLog:
   - include:
       file: changes/V9__add_ticket_owner_id.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V10__add_products.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V11__add_shop_address.sql
+      relativeToChangelogFile: true
