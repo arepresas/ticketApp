@@ -298,4 +298,34 @@ describe('Header', () => {
 
 		window.removeEventListener('dashboard:refresh', refreshSpy);
 	});
+
+	// history.back() reaches the dashboard through the popstate
+	// listener in setupHistoryBridge, which routes through
+	// applyRoute. The refresh signal must fire from there too —
+	// otherwise the dashboard never re-fetches when the user
+	// back-navigates from new/pending/detail. Regression for the
+	// 2026-07-14 incident where uploading a ticket left the
+	// dashboard's tickets list stale because the back-button path
+	// didn't emit any event.
+	it('dispatches dashboard:refresh on popstate back to the dashboard', async () => {
+		// Install the bridge so the popstate listener exists. The
+		// import has to be dynamic because the module guards itself
+		// with a one-shot `installed` flag; importing it from the
+		// test setup above is the simplest way to keep it idempotent.
+		const { setupHistoryBridge } = await import('../../navigation');
+		setupHistoryBridge();
+
+		// Simulate the user being on a non-dashboard route (new
+		// ticket screen) and the browser firing popstate after
+		// history.back() lands them on the empty hash (dashboard).
+		window.location.hash = '';
+		const refreshSpy = vi.fn();
+		window.addEventListener('dashboard:refresh', refreshSpy);
+
+		window.dispatchEvent(new PopStateEvent('popstate'));
+
+		expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+		window.removeEventListener('dashboard:refresh', refreshSpy);
+	});
 });
