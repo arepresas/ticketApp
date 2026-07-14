@@ -101,7 +101,7 @@ class TicketExtractionJobTest {
         // doesn't silently start processing DONE/ON_ERROR tickets.
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.DONE, Instant.now(), Instant.now(),
-                null, null, null, null, 0);
+                null, null, null, null, 0, null);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -145,7 +145,7 @@ class TicketExtractionJobTest {
     void inProgressTicketsAreAlsoFilteredOut() {
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.IN_PROGRESS,
-                Instant.now(), Instant.now(), null, null, null, null, 0);
+                Instant.now(), Instant.now(), null, null, null, null, 0, null);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -161,7 +161,7 @@ class TicketExtractionJobTest {
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.ON_ERROR,
                 Instant.now(), Instant.now(), null, null, null,
-                "previous failure", 0);
+                "previous failure", 0, null);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -212,7 +212,7 @@ class TicketExtractionJobTest {
 
     private static Ticket openTicket(UUID id) {
         return new Ticket(id, OWNER, "title", "", Status.OPEN,
-                Instant.now(), Instant.now(), null, null, null, null, 0);
+                Instant.now(), Instant.now(), null, null, null, null, 0, null);
     }
 
     private static AiProperties withEnabled(boolean enabled) {

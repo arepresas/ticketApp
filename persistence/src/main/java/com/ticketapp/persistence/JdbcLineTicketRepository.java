@@ -33,17 +33,16 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
     }
 
     private static final String LINE_COLS =
-            "id, ticket_id, shop_id, product_id, price_id, " +
+            "id, ticket_id, product_id, price_id, " +
             "quantity, line_total, created_at, updated_at";
 
     private static final String UPSERT_SQL = """
             INSERT INTO line_tickets
-                (id, ticket_id, shop_id, product_id, price_id,
+                (id, ticket_id, product_id, price_id,
                  quantity, line_total, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (ticket_id, product_id) DO UPDATE
-            SET shop_id = EXCLUDED.shop_id,
-                price_id = EXCLUDED.price_id,
+            SET price_id = EXCLUDED.price_id,
                 quantity = EXCLUDED.quantity,
                 line_total = EXCLUDED.line_total,
                 updated_at = EXCLUDED.updated_at
@@ -86,13 +85,12 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             var ps = con.prepareStatement(UPSERT_SQL);
             ps.setObject(1, line.id());
             ps.setObject(2, line.ticketId());
-            ps.setObject(3, line.shopId());
-            ps.setObject(4, line.productId());
-            ps.setObject(5, line.priceId());
-            ps.setBigDecimal(6, line.quantity());
-            ps.setBigDecimal(7, line.lineTotal());
-            ps.setTimestamp(8, java.sql.Timestamp.from(line.createdAt()));
-            ps.setTimestamp(9, java.sql.Timestamp.from(line.updatedAt()));
+            ps.setObject(3, line.productId());
+            ps.setObject(4, line.priceId());
+            ps.setBigDecimal(5, line.quantity());
+            ps.setBigDecimal(6, line.lineTotal());
+            ps.setTimestamp(7, java.sql.Timestamp.from(line.createdAt()));
+            ps.setTimestamp(8, java.sql.Timestamp.from(line.updatedAt()));
             return ps;
         });
         return line;
@@ -101,7 +99,6 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
     private static LineTicket mapLine(java.sql.ResultSet rs) throws java.sql.SQLException {
         UUID id = rs.getObject("id", UUID.class);
         UUID ticketId = rs.getObject("ticket_id", UUID.class);
-        UUID shopId = rs.getObject("shop_id", UUID.class);
         UUID productId = rs.getObject("product_id", UUID.class);
         UUID priceId = rs.getObject("price_id", UUID.class);
         var quantity = rs.getBigDecimal("quantity");
@@ -110,7 +107,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
         var updatedAtTs = rs.getTimestamp("updated_at");
         var createdAt = createdAtTs != null ? createdAtTs.toInstant() : java.time.Instant.now();
         var updatedAt = updatedAtTs != null ? updatedAtTs.toInstant() : createdAt;
-        return new LineTicket(id, ticketId, shopId, productId, priceId,
+        return new LineTicket(id, ticketId, productId, priceId,
                 quantity, lineTotal, createdAt, updatedAt);
     }
 }

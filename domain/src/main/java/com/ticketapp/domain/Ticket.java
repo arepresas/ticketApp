@@ -30,7 +30,8 @@ public record Ticket(
         String fileName,
         byte[] fileData,
         String errorMessage,
-        int attempts
+        int attempts,
+        UUID shopId
 ) {
 
     public Ticket {
@@ -43,6 +44,10 @@ public record Ticket(
         if (updatedAt == null) throw new NullPointerException("updatedAt");
         if (errorMessage != null && errorMessage.isBlank()) errorMessage = null;
         if (attempts < 0) throw new IllegalArgumentException("attempts must be >= 0");
+        // shopId is nullable: most tickets have no shop row until the
+        // normaliser runs on the DONE transition. A non-null value
+        // must reference a real shops row — the FK constraint
+        // (V13) enforces that at the SQL layer.
     }
 
     /**
@@ -66,7 +71,7 @@ public record Ticket(
                               byte[] fileData) {
         Instant now = Instant.now();
         return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData, null, 0);
+                now, now, contentType, fileName, fileData, null, 0, null);
     }
 
     /**
@@ -81,7 +86,7 @@ public record Ticket(
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
         return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData, cleared, attempts);
+                contentType, fileName, fileData, cleared, attempts, shopId);
     }
 
     /**
@@ -98,7 +103,7 @@ public record Ticket(
             throw new IllegalArgumentException("title must not be blank");
         }
         return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts);
+                contentType, fileName, fileData, errorMessage, attempts, shopId);
     }
 
     /**
@@ -110,7 +115,7 @@ public record Ticket(
     public Ticket withDescription(String newDescription) {
         String sanitized = newDescription == null ? "" : newDescription;
         return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts);
+                contentType, fileName, fileData, errorMessage, attempts, shopId);
     }
 
     /**
@@ -131,7 +136,7 @@ public record Ticket(
     public Ticket markError(String message) {
         return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
                 createdAt, Instant.now(),
-                contentType, fileName, fileData, message, attempts);
+                contentType, fileName, fileData, message, attempts, shopId);
     }
 
     /**
@@ -149,7 +154,22 @@ public record Ticket(
      */
     public Ticket incrementAttempts() {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts + 1);
+                contentType, fileName, fileData, errorMessage, attempts + 1, shopId);
+    }
+
+    /**
+     * Anchor the shop the ticket was bought from. Called by the
+     * normaliser during the {@code DONE} transition — the merchant
+     * string the AI extracted resolves (or creates) a single
+     * {@code shops} row, and the resulting id is stamped onto the
+     * ticket so every line_ticket row can derive its shop by
+     * joining back through the ticket instead of carrying a
+     * redundant FK of its own. Bumps {@code updatedAt} so the
+     * dashboard's sort picks up the change.
+     */
+    public Ticket withShopId(UUID newShopId) {
+        return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
+                contentType, fileName, fileData, errorMessage, attempts, newShopId);
     }
 
     @Override
@@ -167,13 +187,14 @@ public record Ticket(
                 && java.util.Objects.equals(fileName, other.fileName)
                 && Arrays.equals(fileData, other.fileData)
                 && java.util.Objects.equals(errorMessage, other.errorMessage)
-                && attempts == other.attempts;
+                && attempts == other.attempts
+                && java.util.Objects.equals(shopId, other.shopId);
     }
 
     @Override
     public int hashCode() {
         int h = java.util.Objects.hash(id, ownerId, title, description, status,
-                createdAt, updatedAt, contentType, fileName, errorMessage, attempts);
+                createdAt, updatedAt, contentType, fileName, errorMessage, attempts, shopId);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
@@ -184,7 +205,8 @@ public record Ticket(
                 + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
                 + ", contentType=" + contentType + ", fileName=" + fileName
                 + ", fileData=" + Arrays.toString(fileData)
-                + ", errorMessage=" + errorMessage + ", attempts=" + attempts + "]";
+                + ", errorMessage=" + errorMessage + ", attempts=" + attempts
+                + ", shopId=" + shopId + "]";
     }
 
     /**

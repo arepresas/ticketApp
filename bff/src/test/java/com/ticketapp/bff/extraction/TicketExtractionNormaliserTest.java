@@ -6,9 +6,12 @@ import com.ticketapp.domain.PriceRepository;
 import com.ticketapp.domain.ProductRepository;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
+import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.Ticket.Status;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -42,6 +45,7 @@ import static org.mockito.Mockito.when;
  */
 class TicketExtractionNormaliserTest {
 
+    private TicketRepository tickets;
     private TicketExtractionRepository extractions;
     private ShopRepository shops;
     private ProductRepository products;
@@ -52,6 +56,7 @@ class TicketExtractionNormaliserTest {
 
     @BeforeEach
     void setup() {
+        tickets = mock(TicketRepository.class);
         extractions = mock(TicketExtractionRepository.class);
         shops = mock(ShopRepository.class);
         products = mock(ProductRepository.class);
@@ -59,9 +64,9 @@ class TicketExtractionNormaliserTest {
         lineTickets = mock(LineTicketRepository.class);
         objectMapper = new ObjectMapper();
         normaliser = new TicketExtractionNormaliser(
-                extractions, shops, products, prices, lineTickets, objectMapper);
+                tickets, extractions, shops, products, prices, lineTickets, objectMapper);
 
-        // Default mocks: products/prices/lines/shops return the
+        // Default mocks: products/prices/lines/shops/tickets return the
         // input as saved (mirrors the round-trip used by the
         // existing IT tests). Individual tests override what's
         // relevant — the existing-shop test stubs shops.save to
@@ -70,6 +75,30 @@ class TicketExtractionNormaliserTest {
         when(products.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(prices.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(lineTickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    /**
+     * Build a minimal {@link Ticket} fixture for the normaliseOnDone
+     * call. The V13 refactor moved shop_id onto the ticket, so the
+     * normaliser now takes the full Ticket (it stamps the resolved
+     * shop id back onto it) — the test fixture matches.
+     */
+    private static Ticket sampleTicket(UUID id) {
+        return new Ticket(
+                id,
+                UUID.randomUUID(),
+                "Mercadona receipt",
+                "",
+                Status.OPEN,
+                Instant.parse("2026-07-04T09:00:00Z"),
+                Instant.parse("2026-07-04T09:00:00Z"),
+                "image/png",
+                "mercadona.png",
+                new byte[]{1, 2, 3},
+                null,
+                0,
+                null);
     }
 
     private TicketExtraction extraction(UUID ticketId, String merchant,
@@ -104,7 +133,7 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -147,7 +176,7 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -181,7 +210,7 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -202,7 +231,7 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("dia")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -231,7 +260,7 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -252,7 +281,7 @@ class TicketExtractionNormaliserTest {
                         "{not valid json", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         ArgumentCaptor<Shop> saved = ArgumentCaptor.forClass(Shop.class);
         verify(shops).save(saved.capture());
@@ -277,14 +306,47 @@ class TicketExtractionNormaliserTest {
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.of(existing));
 
-        normaliser.normaliseOnDone(ticketId);
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
 
         verify(shops, never()).save(any());
-        // The existing shop's id is what every line_ticket points
-        // at — verify via the line_tickets save call below.
+        // V13 refactor: the shop id is now stamped onto the ticket
+        // (not the line). Verify the ticket save captured the
+        // resolved shop id and that the line was saved without a
+        // shopId (the field no longer exists).
+        ArgumentCaptor<Ticket> anchored = ArgumentCaptor.forClass(Ticket.class);
+        verify(tickets).save(anchored.capture());
+        assertThat(anchored.getValue().shopId()).isEqualTo(existing.id());
         ArgumentCaptor<com.ticketapp.domain.LineTicket> line =
                 ArgumentCaptor.forClass(com.ticketapp.domain.LineTicket.class);
         verify(lineTickets).save(line.capture());
-        assertThat(line.getValue().shopId()).isEqualTo(existing.id());
+        assertThat(line.getValue().ticketId()).isEqualTo(ticketId);
+    }
+
+    @Test
+    void firstTimeShopIsStampedOntoTheTicket() {
+        // The V13 refactor moved the shop id from line_tickets to
+        // tickets. When the normaliser creates a new shop row, it
+        // must persist the resolved id onto the ticket itself so
+        // the controller's catalogue() read can join through the
+        // ticket rather than through the (now shopless) line row.
+        UUID ticketId = UUID.randomUUID();
+        Shop created = new Shop(UUID.randomUUID(), "Consum", "consum",
+                null, null, null, null, null, null, null,
+                Instant.parse("2026-07-04T10:00:00Z"));
+        when(extractions.findByTicketId(ticketId))
+                .thenReturn(Optional.of(extraction(ticketId, "Consum", null,
+                        List.of(sampleLine()))));
+        when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
+        when(shops.save(any())).thenReturn(created);
+
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
+
+        // The new shop was created once.
+        ArgumentCaptor<Shop> savedShop = ArgumentCaptor.forClass(Shop.class);
+        verify(shops).save(savedShop.capture());
+        // The ticket was updated with the new shop id.
+        ArgumentCaptor<Ticket> savedTicket = ArgumentCaptor.forClass(Ticket.class);
+        verify(tickets).save(savedTicket.capture());
+        assertThat(savedTicket.getValue().shopId()).isEqualTo(created.id());
     }
 }

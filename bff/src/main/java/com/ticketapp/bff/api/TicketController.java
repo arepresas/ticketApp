@@ -261,7 +261,11 @@ public class TicketController {
                     Ticket updated = repository.save(target.withStatus(changeReq.status()));
                     if (changeReq.status() == Ticket.Status.DONE) {
                         try {
-                            normaliser.normaliseOnDone(updated.id());
+                            // The normaliser now takes the full
+                            // Ticket so it can stamp shop_id on the
+                            // ticket itself (V13 refactor: shop is
+                            // anchored on the ticket, not per line).
+                            normaliser.normaliseOnDone(updated);
                         } catch (RuntimeException ex) {
                             // Best-effort: don't fail the status flip
                             // because of a catalogue hiccup. The next
@@ -471,15 +475,26 @@ public class TicketController {
     @GetMapping("/{id}/catalogue")
     public ResponseEntity<CatalogueResponse> catalogue(@PathVariable UUID id) {
         AuthenticatedUser user = CurrentUser.get();
-        if (repository.findById(id, user.id()).isEmpty()) {
+        // V13 refactor: shop_id lives on the ticket (set by the
+        // normaliser during the DONE transition). The controller
+        // re-reads the ticket so it picks up the freshly-written
+        // shop_id without depending on the just-saved snapshot
+        // from changeStatus — single round-trip, owner-scoped.
+        java.util.Optional<com.ticketapp.domain.Ticket> maybeTicket =
+                repository.findById(id, user.id());
+        if (maybeTicket.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        com.ticketapp.domain.Ticket ticket = maybeTicket.get();
+        if (ticket.shopId() == null) {
+            // No normalised shop yet — ticket wasn't validated or
+            // the normaliser hasn't run for some reason. Caller
+            // treats 404 as "show the JSONB extraction view".
             return ResponseEntity.notFound().build();
         }
         java.util.List<com.ticketapp.domain.LineTicket> lines =
                 lineTickets.findByTicketId(id);
         if (lines.isEmpty()) {
-            // No normalised lines yet — ticket wasn't validated or
-            // the normaliser hasn't run for some reason. Caller
-            // treats 404 as "show the JSONB extraction view".
             return ResponseEntity.notFound().build();
         }
         java.util.Set<UUID> productIds = lines.stream()
@@ -492,15 +507,15 @@ public class TicketController {
                 products.findAllByIds(productIds);
         java.util.Map<UUID, com.ticketapp.domain.Price> priceMap =
                 prices.findAllByIds(priceIds);
-        // All line_tickets for one ticket share the same shop row
-        // (the normaliser resolves the shop once per ticket), so
-        // picking the first is safe. Returning Optional.empty()
-        // only happens if a row is deleted out from under us; we
-        // surface that as a 500-class failure (shouldn't reach prod).
-        com.ticketapp.domain.Shop shop = shops.findById(lines.get(0).shopId())
+        // The shop FK now lives on the ticket itself (V13), so the
+        // per-line shop_id column is gone — read straight from the
+        // ticket. Returning Optional.empty() only happens if a row
+        // is deleted out from under us; surface that as a 500-class
+        // failure (shouldn't reach prod).
+        com.ticketapp.domain.Shop shop = shops.findById(ticket.shopId())
                 .orElseThrow(() -> new IllegalStateException(
-                        "catalogue line " + lines.get(0).id()
-                                + " references missing shop " + lines.get(0).shopId()));
+                        "ticket " + ticket.id()
+                                + " references missing shop " + ticket.shopId()));
         java.util.List<CatalogueLine> wireLines = lines.stream()
                 .map(lt -> {
                     com.ticketapp.domain.Product p = productMap.get(lt.productId());

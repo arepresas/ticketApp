@@ -27,7 +27,6 @@ class LineTicketTest {
         // contained the product at full price.
         LineTicket lt = new LineTicket(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                UUID.randomUUID(),
                 new BigDecimal("1"), new BigDecimal("-3.00"),
                 Instant.now(), Instant.now());
         assertEquals(new BigDecimal("-3.00"), lt.lineTotal());
@@ -38,7 +37,6 @@ class LineTicketTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new LineTicket(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                        UUID.randomUUID(),
                         BigDecimal.ZERO, BigDecimal.ONE,
                         Instant.now(), Instant.now()));
     }
@@ -48,39 +46,36 @@ class LineTicketTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new LineTicket(
                         UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                        UUID.randomUUID(),
                         new BigDecimal("-1"), BigDecimal.ONE,
                         Instant.now(), Instant.now()));
     }
 
     @Test
     void constructorRejectsNullReferencesAndNumericFields() {
-        // All four FK targets + quantity + lineTotal are required.
+        // All three FK targets + quantity + lineTotal are required.
         // Letting any of them be null would let the JDBC layer pass
         // it through and crash on the FK constraint downstream;
         // catching it at the domain boundary keeps the failure
-        // local.
+        // local. shopId no longer lives here (V13 refactor moved it
+        // to Ticket) — the line carries ticketId + productId + priceId.
         Instant now = Instant.now();
         UUID id = UUID.randomUUID();
         UUID t = UUID.randomUUID();
-        UUID s = UUID.randomUUID();
         UUID p = UUID.randomUUID();
         UUID pr = UUID.randomUUID();
         BigDecimal one = BigDecimal.ONE;
 
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(null, t, s, p, pr, one, one, now, now));
+                () -> new LineTicket(null, t, p, pr, one, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, null, s, p, pr, one, one, now, now));
+                () -> new LineTicket(id, null, p, pr, one, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, null, p, pr, one, one, now, now));
+                () -> new LineTicket(id, t, null, pr, one, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, s, null, pr, one, one, now, now));
+                () -> new LineTicket(id, t, p, null, one, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, s, p, null, one, one, now, now));
+                () -> new LineTicket(id, t, p, pr, null, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, s, p, pr, null, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, s, p, pr, one, null, now, now));
+                () -> new LineTicket(id, t, p, pr, one, null, now, now));
     }
 }

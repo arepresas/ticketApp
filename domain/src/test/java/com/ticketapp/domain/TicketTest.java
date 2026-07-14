@@ -109,7 +109,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         null, OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
         assertEquals("id", ex.getMessage());
     }
 
@@ -119,7 +119,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), null, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
         assertEquals("ownerId", ex.getMessage());
     }
 
@@ -129,7 +129,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, null, "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
         assertEquals("title", ex.getMessage());
     }
 
@@ -139,7 +139,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", null, now, now,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
     }
 
     @Test
@@ -148,7 +148,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
     }
 
     @Test
@@ -157,7 +157,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
-                        null, null, null, null, 0));
+                        null, null, null, null, 0, null));
     }
 
     @Test
@@ -167,7 +167,7 @@ class TicketTest {
         Instant now = Instant.now();
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
-                null, null, null, "   ", 0);
+                null, null, null, "   ", 0, null);
 
         assertNull(t.errorMessage());
     }
@@ -181,7 +181,22 @@ class TicketTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, -1));
+                        null, null, null, null, -1, null));
+    }
+
+    @Test
+    void constructorAcceptsNullShopId() {
+        // shopId is nullable: most tickets have no shop row until
+        // the normaliser runs on the DONE transition. The constructor
+        // must not reject null — that would force every caller to
+        // thread a stub shop id through code paths that never see
+        // one.
+        Instant now = Instant.now();
+        Ticket t = new Ticket(
+                UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                null, null, null, null, 0, null);
+
+        assertNull(t.shopId());
     }
 
     @Test
@@ -215,9 +230,9 @@ class TicketTest {
         UUID id = UUID.randomUUID();
         Instant created = Instant.parse("2026-07-05T17:00:00Z");
         Ticket a = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0);
+                null, null, null, "msg", 0, null);
         Ticket b = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0);
+                null, null, null, "msg", 0, null);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
@@ -328,5 +343,39 @@ class TicketTest {
 
         assertEquals("", cleared.description());
         assertEquals(t.title(), cleared.title());
+    }
+
+    @Test
+    void withShopIdAnchorsTheShopOnTheTicket() {
+        // V13 refactor: the normaliser stamps the resolved shop
+        // id onto the ticket itself, not on each line. The setter
+        // must bump updatedAt (the catalogue() read depends on the
+        // ticket row to be fresh) and preserve every other field,
+        // so a partial update can't accidentally reset status or
+        // error state.
+        Ticket t = Ticket.open(OWNER, "x", "").markError("previous failure");
+        UUID shop = UUID.randomUUID();
+        Ticket anchored = t.withShopId(shop);
+
+        assertEquals(shop, anchored.shopId());
+        assertEquals(t.id(), anchored.id());
+        assertEquals(t.status(), anchored.status());
+        assertEquals(t.errorMessage(), anchored.errorMessage());
+        assertEquals(t.attempts(), anchored.attempts());
+        assertFalse(anchored.updatedAt().isBefore(t.updatedAt()),
+                "updatedAt must not move backwards");
+    }
+
+    @Test
+    void withShopIdAcceptsNullToClear() {
+        // A future "user removed the shop association" path (or a
+        // re-validation that resolves no shop) would call this
+        // with null. The setter must accept it without throwing —
+        // a null shopId is just "no shop row" and the catalogue()
+        // endpoint already short-circuits on null to a 404.
+        Ticket anchored = Ticket.open(OWNER, "x", "").withShopId(UUID.randomUUID());
+        Ticket cleared = anchored.withShopId(null);
+
+        assertNull(cleared.shopId());
     }
 }

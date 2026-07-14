@@ -41,7 +41,7 @@ public class JdbcTicketRepository implements TicketRepository {
 
     private static final String SELECT_COLS =
             "id, owner_id, title, description, status, created_at, updated_at, " +
-            "content_type, file_name, file_data, error_message, attempts";
+            "content_type, file_name, file_data, error_message, attempts, shop_id";
 
     /** Single source of truth for the SELECT prefix used in every read query. */
     private static final String SELECT_PREFIX = "SELECT ";
@@ -49,8 +49,8 @@ public class JdbcTicketRepository implements TicketRepository {
     private static final String UPSERT_SQL = """
             INSERT INTO tickets
                 (id, owner_id, title, description, status, created_at, updated_at,
-                 content_type, file_name, file_data, error_message, attempts)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 content_type, file_name, file_data, error_message, attempts, shop_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 owner_id = EXCLUDED.owner_id,
                 title = EXCLUDED.title,
@@ -61,7 +61,8 @@ public class JdbcTicketRepository implements TicketRepository {
                 file_name = EXCLUDED.file_name,
                 file_data = EXCLUDED.file_data,
                 error_message = EXCLUDED.error_message,
-                attempts = EXCLUDED.attempts
+                attempts = EXCLUDED.attempts,
+                shop_id = EXCLUDED.shop_id
             """;
 
     @Override
@@ -113,6 +114,13 @@ public class JdbcTicketRepository implements TicketRepository {
             if (ticket.errorMessage() == null) ps.setNull(11, Types.VARCHAR);
             else ps.setString(11, ticket.errorMessage());
             ps.setInt(12, ticket.attempts());
+            // shop_id is nullable: most tickets have no shop row until
+            // the normaliser runs on the DONE transition. setNull keeps
+            // pre-existing rows valid; the new write path sets it
+            // alongside the catalogue write inside the same
+            // transaction.
+            if (ticket.shopId() == null) ps.setNull(13, Types.OTHER);
+            else ps.setObject(13, ticket.shopId());
             return ps;
         });
         return ticket;
