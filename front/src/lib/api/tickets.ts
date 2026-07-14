@@ -38,6 +38,21 @@ export type CreatedTicket = {
 	contentType: string | null;
 	fileName: string | null;
 	sizeBytes: number | null;
+	/**
+	 * Last failure reason for tickets that landed on {@link TicketStatus#ON_ERROR}.
+	 * Mirrors the BFF's `tickets.error_message` column. `null` for tickets
+	 * that have never failed (or whose error was cleared by a status flip).
+	 */
+	errorMessage: string | null;
+	/**
+	 * Number of times the AI extraction pipeline has been triggered for
+	 * this ticket. Incremented by the BFF orchestrator on every
+	 * `processTicket` call (success or failure). Manual PATCH
+	 * `/status → OPEN` does NOT bump the counter — it's a tally of AI
+	 * attempts, not of user retries. Surfaced in the dashboard so the
+	 * user can see how many tries a stuck extraction has burned.
+	 */
+	attempts: number;
 };
 
 const parseError = async (res: Response): Promise<string> => {
@@ -284,6 +299,26 @@ export const updateTicketStatus = async (
 		throw new TicketApiError(await parseError(res), res.status);
 	}
 	return (await res.json()) as CreatedTicket;
+};
+
+/**
+ * Retry a ticket stuck on {@link TicketStatus#ON_ERROR}. PATCHes the
+ * status back to {@code OPEN}, which clears the persisted error message
+ * (see `Ticket.withStatus` on the BFF) and re-enqueues the ticket for
+ * the scheduled extraction pipeline — the next cron tick picks it up
+ * and runs the same `processTicket` path that ran the first time.
+ *
+ * Intended as the dashboard's "Retry" button on ON_ERROR rows. The
+ * PATCH is the same wire call as a manual status flip; this wrapper
+ * exists so call sites read as intent (`retryTicket`) rather than as
+ * the underlying state machine (`updateTicketStatus(id, 'OPEN')`).
+ *
+ * @returns the freshly-persisted ticket (status now OPEN, errorMessage
+ *          cleared). The caller typically refetches the list to reflect
+ *          the orchestrator's later attempt outcome.
+ */
+export const retryTicket = async (token: string, id: string): Promise<CreatedTicket> => {
+	return updateTicketStatus(token, id, 'OPEN');
 };
 
 /**

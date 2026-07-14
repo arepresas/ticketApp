@@ -91,13 +91,13 @@ class TicketExtractionServiceTest {
     private static Ticket sampleTicket(UUID id) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", new byte[]{1, 2, 3}, null);
+                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0);
     }
 
     private static Ticket sampleTicket(UUID id, byte[] bytes) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null);
+                "image/png", "r.png", bytes, null, 0);
     }
 
     @Test
@@ -220,7 +220,7 @@ class TicketExtractionServiceTest {
         byte[] bytes = new byte[]{1, 2, 3, 4};
         Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null);
+                "image/png", "r.png", bytes, null, 0);
         when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(png));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -287,6 +287,79 @@ class TicketExtractionServiceTest {
         // Only the initial IN_PROGRESS save — the ON_ERROR save was
         // skipped because the refresh returned empty.
         verify(tickets, times(1)).save(any(Ticket.class));
+    }
+
+    @Test
+    void attemptsCounterIsIncrementedOnEveryProcessTicketCall() throws Exception {
+        // The dashboard surfaces a per-ticket "attempts" counter so the
+        // user can see how many AI tries a stuck extraction has burned.
+        // The orchestrator must bump it on every call — both success
+        // and failure — so the number reflects reality regardless of
+        // outcome. Counter starts at 0 on the fixture, so the
+        // persisted save should carry attempts == 1 on the first
+        // (IN_PROGRESS) save.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(receiptExtractor.extract(any())).thenReturn(
+                new ReceiptExtraction(
+                        new ReceiptExtractionResult(
+                                "Mercadona",
+                                LocalDate.of(2026, Month.JULY, 4),
+                                "food",
+                                List.of(),
+                                new BigDecimal("1.20"),
+                                "EUR"),
+                        "{}",
+                        MODEL));
+
+        service.processTicket(open);
+
+        // First save is the IN_PROGRESS flip with attempts bumped to 1.
+        verify(tickets).save(argThat(t ->
+                t.status() == Status.IN_PROGRESS && t.attempts() == 1));
+    }
+
+    @Test
+    void attemptsCounterPersistsAcrossRetriesForSameTicket() throws Exception {
+        // After a processTicket call the persisted counter must be
+        // reflected on the ON_ERROR save too. The orchestrator calls
+        // markError which re-reads via owner-scoped findById before
+        // writing ON_ERROR — in production that re-read lands on the
+        // DB row persisted by the IN_PROGRESS save, so the bumped
+        // counter survives the failure path. The mock has to simulate
+        // that round-trip: the saved ticket becomes the next findById
+        // answer, otherwise the mock returns the original (attempts=0)
+        // and the test would assert a value that only exists in
+        // production.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        // Mutable holder so the save() answer can publish the bumped
+        // ticket that the subsequent markError findById() must return.
+        java.util.concurrent.atomic.AtomicReference<Ticket> stored = new java.util.concurrent.atomic.AtomicReference<>(open);
+        when(tickets.save(any())).thenAnswer(inv -> {
+            Ticket saved = inv.getArgument(0);
+            stored.set(saved);
+            return saved;
+        });
+        when(tickets.findById(id, OWNER)).thenAnswer(inv -> Optional.of(stored.get()));
+        when(receiptExtractor.extract(any()))
+                .thenThrow(new ReceiptExtractionException(500, "boom"));
+
+        service.processTicket(open);
+
+        // Two saves: IN_PROGRESS (attempts==1) then ON_ERROR
+        // (attempts==1, errorMessage set). The counter does NOT
+        // increment again on the failure path — incrementAttempts()
+        // is called once per processTicket invocation.
+        verify(tickets, times(2)).save(any(Ticket.class));
+        verify(tickets).save(argThat(t ->
+                t.status() == Status.IN_PROGRESS && t.attempts() == 1));
+        verify(tickets).save(argThat(t ->
+                t.status() == Status.ON_ERROR && t.attempts() == 1));
     }
 
     private void verifyNoExtractorCall() throws Exception {

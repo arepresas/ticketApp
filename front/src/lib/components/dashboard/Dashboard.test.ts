@@ -56,18 +56,20 @@ const { listAllTicketsStub } = vi.hoisted(() => ({
 	listAllTicketsStub: vi.fn<(..._args: unknown[]) => Promise<unknown[]>>()
 }));
 listAllTicketsStub.mockResolvedValue([
-	{
-		id: 't-stub-1',
-		title: 'Mercadona weekly',
-		description: '',
-		status: 'OPEN',
-		createdAt: '2026-03-12T10:00:00Z',
-		updatedAt: '2026-03-12T10:00:00Z',
-		contentType: 'image/png',
-		fileName: 'mercadona.png',
-		sizeBytes: 12345
-	}
-]);
+		{
+			id: 't-stub-1',
+			title: 'Mercadona weekly',
+			description: '',
+			status: 'OPEN',
+			createdAt: '2026-03-12T10:00:00Z',
+			updatedAt: '2026-03-12T10:00:00Z',
+			contentType: 'image/png',
+			fileName: 'mercadona.png',
+			sizeBytes: 12345,
+			errorMessage: null,
+			attempts: 1
+		}
+	]);
 vi.mock('../../api/tickets', async () => {
 	const actual = await vi.importActual<typeof import('../../api/tickets')>(
 		'../../api/tickets'
@@ -151,7 +153,16 @@ describe('Dashboard', () => {
 			const headers = Array.from(container.querySelectorAll('thead th')).map(
 				(th) => th.textContent?.trim() ?? ''
 			);
-			expect(headers).toEqual(['Ticket', 'File', 'Size', 'Created', 'Status']);
+			expect(headers).toEqual([
+				'Ticket',
+				'File',
+				'Size',
+				'Created',
+				'Status',
+				'Attempts',
+				'Error',
+				'Actions'
+			]);
 		});
 
 		// The stub row's title is rendered (proves the table actually

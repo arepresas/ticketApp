@@ -26,10 +26,11 @@
 	 * the pending list's colour scheme).
 	 */
 	import { onMount } from 'svelte';
-	import { RefreshCcw, FileText, Image as ImageIcon } from '@lucide/svelte';
+	import { RefreshCcw, RotateCw, FileText, Image as ImageIcon } from '@lucide/svelte';
 
 	import {
 		listAllTickets,
+		retryTicket,
 		TicketApiError,
 		type CreatedTicket,
 		type TicketStatus
@@ -64,6 +65,16 @@
 	let tickets = $state<CreatedTicket[]>([]);
 	let loading = $state(true);
 	let errorMessage = $state<string | null>(null);
+
+	// Per-ticket id currently being retried. Drives the disabled state
+	// on the row-level Retry button so a double-click doesn't fire two
+	// PATCHes. Cleared in the finally block of `handleRetry`.
+	let retryingId = $state<string | null>(null);
+	// Last retry error surfaced at the table level (not the per-ticket
+	// fetch error). Distinct from `errorMessage` so the banner that
+	// shows "load failed" and "retry failed" don't fight for the same
+	// slot.
+	let retryError = $state<string | null>(null);
 
 	// Status → readable label. Mirrors PendingTicketsApp so the user
 	// sees the same word on both screens.
@@ -141,6 +152,47 @@
 
 	function openDetail(id: string): void {
 		navigate({ kind: 'detail', ticketId: id });
+	}
+
+	// Per-ticket retry: PATCHes status back to OPEN (which clears the
+	// error message via Ticket.withStatus on the BFF) and re-enqueues
+	// the ticket for the scheduled extraction pipeline. `retryTicket`
+	// is a thin wrapper over `updateTicketStatus(id, 'OPEN')` — kept
+	// separate so the call site reads as intent. The refetch after
+	// the PATCH lands picks up the OPEN status immediately; the next
+	// cron tick will then flip it to IN_PROGRESS / DONE / ON_ERROR.
+	async function handleRetry(id: string, ev: MouseEvent): Promise<void> {
+		// The row's onclick navigates to the detail view; stop the
+		// event from bubbling so clicking Retry doesn't also fire a
+		// detail navigation. The dedicated button is the only path
+		// that should run on a Retry click.
+		ev.stopPropagation();
+		const token = readSessionToken();
+		if (!token) return;
+		retryingId = id;
+		retryError = null;
+		try {
+			await retryTicket(token, id);
+			await load();
+		} catch (err: unknown) {
+			retryError =
+				err instanceof TicketApiError
+					? `Retry failed (${err.status}): ${err.message}`
+					: `Retry failed: ${err instanceof Error ? err.message : 'unknown error'}`;
+		} finally {
+			retryingId = null;
+		}
+	}
+
+	// Truncate the error message to a single line in the table cell.
+	// The full text is preserved in the title attribute (tooltip on
+	// hover) and in the detail view. 60 chars is wide enough for the
+	// common "status=503 MiniMax returned 500: ..." shape without
+	// forcing the cell to expand.
+	function truncateError(msg: string | null, max = 60): string {
+		if (!msg) return '';
+		if (msg.length <= max) return msg;
+		return msg.slice(0, max - 1) + '…';
 	}
 
 	onMount(() => {
@@ -252,6 +304,22 @@
 		</div>
 	{/if}
 
+	{#if retryError}
+		<!--
+			Surface retry failures separately from the table-load
+			banner. Same destructive styling so the user notices, but
+			scoped to the action they just attempted (vs. a generic
+			"couldn't load" message).
+		-->
+		<div
+			role="alert"
+			data-testid="tickets-retry-error"
+			class="rounded-b-lg border-t border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+		>
+			{retryError}
+		</div>
+	{/if}
+
 	{#if loading && tickets.length === 0}
 		<!-- Loading: rows skeleton so layout doesn't jump when data lands. -->
 		<div class="space-y-2 p-4" aria-busy="true">
@@ -278,6 +346,9 @@
 					<th scope="col" class="px-4 py-3 text-right font-medium">Size</th>
 					<th scope="col" class="px-4 py-3 text-left font-medium">Created</th>
 					<th scope="col" class="px-4 py-3 text-left font-medium">Status</th>
+					<th scope="col" class="px-4 py-3 text-right font-medium">Attempts</th>
+					<th scope="col" class="px-4 py-3 text-left font-medium">Error</th>
+					<th scope="col" class="px-4 py-3 text-right font-medium">Actions</th>
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-border">
@@ -327,6 +398,43 @@
 							>
 								{STATUS_LABEL[t.status]}
 							</span>
+						</td>
+						<td
+							class="px-4 py-3 text-right font-mono tabular-nums text-xs text-muted-foreground"
+							data-testid="ticket-attempts"
+						>
+							{t.attempts}
+						</td>
+						<td
+							class="px-4 py-3 text-xs text-muted-foreground max-w-[16rem]"
+							data-testid="ticket-error"
+						>
+							{#if t.errorMessage}
+								<span
+									class="block truncate"
+									title={t.errorMessage}
+									data-testid="ticket-error-text"
+								>
+									{truncateError(t.errorMessage)}
+								</span>
+							{:else}
+								<span class="text-muted-foreground/50">—</span>
+							{/if}
+						</td>
+						<td class="px-4 py-3 text-right">
+							{#if t.status === 'ON_ERROR'}
+								<button
+									type="button"
+									onclick={(ev) => void handleRetry(t.id, ev)}
+									disabled={retryingId === t.id}
+									aria-label="Retry extraction"
+									data-testid="ticket-retry"
+									class="inline-flex h-7 items-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-accent disabled:opacity-50"
+								>
+									<RotateCw class="size-3" />
+									Retry
+								</button>
+							{/if}
 						</td>
 					</tr>
 				{/each}

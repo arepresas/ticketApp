@@ -17,6 +17,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,8 +31,11 @@ import static org.mockito.Mockito.when;
  * <p>Pins provider-specific behaviour that lives entirely inside
  * this module and that the BFF orchestrator must not depend on:
  * <ul>
- *   <li>PDF input routes through {@link PdfTextExtractor}.</li>
- *   <li>Empty PDF text is treated as a failure.</li>
+ *   <li>PDF input routes through {@link PdfTextExtractor} when
+ *       selectable text is available.</li>
+ *   <li>Empty PDF text (scanned / image-only receipts) falls back to
+ *       sending the raw PDF bytes as a document image so the model
+ *       can OCR-interpret them.</li>
  *   <li>{@code <think>...</think>} blocks are stripped before parsing.</li>
  *   <li>Unparseable assistant replies raise
  *       {@link ReceiptExtractionException} with the raw text in the
@@ -93,14 +97,100 @@ class MiniMaxReceiptExtractorTest {
     }
 
     @Test
-    void emptyPdfTextIsTreatedAsFailure() throws Exception {
+    void emptyPdfTextFallsBackToImageUpload() throws Exception {
+        // Scanned / image-only PDFs (no selectable text) used to
+        // land the ticket in ON_ERROR with "PDF text extraction
+        // returned empty". The first iteration of the fallback
+        // forwarded the raw PDF bytes as image — that fails too
+        // because MiniMax rejects application/pdf in image_url
+        // (HTTP 400, see the 2026-07-14 incident). The current
+        // contract: rasterize the first page to PNG via
+        // PDFRenderer and send the PNG through the same image
+        // branch as a normal photo upload. Pinned here so a
+        // future regression that re-throws on empty text, or that
+        // skips the rasterization step, catches the eye.
+        byte[] pdf = new byte[]{'%', 'P', 'D', 'F'};
+        byte[] rasterized = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        when(pdfExtractor.extract(pdf)).thenReturn("");
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(rasterized);
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"Mercadona","purchase_date":"2026-07-04",
+                 "products":[],"total_amount":12.50,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(pdf, "application/pdf"));
+
+        assertThat(result.result().merchant()).isEqualTo("Mercadona");
+        assertThat(result.result().totalAmount()).isEqualByComparingTo("12.50");
+        // Pre-processing chain: text is consulted (and discarded
+        // because empty), then the same pdf is rasterized.
+        verify(pdfExtractor).extract(pdf);
+        verify(pdfExtractor).rasterizeFirstPageAsPng(pdf);
+        // Client must receive the rasterized PNG — not the raw PDF
+        // bytes, not text. The mime is image/png so the API
+        // actually accepts it.
+        verify(client).extractReceipt(argThat(input ->
+                input.pdfText() == null
+                        && "image/png".equals(input.mimeType())
+                        && input.bytes() == rasterized));
+    }
+
+    @Test
+    void emptyPdfTextFallbackSurfacesRasterizationFailure() throws Exception {
+        // Rasterization can fail on a corrupt PDF, an
+        // out-of-memory huge doc, or a PDFBox internal error.
+        // The fallback must surface the real cause (not a
+        // generic "PDF text extraction" message) so operators can
+        // see the underlying IOException in the dashboard.
         byte[] pdf = new byte[]{1};
         when(pdfExtractor.extract(pdf)).thenReturn("");
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdf))
+                .thenThrow(new java.io.IOException("PDFBox boom"));
 
         assertThatThrownBy(() -> extractor.extract(
                 new ReceiptExtractionRequest(pdf, "application/pdf")))
                 .isInstanceOf(ReceiptExtractionException.class)
-                .hasMessageContaining("PDF text extraction");
+                .hasMessageContaining("PDF rasterization failed")
+                .hasMessageContaining("PDFBox boom");
+    }
+
+    @Test
+    void emptyPdfTextFallbackRaisesWhenPdfHasNoPages() throws Exception {
+        // Defensive: a zero-page PDF (extremely rare but valid in
+        // the PDF spec) should surface a clear error, not a silent
+        // null deref. The fallback returns null and the extractor
+        // throws a dedicated "no pages to rasterize" message.
+        byte[] pdf = new byte[]{1};
+        when(pdfExtractor.extract(pdf)).thenReturn("");
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(null);
+
+        assertThatThrownBy(() -> extractor.extract(
+                new ReceiptExtractionRequest(pdf, "application/pdf")))
+                .isInstanceOf(ReceiptExtractionException.class)
+                .hasMessageContaining("no pages to rasterize");
+    }
+
+    @Test
+    void emptyPdfTextFallbackStillSurfacesApiErrors() throws Exception {
+        // Belt-and-braces: the fallback must not mask a downstream
+        // failure. If the API call itself fails after the rasterize
+        // + image-upload path, the exception propagates with the
+        // underlying message — the operator sees the real cause,
+        // not a stuck "PDF text extraction returned empty" string
+        // that the fallback already handled.
+        byte[] pdf = new byte[]{1};
+        byte[] rasterized = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        when(pdfExtractor.extract(pdf)).thenReturn("");
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(rasterized);
+        when(client.extractReceipt(any())).thenThrow(
+                new RuntimeException("MiniMax 503"));
+
+        assertThatThrownBy(() -> extractor.extract(
+                new ReceiptExtractionRequest(pdf, "application/pdf")))
+                .isInstanceOf(ReceiptExtractionException.class)
+                .hasMessageContaining("MiniMax 503")
+                .hasMessageNotContaining("PDF text extraction");
     }
 
     @Test

@@ -43,6 +43,7 @@
 		ZoomIn,
 		ZoomOut,
 		RotateCcw,
+		RotateCw,
 		Plus,
 		Trash2,
 		Check as CheckIcon,
@@ -58,6 +59,7 @@
 		updateTicketMetadata,
 		replaceTicketExtraction,
 		getTicketCatalogue,
+		retryTicket,
 		TicketApiError,
 		type CreatedTicket,
 		type TicketExtraction,
@@ -603,6 +605,37 @@
 		}
 	}
 
+	/**
+	 * Reset a ticket stuck on {@code ON_ERROR} back to {@code OPEN} so
+	 * the scheduled extraction pipeline picks it up again. Mirrors the
+	 * dashboard's {@code handleRetry} helper — same wire call
+	 * ({@code retryTicket} → {@code PATCH status=OPEN}), different
+	 * screen, distinct error message so the user can tell which
+	 * action failed. Closed-on-success mirrors {@link setStatus}: the
+	 * detail screen is no longer useful once the status flips because
+	 * the orchestrator will mutate the extraction row asynchronously.
+	 */
+	async function resetStatus(): Promise<void> {
+		if (!ticketId || acting) return;
+		const token = readSessionToken();
+		if (!token) return;
+		acting = true;
+		errorMessage = null;
+		try {
+			await retryTicket(token, ticketId);
+			window.dispatchEvent(new CustomEvent('ticket:updated'));
+			close();
+		} catch (err: unknown) {
+			if (err instanceof TicketApiError) {
+				errorMessage = `Could not reset ticket (${err.status}): ${err.message}`;
+			} else {
+				errorMessage = `Could not reset ticket: ${err instanceof Error ? err.message : 'unknown error'}`;
+			}
+		} finally {
+			acting = false;
+		}
+	}
+
 	// ---------------------------------------------------------------------
 	// Seamless autosave — replaces the previous Edit / Save / Cancel flow.
 	//
@@ -805,11 +838,22 @@
 	 * user navigates into a ticket via pushState. Mirrors the
 	 * hash-driven path above so the deep-link and click-to-open
 	 * flows converge in the same loader.
+	 *
+	 * <p>The handler MUST also write the incoming id back into
+	 * {@code ticketId} — the local $state stays at its mount-time
+	 * value (null when the screen was mounted without a hash) until
+	 * something explicitly updates it, and the status-action
+	 * handlers {@code setStatus} / {@code resetStatus} early-return
+	 * when {@code ticketId} is null. Without this sync the buttons
+	 * silently no-op on cross-route navigation (dashboard row →
+	 * detail), only working after a hard refresh because the fresh
+	 * mount seeds {@code ticketId} from {@code parseTicketIdFromHash}.
 	 */
 	$effect(() => {
 		const handler = (e: Event): void => {
 			const detail = (e as CustomEvent<{ id: string }>).detail;
 			if (detail?.id) {
+				ticketId = detail.id;
 				void load(detail.id);
 			}
 		};
@@ -1084,6 +1128,41 @@
 													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0"
 												/>
 											</label>
+										</div>
+									{:else if ticket?.status === 'ON_ERROR'}
+										<!--
+											ON_ERROR + no extraction row: the
+											AI pipeline attempted extraction
+											and failed. Surface the failure
+											headline + the persisted error
+											message (truncated server-side at
+											2000 chars, see
+											TicketExtractionService.ERROR_MESSAGE_MAX_CHARS)
+											so the operator can see WHY
+											without opening the server logs.
+											The footer Reset button is the
+											recovery affordance.
+										-->
+										<div
+											class="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-3"
+											data-testid="extraction-error"
+										>
+											<AlertCircle class="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+											<div class="min-w-0 flex-1">
+												<h2 class="text-lg font-semibold text-destructive">Extraction failed</h2>
+												{#if ticket.errorMessage}
+													<p
+														class="mt-1 break-words text-xs text-destructive/90"
+														data-testid="extraction-error-message"
+													>
+														{ticket.errorMessage}
+													</p>
+												{:else}
+													<p class="mt-1 text-xs text-muted-foreground">
+														The AI extraction failed but no error reason was recorded. Use Reset to retry.
+													</p>
+												{/if}
+											</div>
 										</div>
 									{:else}
 										<h2 class="text-lg font-semibold">Awaiting AI extraction</h2>
@@ -1590,9 +1669,13 @@
 					Status actions hide once the ticket reaches a terminal
 					state — DONE (already validated) or CANCELLED
 					(deliberately dismissed by the user, not coming back).
-					ON_ERROR tickets still expose both buttons so the
-					user can retry (mark as done) or abandon (mark as
-					cancelled) after a failed AI extraction.
+
+					For ON_ERROR tickets the "Mark as done" action is
+					replaced by a Reset button that flips the status back
+					to OPEN, clearing the persisted error message so the
+					scheduled extraction pipeline re-picks the ticket up.
+					"Mark as cancelled" stays — abandoning a failed
+					ticket is still a valid choice.
 				-->
 				{#if editable}
 				<footer class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
@@ -1606,6 +1689,18 @@
 						<XCircle class="size-4" />
 						Mark as cancelled
 					</button>
+					{#if ticket?.status === 'ON_ERROR'}
+					<button
+						type="button"
+						onclick={() => void resetStatus()}
+						disabled={acting}
+						data-testid="reset-extraction"
+						class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						<RotateCw class="size-4" />
+						Reset
+					</button>
+					{:else}
 					<button
 						type="button"
 						onclick={() => setStatus('DONE')}
@@ -1616,6 +1711,7 @@
 						<CheckCircle2 class="size-4" />
 						Mark as done
 					</button>
+					{/if}
 				</footer>
 				{/if}
 			{/if}

@@ -84,7 +84,11 @@ public class TicketExtractionService {
         }
 
         jdbcTicketExtractionRepository.recordAttempt(id);
-        ticketRepository.save(ticket.withStatus(Status.IN_PROGRESS));
+        // Bump the in-domain attempt counter so the dashboard can show
+        // "tried N times" next to the status badge. Persisted on the
+        // same IN_PROGRESS save so a reader that catches the ticket
+        // mid-extraction sees an already-incremented counter.
+        ticketRepository.save(ticket.incrementAttempts().withStatus(Status.IN_PROGRESS));
 
         try {
             ReceiptExtraction extraction = receiptExtractor.extract(

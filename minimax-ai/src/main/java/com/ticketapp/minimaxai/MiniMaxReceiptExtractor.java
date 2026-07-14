@@ -80,10 +80,35 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
                         "PDF text extraction failed: " + ioe.getMessage(), ioe);
             }
             if (text.isBlank()) {
-                throw new ReceiptExtractionException(0,
-                        "PDF text extraction returned empty");
+                // Scanned / image-only PDF: no selectable text. The
+                // upstream API rejects raw PDF bytes in image_url
+                // (HTTP 400: "media type 'application/pdf' not
+                // supported") so we can't just forward the original
+                // bytes — the PDF has to be rasterized to PNG first.
+                // 200 DPI is high enough to keep small print
+                // legible; the resulting PNG is sent through the
+                // same image_url branch as a normal photo upload.
+                log.warn("PDF text extraction returned empty for {} bytes — "
+                        + "rasterizing first page as PNG", request.content().length);
+                byte[] pngBytes;
+                try {
+                    pngBytes = pdfExtractor.rasterizeFirstPageAsPng(request.content());
+                } catch (java.io.IOException ioe) {
+                    throw new ReceiptExtractionException(0,
+                            "PDF rasterization failed: " + ioe.getMessage(), ioe);
+                }
+                if (pngBytes == null) {
+                    // Either empty bytes (caught at the call site
+                    // above) or zero-page document — both surface as
+                    // the same "nothing to extract" hard failure.
+                    throw new ReceiptExtractionException(0,
+                            "PDF has no pages to rasterize");
+                }
+                input = MiniMaxApiClient.ReceiptInput.image(
+                        properties.model(), pngBytes, "image/png");
+            } else {
+                input = MiniMaxApiClient.ReceiptInput.pdfText(properties.model(), text);
             }
-            input = MiniMaxApiClient.ReceiptInput.pdfText(properties.model(), text);
         } else {
             input = MiniMaxApiClient.ReceiptInput.image(properties.model(),
                     request.content(), request.contentType());

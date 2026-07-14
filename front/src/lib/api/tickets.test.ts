@@ -21,7 +21,9 @@ const sampleCreated: CreatedTicket = {
 	updatedAt: '2026-07-03T17:00:00Z',
 	contentType: 'application/pdf',
 	fileName: 'receipt.pdf',
-	sizeBytes: 2048
+	sizeBytes: 2048,
+	errorMessage: null,
+	attempts: 0
 };
 
 const sampleExtraction: TicketExtraction = {

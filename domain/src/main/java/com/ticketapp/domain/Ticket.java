@@ -29,7 +29,8 @@ public record Ticket(
         String contentType,
         String fileName,
         byte[] fileData,
-        String errorMessage
+        String errorMessage,
+        int attempts
 ) {
 
     public Ticket {
@@ -41,6 +42,7 @@ public record Ticket(
         if (createdAt == null) throw new NullPointerException("createdAt");
         if (updatedAt == null) throw new NullPointerException("updatedAt");
         if (errorMessage != null && errorMessage.isBlank()) errorMessage = null;
+        if (attempts < 0) throw new IllegalArgumentException("attempts must be >= 0");
     }
 
     /**
@@ -64,7 +66,7 @@ public record Ticket(
                               byte[] fileData) {
         Instant now = Instant.now();
         return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData, null);
+                now, now, contentType, fileName, fileData, null, 0);
     }
 
     /**
@@ -79,7 +81,7 @@ public record Ticket(
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
         return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData, cleared);
+                contentType, fileName, fileData, cleared, attempts);
     }
 
     /**
@@ -96,7 +98,7 @@ public record Ticket(
             throw new IllegalArgumentException("title must not be blank");
         }
         return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage);
+                contentType, fileName, fileData, errorMessage, attempts);
     }
 
     /**
@@ -108,7 +110,7 @@ public record Ticket(
     public Ticket withDescription(String newDescription) {
         String sanitized = newDescription == null ? "" : newDescription;
         return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage);
+                contentType, fileName, fileData, errorMessage, attempts);
     }
 
     /**
@@ -129,7 +131,25 @@ public record Ticket(
     public Ticket markError(String message) {
         return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
                 createdAt, Instant.now(),
-                contentType, fileName, fileData, message);
+                contentType, fileName, fileData, message, attempts);
+    }
+
+    /**
+     * Bump the extraction-attempt counter. Called by the orchestrator
+     * immediately before each {@code receiptExtractor.extract(...)}
+     * call, so success and failure paths both increment. Bumps
+     * {@code updatedAt} so the dashboard's "last attempt" sort
+     * (currently driven by {@code last_extraction_attempt_at} on the
+     * SQL side) stays consistent with the in-domain field.
+     *
+     * <p>Not called by manual PATCH status flips: the counter is the
+     * AI pipeline's "I tried" tally, not a "the user clicked retry"
+     * tally — those have different meanings and conflating them
+     * would make the dashboard number harder to reason about.
+     */
+    public Ticket incrementAttempts() {
+        return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
+                contentType, fileName, fileData, errorMessage, attempts + 1);
     }
 
     @Override
@@ -146,13 +166,14 @@ public record Ticket(
                 && java.util.Objects.equals(contentType, other.contentType)
                 && java.util.Objects.equals(fileName, other.fileName)
                 && Arrays.equals(fileData, other.fileData)
-                && java.util.Objects.equals(errorMessage, other.errorMessage);
+                && java.util.Objects.equals(errorMessage, other.errorMessage)
+                && attempts == other.attempts;
     }
 
     @Override
     public int hashCode() {
         int h = java.util.Objects.hash(id, ownerId, title, description, status,
-                createdAt, updatedAt, contentType, fileName, errorMessage);
+                createdAt, updatedAt, contentType, fileName, errorMessage, attempts);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
@@ -163,7 +184,7 @@ public record Ticket(
                 + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
                 + ", contentType=" + contentType + ", fileName=" + fileName
                 + ", fileData=" + Arrays.toString(fileData)
-                + ", errorMessage=" + errorMessage + "]";
+                + ", errorMessage=" + errorMessage + ", attempts=" + attempts + "]";
     }
 
     /**
