@@ -5,7 +5,8 @@ import {
 	MAX_BYTES,
 	fileSizeError,
 	humanSize,
-	isAcceptedFile
+	isAcceptedFile,
+	validateFiles
 } from './validation';
 
 describe('upload validation', () => {
@@ -69,5 +70,63 @@ describe('upload validation', () => {
 		expect(MAX_BYTES).toBe(10 * 1024 * 1024);
 		expect(ACCEPTED_MIME_EXACT).toEqual(['application/pdf']);
 		expect(ACCEPTED_MIME_PREFIXES).toEqual(['image/']);
+	});
+});
+
+describe('validateFiles (multi-file intake)', () => {
+	function makeFile(name: string, type: string, size: number): File {
+		// Buffer the requested size up front so file.arrayBuffer()
+		// resolves to a Uint8Array of the expected length. The
+		// content is irrelevant — size + type is what validation
+		// looks at.
+		const bytes = new Uint8Array(size);
+		return new File([bytes], name, { type });
+	}
+
+	it('returns an empty array for an empty input', async () => {
+		expect(await validateFiles([])).toEqual([]);
+	});
+
+	it('accepts every file when the batch is uniformly valid', async () => {
+		const decisions = await validateFiles([
+			makeFile('a.png', 'image/png', 1024),
+			makeFile('b.pdf', 'application/pdf', 2048),
+			makeFile('c.jpg', 'image/jpeg', 4096)
+		]);
+		expect(decisions).toHaveLength(3);
+		for (const d of decisions) {
+			expect(d.status).toBe('accepted');
+			if (d.status === 'accepted') {
+				expect(d.bytes.byteLength).toBeGreaterThan(0);
+			}
+		}
+	});
+
+	it('returns one rejected decision per offending file with a reason', async () => {
+		const decisions = await validateFiles([
+			makeFile('ok.png', 'image/png', 1024),
+			makeFile('bad.txt', 'text/plain', 100),
+			makeFile('huge.png', 'image/png', MAX_BYTES + 1)
+		]);
+		expect(decisions).toHaveLength(3);
+		const statuses = decisions.map((d) => d.status);
+		expect(statuses).toEqual(['accepted', 'rejected', 'rejected']);
+		const reasons = decisions
+			.filter((d) => d.status === 'rejected')
+			.map((d) => (d.status === 'rejected' ? d.reason : ''));
+		expect(reasons[0]).toMatch(/Only images and PDFs/);
+		expect(reasons[1]).toMatch(/too large/i);
+	});
+
+	it('preserves the input order in the decision list', async () => {
+		const names = ['a.png', 'b.txt', 'c.png', 'd.pdf'];
+		const decisions = await validateFiles([
+			makeFile(names[0], 'image/png', 100),
+			makeFile(names[1], 'text/plain', 100),
+			makeFile(names[2], 'image/png', 100),
+			makeFile(names[3], 'application/pdf', 100)
+		]);
+		const seen = decisions.map((d) => d.file.name);
+		expect(seen).toEqual(names);
 	});
 });
