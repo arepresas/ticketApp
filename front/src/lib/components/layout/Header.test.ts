@@ -228,4 +228,74 @@ describe('Header', () => {
 
 		expect(document.body.classList.contains('is-pending')).toBe(false);
 	});
+
+	// Same-route re-click is a "refresh" affordance: the router doesn't
+	// push history, so the active screen needs an explicit signal to
+	// re-fetch. RecentTicketsTable listens for `dashboard:refresh` and
+	// pulls the latest ticket list when this fires. Pinned here so the
+	// router change can't silently regress (e.g. by removing the
+	// same-route dispatch in `navigate`).
+	it('dispatches a dashboard:refresh event when the Dashboard link is clicked while already on dashboard', () => {
+		snapshot.user = {
+			id: 'u-1',
+			email: 'ada@example.com',
+			name: 'Ada Lovelace'
+		};
+		snapshot.isAuthenticated = true;
+		snapshot.status = 'authenticated';
+		// Boot the router so `navigate` knows the current route. Without
+		// this the hash is empty (which parseRoute maps to dashboard) but
+		// readHash() === '' still equals hashFor({kind:'dashboard'}), so
+		// sameRoute is true and the dispatch fires — leaving this in just
+		// to make the test self-contained.
+		window.location.hash = '';
+
+		const refreshSpy = vi.fn();
+		window.addEventListener('dashboard:refresh', refreshSpy);
+
+		const { container } = render(Header);
+		const dashboardLink = container
+			.querySelector('nav[aria-label="Primary"]')
+			?.querySelector<HTMLAnchorElement>('a[href="#dashboard"]');
+		expect(dashboardLink).toBeTruthy();
+		dashboardLink?.click();
+
+		expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+		window.removeEventListener('dashboard:refresh', refreshSpy);
+	});
+
+	// Cross-route navigation TO dashboard must also dispatch
+	// `dashboard:refresh`, otherwise the table never re-fetches when
+	// the user comes back from pending/new/detail. Earlier versions
+	// of `navigate` only dispatched on same-route clicks, which
+	// silently broke the "click Dashboard to see fresh data" UX.
+	it('dispatches a dashboard:refresh event when the Dashboard link is clicked from another route', () => {
+		snapshot.user = {
+			id: 'u-1',
+			email: 'ada@example.com',
+			name: 'Ada Lovelace'
+		};
+		snapshot.isAuthenticated = true;
+		snapshot.status = 'authenticated';
+		// Simulate the user being on the pending screen — different
+		// route from dashboard. `navigate` compares readHash() to the
+		// dashboard hash and takes the cross-route branch, which must
+		// still emit the refresh signal.
+		window.location.hash = '#pending';
+
+		const refreshSpy = vi.fn();
+		window.addEventListener('dashboard:refresh', refreshSpy);
+
+		const { container } = render(Header);
+		const dashboardLink = container
+			.querySelector('nav[aria-label="Primary"]')
+			?.querySelector<HTMLAnchorElement>('a[href="#dashboard"]');
+		expect(dashboardLink).toBeTruthy();
+		dashboardLink?.click();
+
+		expect(refreshSpy).toHaveBeenCalledTimes(1);
+
+		window.removeEventListener('dashboard:refresh', refreshSpy);
+	});
 });

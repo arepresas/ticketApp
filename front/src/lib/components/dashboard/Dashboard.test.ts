@@ -215,4 +215,30 @@ describe('Dashboard', () => {
 
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
 	});
+
+	// Regression guard for the header-as-refresh wiring. The greeting
+	// header in Dashboard.svelte delegates a click to the inner
+	// RecentTicketsTable's `load()` via a `registerLoad` callback prop.
+	// If the prop wiring breaks (stale closure, missing $state, etc.)
+	// clicking the header does nothing — silent UX regression. The
+	// tickets refetch is the only observable signal we can pin here.
+	it('re-fetches tickets when the greeting header is clicked', async () => {
+		const { container } = render(Dashboard, { user });
+
+		// Wait for the initial mount fetch (Dashboard + RecentTicketsTable
+		// both fire on mount, so we expect at least one listAllTickets call).
+		await waitFor(() => {
+			expect(listAllTicketsStub).toHaveBeenCalledTimes(1);
+		});
+		const callsAfterMount = listAllTicketsStub.mock.calls.length;
+
+		const header = container.querySelector('[data-testid="dashboard-header"]');
+		expect(header).not.toBeNull();
+		header?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+		await waitFor(() => {
+			expect(listAllTicketsStub.mock.calls.length).toBeGreaterThan(callsAfterMount);
+		});
+		expect(listAllTicketsStub).toHaveBeenCalledTimes(callsAfterMount + 1);
+	});
 });

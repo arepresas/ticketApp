@@ -117,14 +117,26 @@ export function applyRoute(route: Route): void {
  * body class + open event. Skips the push when the URL already
  * represents `target` so re-clicking the same screen doesn't stack
  * identical entries.
+ *
+ * Navigating TO the dashboard always dispatches a `dashboard:refresh`
+ * window event so the self-fetching RecentTicketsTable can re-pull
+ * its data — covers both same-route re-click (clicking the active
+ * Dashboard nav link) and cross-route navigation (e.g. pending →
+ * dashboard). The listener skips the event while the initial mount
+ * fetch is still in flight, so initial boot is unaffected (that path
+ * goes through `setupHistoryBridge` → `applyRoute`, not `navigate`).
  */
 export function navigate(target: Route): void {
 	const targetHash = hashFor(target);
-	if (readHash() !== targetHash) {
+	const sameRoute = readHash() === targetHash;
+	if (!sameRoute) {
 		const url = targetHash === '' ? window.location.pathname + window.location.search : targetHash;
 		history.pushState({ route: target }, '', url);
 	}
 	applyRoute(target);
+	if (target.kind === 'dashboard') {
+		window.dispatchEvent(new CustomEvent('dashboard:refresh'));
+	}
 }
 
 /** Equivalent to the browser's back button. */

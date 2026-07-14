@@ -16,6 +16,7 @@
 	 * flight shouldn't restart the request or wipe the loading flag.
 	 */
 	import { untrack } from 'svelte';
+	import { RefreshCcw } from '@lucide/svelte';
 
 	import type { AuthUser } from '../../auth/types';
 	import { fetchDashboard, type Dashboard } from '../../api/dashboard';
@@ -28,6 +29,11 @@
 	type Props = { user: AuthUser };
 
 	let { user }: Props = $props();
+
+	// Refresh hook for the tickets table. Set by RecentTicketsTable via its
+	// `registerLoad` prop on mount. No-op until then — the table owns the
+	// fetch, we just provide a clickable affordance in the greeting header.
+	let refreshTickets: () => Promise<void> = async () => {};
 
 	let data = $state<Dashboard | null>(null);
 	let loading = $state(true);
@@ -77,10 +83,25 @@
 </script>
 
 <section class="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-	<!-- Header: greeting + user identity. No logout here — the existing
-	     GoogleLoginButton flow owns the auth UI; duplicating it would split
-	     the source of truth. -->
-	<header class="flex items-center gap-3">
+	<!-- Header: greeting + user identity. The whole header is clickable so
+	     clicking anywhere on it refreshes the tickets table below — matches
+	     the title-as-button pattern in RecentTicketsTable for consistency.
+	     No logout here — the existing GoogleLoginButton flow owns the auth
+	     UI; duplicating it would split the source of truth. -->
+	<header
+		class="group -mx-2 -my-1 flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1 select-none transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+		role="button"
+		tabindex="0"
+		title="Click to refresh tickets"
+		data-testid="dashboard-header"
+		onclick={() => void refreshTickets()}
+		onkeydown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				void refreshTickets();
+			}
+		}}
+	>
 		{#if user.picture}
 			<img
 				src={user.picture}
@@ -103,6 +124,10 @@
 			</h1>
 			<p class="truncate text-xs text-muted-foreground sm:text-sm">{user.email}</p>
 		</div>
+		<RefreshCcw
+			class="ml-auto size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+			aria-hidden="true"
+		/>
 	</header>
 
 	{#if error}
@@ -184,8 +209,14 @@
 			All-tickets table is now self-fetching (talks to the BFF
 			directly via `listAllTickets`). Charts/KPI cards stay on
 			the mocked `fetchDashboard()` until we wire them to a real
-			endpoint — that data path is out of scope here.
+			endpoint — that data path is out of scope here. The parent
+			header above wires into `load()` via `registerLoad` so a
+			click on the greeting header refetches this table.
 		-->
-		<RecentTicketsTable />
+		<RecentTicketsTable
+			registerLoad={(loadFn) => {
+				refreshTickets = loadFn;
+			}}
+		/>
 	{/if}
 </section>

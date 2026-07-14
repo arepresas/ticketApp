@@ -36,6 +36,18 @@
 	} from '../../api/tickets';
 	import { navigate } from '../../navigation';
 
+	type Props = {
+		/**
+		 * Optional hook the parent uses to wire an external refresh trigger
+		 * (e.g. the dashboard greeting header) to this table's `load()`. Called
+		 * once on mount with the same async fn the local Refresh button calls.
+		 * Cheap to skip — leaves the table behaving exactly as before.
+		 */
+		registerLoad?: (loadFn: () => Promise<void>) => void;
+	};
+
+	let { registerLoad }: Props = $props();
+
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
 	function readSessionToken(): string | null {
@@ -133,6 +145,11 @@
 
 	onMount(() => {
 		void load();
+		// Expose `load` to the parent so an external trigger (e.g. the
+		// dashboard header) can refetch the tickets list without us
+		// lifting state up. Single registration on mount is enough —
+		// the fn reference is stable for the component's lifetime.
+		registerLoad?.(load);
 		const onAuthExpired = (): void => {
 			// Token cleared while the dashboard is mounted. Drop the
 			// local copy and skip showing an error — the parent
@@ -162,13 +179,26 @@
 				void load();
 			}
 		};
+		// Re-clicking the active Dashboard nav link (in the global
+		// header) calls `navigate({kind:'dashboard'})` while we're
+		// already on the dashboard route. The router dispatches a
+		// `dashboard:refresh` event in that case — same-route re-
+		// click — so the user-visible behaviour matches "the link
+		// reloads the screen". Skip when the initial mount fetch is
+		// still in flight to avoid double-fetching on first paint.
+		const onDashboardRefresh = (): void => {
+			if (loading) return;
+			void load();
+		};
 		window.addEventListener('auth:expired', onAuthExpired);
 		window.addEventListener('ticket:updated', onTicketUpdated);
 		document.addEventListener('visibilitychange', onVisibilityChange);
+		window.addEventListener('dashboard:refresh', onDashboardRefresh);
 		return () => {
 			window.removeEventListener('auth:expired', onAuthExpired);
 			window.removeEventListener('ticket:updated', onTicketUpdated);
 			document.removeEventListener('visibilitychange', onVisibilityChange);
+			window.removeEventListener('dashboard:refresh', onDashboardRefresh);
 		};
 	});
 </script>
@@ -180,26 +210,24 @@
 	<header class="flex items-center justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
 		<!--
 			Title doubles as a refresh trigger: clicking it re-runs
-			load(). cursor-pointer + role="button" + tabindex give
-			discoverability and keyboard access (Enter / Space) so the
-			affordance works for mouse and keyboard users alike. The
-			dedicated Refresh button on the right is kept for clarity
-			— both call the same `load()`.
+			load(). It's a real <button> nested inside the <h2> so
+			keyboard activation (Enter / Space) and focus work natively
+			without manual role/tabindex plumbing — and svelte-check
+			doesn't flag it as "non-interactive element with interactive
+			role". Visual styling lives on the button (border-0 + bg-
+			transparent + p-0 + text-inherit) so it still reads as a
+			plain heading. The dedicated Refresh button on the right is
+			kept for clarity — both call the same `load()`.
 		-->
-		<h2
-			class="cursor-pointer text-sm font-semibold tracking-tight select-none hover:text-foreground/80"
-			role="button"
-			tabindex="0"
-			data-testid="tickets-title"
-			onclick={() => void load()}
-			onkeydown={(e) => {
-				if (e.key === 'Enter' || e.key === ' ') {
-					e.preventDefault();
-					void load();
-				}
-			}}
-		>
-			All tickets
+		<h2 class="m-0 text-sm font-semibold tracking-tight">
+			<button
+				type="button"
+				class="cursor-pointer select-none border-0 bg-transparent p-0 text-inherit hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+				data-testid="tickets-title"
+				onclick={() => void load()}
+			>
+				All tickets
+			</button>
 		</h2>
 		<button
 			type="button"
