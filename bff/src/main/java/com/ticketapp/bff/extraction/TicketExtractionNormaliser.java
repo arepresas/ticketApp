@@ -11,8 +11,10 @@ import com.ticketapp.domain.Product;
 import com.ticketapp.domain.ProductRepository;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
+import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -67,6 +69,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TicketExtractionNormaliser {
 
+    private final TicketRepository tickets;
     private final TicketExtractionRepository extractions;
     private final ShopRepository shops;
     private final ProductRepository products;
@@ -75,7 +78,8 @@ public class TicketExtractionNormaliser {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public void normaliseOnDone(UUID ticketId) {
+    public void normaliseOnDone(Ticket ticket) {
+        UUID ticketId = ticket.id();
         TicketExtraction extraction = extractions.findByTicketId(ticketId).orElse(null);
         if (extraction == null) {
             log.debug("Skip normalisation: no extraction row for ticket {}", ticketId);
@@ -92,8 +96,16 @@ public class TicketExtractionNormaliser {
         // provider emitted them; null fields are passed through and
         // the UPSERT's COALESCE preserves any value already on the
         // row from a previous ticket or a manual PATCH.
+        //
+        // The resolved shop id is stamped onto the ticket itself
+        // (V13 refactor) — every line_tickets row derives its shop
+        // by joining back through the ticket. The save is inside
+        // this transaction, so a later line failure rolls the
+        // shop_id back too (the controller's @Transactional
+        // boundary is the unit of consistency).
         ShopContact contact = readShopContact(extraction.extractionPayload());
         Shop shop = resolveShop(extraction.merchant(), contact, Instant.now());
+        tickets.save(ticket.withShopId(shop.id()));
 
         int persistedProducts = 0;
         int persistedPrices = 0;
@@ -122,7 +134,6 @@ public class TicketExtractionNormaliser {
             LineTicket lineTicket = lineTickets.save(new LineTicket(
                     UUID.randomUUID(),
                     ticketId,
-                    shop.id(),
                     product.id(),
                     price.id(),
                     line.quantity(),

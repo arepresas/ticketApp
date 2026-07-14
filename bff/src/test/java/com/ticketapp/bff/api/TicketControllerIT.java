@@ -77,13 +77,16 @@ class TicketControllerIT {
         // test doesn't leak into another (and so leftover tickets
         // don't pollute the list assertions). Order matters — the
         // catalogue tables all reference tickets, so they go
-        // first to avoid FK violations.
+        // first to avoid FK violations. tickets is deleted BEFORE
+        // shops because the V13 refactor moved the shop FK onto
+        // tickets — a ticket row with shop_id set blocks
+        // DELETE FROM shops via RESTRICT.
         jdbc.update("DELETE FROM line_tickets");
         jdbc.update("DELETE FROM prices");
         jdbc.update("DELETE FROM products");
-        jdbc.update("DELETE FROM shops");
         jdbc.update("DELETE FROM ticket_extractions");
         jdbc.update("DELETE FROM tickets");
+        jdbc.update("DELETE FROM shops");
         jdbc.update("DELETE FROM auth_sessions");
         jdbc.update("DELETE FROM app_users");
         // Reset the in-process receipt-extractor stub so per-test

@@ -48,8 +48,13 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         byte[] fileData = rs.getBytes("file_data");
         String errorMessage = rs.getString("error_message");
         int attempts = rs.getInt("attempts");
+        // shop_id is nullable — the normaliser writes it during the
+        // DONE transition, so most rows (OPEN / IN_PROGRESS /
+        // ON_ERROR / CANCELLED) carry NULL here. getObject(..., UUID.class)
+        // returns null for SQL NULL and forwards as-is to the domain.
+        UUID shopId = rs.getObject("shop_id", UUID.class);
         return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts);
+                contentType, fileName, fileData, errorMessage, attempts, shopId);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */
