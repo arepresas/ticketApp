@@ -257,4 +257,26 @@ describe('RecentTicketsTable', () => {
 		});
 		expect(listAllTicketsStub).toHaveBeenCalledTimes(callsAfterMount + 1);
 	});
+
+	// Re-clicking the global Header's Dashboard link dispatches a
+	// `dashboard:refresh` window event (the router detects same-route
+	// navigation). The table listens for it so the user gets a fresh
+	// fetch on link re-click — the visible affordance matches "click
+	// reloads". Pinned so removing the listener silently can't regress.
+	it('re-fetches when a dashboard:refresh event fires', async () => {
+		render(RecentTicketsTable);
+		await waitFor(() => {
+			expect(listAllTicketsStub).toHaveBeenCalledTimes(1);
+		});
+		const callsAfterMount = listAllTicketsStub.mock.calls.length;
+
+		window.dispatchEvent(new CustomEvent('dashboard:refresh'));
+
+		await waitFor(() => {
+			expect(listAllTicketsStub.mock.calls.length).toBeGreaterThan(
+				callsAfterMount
+			);
+		});
+		expect(listAllTicketsStub).toHaveBeenCalledTimes(callsAfterMount + 1);
+	});
 });
