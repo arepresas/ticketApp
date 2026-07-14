@@ -418,8 +418,15 @@
 	const PREVIEW_WIDTH_MAX = 960;
 	const PREVIEW_WIDTH_DEFAULT = 600;
 	const PREVIEW_HEIGHT_MIN = 240;
-	const PREVIEW_HEIGHT_MAX = 720;
-	const PREVIEW_HEIGHT_DEFAULT = 480;
+	// Cap is 1.5× the new default so the user still has room to
+	// grow the preview past the default via the drag handle, but
+	// can't push the pane past what a tall desktop viewport
+	// comfortably carries. The default itself was bumped from 480
+	// to 960 (double) so a fresh ticket detail lands with a tall
+	// preview that shows the receipt at near-full size without the
+	// user having to drag.
+	const PREVIEW_HEIGHT_MAX = 1152;
+	const PREVIEW_HEIGHT_DEFAULT = 768;
 
 	/**
 	 * Approx. chrome height (card header + drag handle + borders) that
@@ -432,27 +439,22 @@
 	let previewWidth = $state(PREVIEW_WIDTH_DEFAULT);
 	let previewHeight = $state(PREVIEW_HEIGHT_DEFAULT);
 	let widthDrag = $state<{ startX: number; startWidth: number } | null>(null);
-	let heightDrag = $state<{ startY: number; startHeight: number } | null>(null);
+	let heightDrag = $state<{ startY: number;  startHeight: number } | null>(null);
 
 	/**
-	 * Live height of the extraction section, observed via
-	 * ResizeObserver. Used as the floor for the preview pane when the
-	 * user's `previewHeight` would otherwise leave the preview shorter
-	 * than the products list.
+	 * The preview content area's height is bound directly to
+	 * {@code previewHeight} (clamped to {@link PREVIEW_HEIGHT_MIN} /
+	 * {@link PREVIEW_HEIGHT_MAX}) so the user's vertical drag is
+	 * authoritative in both directions. An earlier revision
+	 * floored the bound height at the products list height so
+	 * the preview would auto-grow to match a tall list, but the
+	 * same floor blocked the user from shrinking the preview
+	 * below the list height — the drag handle's cursor +
+	 * {@code aria-valuenow} moved while the inline
+	 * {@code style:height} ignored the drop. If an auto-fit
+	 * affordance is wanted in the future, ship it as a "fit to
+	 * content" button rather than as a silent floor.
 	 */
-	let extractionHeight = $state(0);
-	let extractionSection: HTMLElement | undefined = $state(undefined);
-
-	/**
-	 * Effective content-area height: max(userDrag, listHeight - chrome).
-	 * The derive re-runs whenever either input changes — user drag
-	 * (debounced via $effect events), extraction height from the
-	 * ResizeObserver callback. Both flow through Svelte reactivity
-	 * without any extra plumbing.
-	 */
-	const previewContentHeight = $derived(
-		clampHeight(Math.max(previewHeight, extractionHeight - PREVIEW_CHROME_HEIGHT))
-	);
 
 	function clampWidth(w: number): number {
 		return Math.max(PREVIEW_WIDTH_MIN, Math.min(PREVIEW_WIDTH_MAX, w));
@@ -559,29 +561,6 @@
 			window.removeEventListener('mousemove', onMove);
 			window.removeEventListener('mouseup', onUp);
 		};
-	});
-
-	/**
-	 * Live height of the extraction section (the column that
-	 * carries the products list). A ResizeObserver pushes the height
-	 * into `extractionHeight` so the `$derived` preview content
-	 * height can grow to match when the list exceeds the user's
-	 * chosen floor. Lazily instantiated once the extraction
-	 * `bind:this` element is resolved.
-	 */
-	$effect(() => {
-		const el = extractionSection;
-		if (!el) return;
-		// Seed once so the preview doesn't render at 0 height on first
-		// paint before the observer fires.
-		extractionHeight = el.offsetHeight;
-		const observer = new ResizeObserver((entries) => {
-			for (const entry of entries) {
-				extractionHeight = entry.contentRect.height;
-			}
-		});
-		observer.observe(el);
-		return () => observer.disconnect();
 	});
 
 	async function setStatus(status: 'DONE' | 'CANCELLED'): Promise<void> {
@@ -1047,15 +1026,7 @@
 				-->
 				<div class="flex flex-col gap-6 lg:flex-row">
 					<!-- Left: structured extraction -->
-					<!--
-						Bind to `extractionSection` so the
-						ResizeObserver above can read its height.
-						The ref is set after the mount paints;
-						the observer effect guards on `el` being
-						defined.
-					-->
 					<section
-						bind:this={extractionSection}
 						class="flex min-w-0 flex-1 flex-col gap-4"
 					>
 						<div
@@ -1449,14 +1420,12 @@
 							inside. The card's own height is set by
 							its content (header + content area +
 							handle) — no flex-stretch here. The
-							content area's effective height is
-							`previewContentHeight` (a `$derived`
-							that bumps up to match the products list
-							when the user drags the floor below it),
-							so the pane only grows when needed; a
-							tall list + a short user drag ends up
-							tall, but a tall user drag + a short
-							list stays at the user's choice.
+							content area's effective height tracks
+							{@code previewHeight} directly so the
+							vertical drag is authoritative in both
+							directions; the height handle's
+							{@code aria-valuenow} and the rendered
+							inline style stay in lockstep.
 						-->
 						<div
 							class="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
@@ -1484,20 +1453,21 @@
 							</header>
 							<!--
 								Content area. Explicit height from the
-								`previewContentHeight` derived (which is
-								max(userDrag, listHeight − chrome)). Image
-								renders at its natural size and is
-								centered — no `object-cover` stretching,
-								no flex-grow absorbing empty space; if
-								the image is smaller than the pane the
-								background colour shows around it,
-								matching the original behaviour. If the
-								image is bigger than the pane the pan
-								+ zoom wrapper scrolls (unchanged).
+								clamped {@code previewHeight} state so
+								the vertical drag is authoritative in
+								both directions. Image renders at its
+								natural size and is centered — no
+								`object-cover` stretching, no flex-grow
+								absorbing empty space; if the image is
+								smaller than the pane the background
+								colour shows around it, matching the
+								original behaviour. If the image is
+								bigger than the pane the pan + zoom
+								wrapper scrolls (unchanged).
 							-->
 							<div
 								class="relative flex items-center justify-center overflow-hidden bg-muted/30"
-								style:height="{previewContentHeight}px"
+								style:height="{previewHeight}px"
 							>
 								{#if !fileUrl}
 									<div

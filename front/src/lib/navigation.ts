@@ -98,6 +98,20 @@ export function applyRoute(route: Route): void {
 	if (cls) document.body.classList.add(cls);
 	switch (route.kind) {
 		case 'dashboard':
+			// Self-fetching screens need a signal to re-pull their
+			// data when the dashboard becomes the active route,
+			// regardless of how the user got there — forward
+			// navigation, same-route re-click, or back/forward.
+			// Centralising the dispatch here (instead of in
+			// `navigate`) means the popstate path also fires it,
+			// which is the only way the dashboard refreshes after
+			// a `history.back()` from the new-ticket screen or
+			// any other screen that back-navigates to the dashboard.
+			// The listener in RecentTicketsTable skips the event
+			// while the initial mount fetch is in flight, so the
+			// boot-time applyRoute call (no listener yet) is
+			// harmless.
+			window.dispatchEvent(new CustomEvent('dashboard:refresh'));
 			break;
 		case 'pending':
 			window.dispatchEvent(new CustomEvent('pending:open'));
@@ -116,15 +130,10 @@ export function applyRoute(route: Route): void {
  * Push a new history entry for `target` and apply the matching
  * body class + open event. Skips the push when the URL already
  * represents `target` so re-clicking the same screen doesn't stack
- * identical entries.
- *
- * Navigating TO the dashboard always dispatches a `dashboard:refresh`
- * window event so the self-fetching RecentTicketsTable can re-pull
- * its data — covers both same-route re-click (clicking the active
- * Dashboard nav link) and cross-route navigation (e.g. pending →
- * dashboard). The listener skips the event while the initial mount
- * fetch is still in flight, so initial boot is unaffected (that path
- * goes through `setupHistoryBridge` → `applyRoute`, not `navigate`).
+ * identical entries. The per-route `dashboard:refresh` /
+ * `pending:open` / `detail:open` events fire from {@link applyRoute}
+ * so both the forward (pushState) and back/forward (popstate)
+ * paths produce the same effect.
  */
 export function navigate(target: Route): void {
 	const targetHash = hashFor(target);
@@ -134,9 +143,6 @@ export function navigate(target: Route): void {
 		history.pushState({ route: target }, '', url);
 	}
 	applyRoute(target);
-	if (target.kind === 'dashboard') {
-		window.dispatchEvent(new CustomEvent('dashboard:refresh'));
-	}
 }
 
 /** Equivalent to the browser's back button. */
