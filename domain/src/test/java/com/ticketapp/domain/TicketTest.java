@@ -109,7 +109,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         null, OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null));
+                        null, null, null, null, 0));
         assertEquals("id", ex.getMessage());
     }
 
@@ -119,7 +119,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), null, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null));
+                        null, null, null, null, 0));
         assertEquals("ownerId", ex.getMessage());
     }
 
@@ -129,7 +129,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, null, "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null));
+                        null, null, null, null, 0));
         assertEquals("title", ex.getMessage());
     }
 
@@ -139,7 +139,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", null, now, now,
-                        null, null, null, null));
+                        null, null, null, null, 0));
     }
 
     @Test
@@ -148,7 +148,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
-                        null, null, null, null));
+                        null, null, null, null, 0));
     }
 
     @Test
@@ -157,7 +157,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
-                        null, null, null, null));
+                        null, null, null, null, 0));
     }
 
     @Test
@@ -167,9 +167,21 @@ class TicketTest {
         Instant now = Instant.now();
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
-                null, null, null, "   ");
+                null, null, null, "   ", 0);
 
         assertNull(t.errorMessage());
+    }
+
+    @Test
+    void constructorRejectsNegativeAttempts() {
+        Instant now = Instant.now();
+        // The DB column is NOT NULL DEFAULT 0; the domain guards
+        // against an accidentally-negative value (a bug elsewhere
+        // could otherwise persist -1 through the UPSERT).
+        assertThrows(IllegalArgumentException.class,
+                () -> new Ticket(
+                        UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                        null, null, null, null, -1));
     }
 
     @Test
@@ -203,12 +215,55 @@ class TicketTest {
         UUID id = UUID.randomUUID();
         Instant created = Instant.parse("2026-07-05T17:00:00Z");
         Ticket a = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg");
+                null, null, null, "msg", 0);
         Ticket b = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg");
+                null, null, null, "msg", 0);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void openTicketStartsWithZeroAttempts() {
+        // New tickets created via Ticket.open must start at 0 attempts
+        // — the orchestrator is the only code path that bumps the
+        // counter.
+        Ticket t = Ticket.open(OWNER, "x", "");
+
+        assertEquals(0, t.attempts());
+    }
+
+    @Test
+    void incrementAttemptsBumpsCounterAndPreservesIdentity() {
+        // Used by the orchestrator on every processTicket call. Must
+        // bump the counter and preserve every other field (status,
+        // errorMessage, file columns, etc.) so a partial bump can't
+        // accidentally reset the error state.
+        Ticket t = Ticket.open(OWNER, "x", "").markError("previous failure");
+        Ticket next = t.incrementAttempts();
+
+        assertEquals(t.attempts() + 1, next.attempts());
+        assertEquals(t.status(), next.status());
+        assertEquals(t.errorMessage(), next.errorMessage());
+        assertEquals(t.id(), next.id());
+        assertEquals(t.title(), next.title());
+    }
+
+    @Test
+    void withStatusPreservesAttempts() {
+        // PATCH .../status → OPEN clears the error message but must
+        // NOT reset the attempts counter — the dashboard's "tried N
+        // times" tally should survive a manual retry, otherwise the
+        // number resets every time the user clicks Retry.
+        Ticket failed = Ticket.open(OWNER, "x", "")
+                .markError("boom")
+                .incrementAttempts()
+                .incrementAttempts();
+        Ticket retried = failed.withStatus(Ticket.Status.OPEN);
+
+        assertEquals(failed.attempts(), retried.attempts());
+        assertEquals(Ticket.Status.OPEN, retried.status());
+        assertNull(retried.errorMessage());
     }
 
     @Test

@@ -41,7 +41,7 @@ public class JdbcTicketRepository implements TicketRepository {
 
     private static final String SELECT_COLS =
             "id, owner_id, title, description, status, created_at, updated_at, " +
-            "content_type, file_name, file_data, error_message";
+            "content_type, file_name, file_data, error_message, attempts";
 
     /** Single source of truth for the SELECT prefix used in every read query. */
     private static final String SELECT_PREFIX = "SELECT ";
@@ -49,8 +49,8 @@ public class JdbcTicketRepository implements TicketRepository {
     private static final String UPSERT_SQL = """
             INSERT INTO tickets
                 (id, owner_id, title, description, status, created_at, updated_at,
-                 content_type, file_name, file_data, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 content_type, file_name, file_data, error_message, attempts)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 owner_id = EXCLUDED.owner_id,
                 title = EXCLUDED.title,
@@ -60,7 +60,8 @@ public class JdbcTicketRepository implements TicketRepository {
                 content_type = EXCLUDED.content_type,
                 file_name = EXCLUDED.file_name,
                 file_data = EXCLUDED.file_data,
-                error_message = EXCLUDED.error_message
+                error_message = EXCLUDED.error_message,
+                attempts = EXCLUDED.attempts
             """;
 
     @Override
@@ -111,6 +112,7 @@ public class JdbcTicketRepository implements TicketRepository {
             else ps.setBytes(10, ticket.fileData());
             if (ticket.errorMessage() == null) ps.setNull(11, Types.VARCHAR);
             else ps.setString(11, ticket.errorMessage());
+            ps.setInt(12, ticket.attempts());
             return ps;
         });
         return ticket;

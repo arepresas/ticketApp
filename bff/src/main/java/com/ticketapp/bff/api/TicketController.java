@@ -680,6 +680,9 @@ public class TicketController {
      * {@code sizeBytes} is included so the UI can show the upload size.
      * {@code errorMessage} is included so the dashboard can show the
      * failure reason next to tickets in {@code ON_ERROR} status.
+     * {@code attempts} is included so the dashboard can show how many
+     * times the AI extraction has been tried — actionable signal when
+     * a ticket is stuck on the same ON_ERROR after multiple retries.
      * {@code ownerId} is included so the UI can render owner-aware
      * affordances and so the wire response is round-trippable to the
      * domain type when needed (tests, audit logs).
@@ -695,7 +698,8 @@ public class TicketController {
             String contentType,
             String fileName,
             Integer sizeBytes,
-            String errorMessage) {
+            String errorMessage,
+            Integer attempts) {
 
         static TicketResponse of(Ticket t) {
             Integer size = t.fileData() == null ? null : t.fileData().length;
@@ -703,7 +707,7 @@ public class TicketController {
                     t.id(), t.ownerId(), t.title(), t.description(), t.status(),
                     t.createdAt(), t.updatedAt(),
                     t.contentType(), t.fileName(), size,
-                    t.errorMessage());
+                    t.errorMessage(), t.attempts());
         }
     }
 }

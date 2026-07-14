@@ -29,3 +29,6 @@ databaseChangeLog:
   - include:
       file: changes/V11__add_shop_address.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V12__add_ticket_attempts.sql
+      relativeToChangelogFile: true

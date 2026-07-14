@@ -15,14 +15,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Unit tests for {@link PdfTextExtractor}.
  *
- * <p>The class is a thin wrapper around PDFBox 3.x's text stripper,
- * but it has two contract points worth pinning:
+ * <p>The class is a thin wrapper around PDFBox 3.x's text stripper
+ * and image renderer, but it has contract points worth pinning:
  * <ul>
  *   <li>Empty / null input returns an empty string (not null, not
  *       throws) — the orchestrator treats empty text as a
  *       recoverable skip signal.</li>
  *   <li>Valid PDF bytes round-trip through the stripper to yield the
  *       text the page content stream wrote.</li>
+ *   <li>{@code rasterizeFirstPageAsPng} produces a non-empty PNG
+ *       byte stream for a valid single-page PDF, and {@code null}
+ *       for empty / zero-page input — the orchestrator uses
+ *       {@code null} as the "nothing to extract" signal so the
+ *       caller can surface a clear "no pages" error message instead
+ *       of a generic IOException.</li>
  * </ul>
  */
 class PdfTextExtractorTest {
@@ -86,6 +92,35 @@ class PdfTextExtractorTest {
 
         // If we got here without exception, the document close path
         // is exercised repeatedly. No direct assertion needed.
+    }
+
+    @Test
+    void rasterizeEmptyBytesReturnsNull() throws IOException {
+        // Same null/empty guard as the text path. Returning null
+        // (not throwing) lets the orchestrator distinguish "empty
+        // input" from "rasterization produced a 0-byte PNG" — the
+        // empty case is a hard failure, the 0-byte case would be
+        // a renderer bug worth surfacing differently.
+        assertThat(extractor.rasterizeFirstPageAsPng(new byte[0])).isNull();
+        assertThat(extractor.rasterizeFirstPageAsPng(null)).isNull();
+    }
+
+    @Test
+    void rasterizeSinglePagePdfReturnsPngBytes() throws IOException {
+        // The fallback path: scanned / image-only PDFs land here
+        // when text extraction returns empty. We don't assert the
+        // pixel content (PDFBox + headless rendering is fragile)
+        // just that the bytes are a valid non-empty PNG. The
+        // PNG signature is the canonical "starts with 89 50 4E 47".
+        byte[] pdf = buildPdfWithText("ignored — image-only fallback");
+
+        byte[] png = extractor.rasterizeFirstPageAsPng(pdf);
+
+        assertThat(png).isNotNull();
+        assertThat(png.length).isGreaterThan(8);
+        assertThat(png[0] == (byte) 0x89 && png[1] == 'P' && png[2] == 'N' && png[3] == 'G')
+                .as("rasterizeFirstPageAsPng must return PNG bytes (signature 89 50 4E 47)")
+                .isTrue();
     }
 
     /** Build a one-page PDF with the given text in default Helvetica. */

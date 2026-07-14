@@ -5,8 +5,9 @@ import type { CreatedTicket } from '../../api/tickets';
 
 // Stub listAllTickets with a hoisted spy so tests can override per-case.
 // vi.hoisted runs before the vi.mock factory sees the closure.
-const { listAllTicketsStub } = vi.hoisted(() => ({
-	listAllTicketsStub: vi.fn<() => Promise<CreatedTicket[]>>()
+const { listAllTicketsStub, retryTicketStub } = vi.hoisted(() => ({
+	listAllTicketsStub: vi.fn<() => Promise<CreatedTicket[]>>(),
+	retryTicketStub: vi.fn<(token: string, id: string) => Promise<CreatedTicket>>()
 }));
 
 vi.mock('../../api/tickets', async () => {
@@ -15,7 +16,8 @@ vi.mock('../../api/tickets', async () => {
 	);
 	return {
 		...actual,
-		listAllTickets: (..._args: unknown[]) => listAllTicketsStub()
+		listAllTickets: (...args: unknown[]) => listAllTicketsStub(...(args as [])),
+		retryTicket: (token: string, id: string) => retryTicketStub(token, id)
 	};
 });
 
@@ -31,7 +33,9 @@ const sample: CreatedTicket[] = [
 		updatedAt: '2026-03-12T10:00:00Z',
 		contentType: 'image/png',
 		fileName: 'mercadona.png',
-		sizeBytes: 12345
+		sizeBytes: 12345,
+		errorMessage: null,
+		attempts: 1
 	},
 	{
 		id: 't-002',
@@ -42,7 +46,9 @@ const sample: CreatedTicket[] = [
 		updatedAt: '2026-03-15T08:30:00Z',
 		contentType: 'application/pdf',
 		fileName: 'lidl.pdf',
-		sizeBytes: 2048
+		sizeBytes: 2048,
+		errorMessage: null,
+		attempts: 0
 	},
 	{
 		id: 't-003',
@@ -53,7 +59,9 @@ const sample: CreatedTicket[] = [
 		updatedAt: '2026-03-10T18:00:00Z',
 		contentType: null,
 		fileName: null,
-		sizeBytes: null
+		sizeBytes: null,
+		errorMessage: null,
+		attempts: 0
 	},
 	{
 		id: 't-004',
@@ -64,7 +72,9 @@ const sample: CreatedTicket[] = [
 		updatedAt: '2026-03-14T12:00:00Z',
 		contentType: 'image/jpeg',
 		fileName: 'broken.jpg',
-		sizeBytes: 4096
+		sizeBytes: 4096,
+		errorMessage: 'status=502 MiniMax returned 500: provider overloaded',
+		attempts: 3
 	}
 ];
 
@@ -81,6 +91,15 @@ describe('RecentTicketsTable', () => {
 		}
 		listAllTicketsStub.mockReset();
 		listAllTicketsStub.mockResolvedValue(sample);
+		// retryTicket default: returns the same row with status OPEN
+		// and the errorMessage cleared, mirroring the BFF's
+		// withStatus(OPEN) side effect.
+		retryTicketStub.mockReset();
+		retryTicketStub.mockImplementation(async (_token: string, id: string) => {
+			const row = sample.find((t) => t.id === id);
+			if (!row) throw new Error(`unknown ticket id ${id} in retry stub`);
+			return { ...row, status: 'OPEN', errorMessage: null };
+		});
 	});
 
 	afterEach(() => {
@@ -99,7 +118,16 @@ describe('RecentTicketsTable', () => {
 			const headers = Array.from(container.querySelectorAll('thead th')).map(
 				(th) => th.textContent?.trim() ?? ''
 			);
-			expect(headers).toEqual(['Ticket', 'File', 'Size', 'Created', 'Status']);
+			expect(headers).toEqual([
+				'Ticket',
+				'File',
+				'Size',
+				'Created',
+				'Status',
+				'Attempts',
+				'Error',
+				'Actions'
+			]);
 		});
 	});
 
@@ -144,6 +172,15 @@ describe('RecentTicketsTable', () => {
 		);
 		expect(rows[3]?.querySelector('[data-testid="status-badge"]')?.className).toMatch(
 			/text-red-/
+		);
+
+		// ON_ERROR row also exposes the attempt counter and the truncated
+		// failure reason in the new columns.
+		expect(rows[3]?.querySelector('[data-testid="ticket-attempts"]')?.textContent?.trim()).toBe(
+			'3'
+		);
+		expect(rows[3]?.querySelector('[data-testid="ticket-error-text"]')?.textContent).toContain(
+			'status=502'
 		);
 	});
 

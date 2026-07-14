@@ -47,8 +47,9 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         String fileName = rs.getString("file_name");
         byte[] fileData = rs.getBytes("file_data");
         String errorMessage = rs.getString("error_message");
+        int attempts = rs.getInt("attempts");
         return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage);
+                contentType, fileName, fileData, errorMessage, attempts);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */
