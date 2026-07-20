@@ -38,7 +38,7 @@
         <spring-boot.version>4.1.0</spring-boot.version>
         <jacoco.version>0.8.15</jacoco.version>
         <pdfbox.version>3.0.8</pdfbox.version>
-        <openai-java.version>4.42.0</openai-java.version>
+        <openai-java.version>4.43.0</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
