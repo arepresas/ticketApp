@@ -10,7 +10,7 @@
     id: string;
     title: string;
     description: string;
-    status: 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'CANCELLED';
+    status: 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';
     createdAt: string;
     updatedAt: string;
   };

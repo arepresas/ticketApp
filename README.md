@@ -4,7 +4,7 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 
 ## Layout
 
-| Path | Stack |
+| Project Path | Stack |
 |------|-------|
 | `domain/` | Pure Java domain model (no deps); owns the `ReceiptExtractor` port |
 | `persistence/` | JDBC + Liquibase persistence |

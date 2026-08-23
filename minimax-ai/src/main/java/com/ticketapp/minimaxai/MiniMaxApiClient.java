@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.Accessors;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -46,6 +47,7 @@ import java.util.Optional;
  * content (merchant names, prices, items) is forbidden by the
  * security posture — see ADR 0006 "Privacy" consequences.
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public final class MiniMaxApiClient {
@@ -89,6 +91,8 @@ public final class MiniMaxApiClient {
      *         so we keep the parsing layer thin and observable.
      */
     public String extractReceipt(ReceiptInput input) throws java.io.IOException {
+        log.info("MiniMax extraction request: model={}", input.model());
+
         ChatCompletionCreateParams.Builder params = ChatCompletionCreateParams.builder()
                 .model(input.model())
                 .addSystemMessage(EXTRACTION_PROMPT)

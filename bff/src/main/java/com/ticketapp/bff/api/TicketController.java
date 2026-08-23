@@ -128,8 +128,16 @@ public class TicketController {
     @GetMapping("/pending")
     public List<TicketResponse> pending() {
         AuthenticatedUser user = CurrentUser.get();
+        // "Pending" means "not yet terminal": anything that needs
+        // attention from either the AI pipeline or the user. IN_ANALYSIS
+        // is included so the caller sees a ticket the scheduler is
+        // currently feeding to the provider — useful for "is this
+        // stuck?" triage while a long extract is in flight.
         Set<Ticket.Status> pending = Set.of(
-                Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS, Ticket.Status.ON_ERROR);
+                Ticket.Status.OPEN,
+                Ticket.Status.IN_ANALYSIS,
+                Ticket.Status.IN_PROGRESS,
+                Ticket.Status.ON_ERROR);
         return repository.findByStatusIn(pending, user.id()).stream()
                 .map(TicketResponse::of)
                 .collect(Collectors.toList());

@@ -40,8 +40,9 @@ import java.util.UUID;
  * runtime requires a restart. That matches Spring's configuration
  * model and avoids surprising mid-flight reconfiguration.
  *
- * <p>Errors are isolated to the per-ticket transaction in the
- * service: one bad receipt never aborts the rest of the batch.
+ * <p>Errors are isolated per ticket inside the service's short
+ * transaction segments: one bad receipt never aborts the rest of the
+ * batch.
  */
 @Component
 @Slf4j
