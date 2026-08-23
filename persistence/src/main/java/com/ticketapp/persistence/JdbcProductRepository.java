@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Types;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,6 +56,19 @@ public class JdbcProductRepository implements ProductRepository {
     private static final String FIND_BY_IDS_SQL =
             "SELECT " + PRODUCT_COLS + " FROM products WHERE id IN (:ids)";
 
+    /**
+     * Prefix lookup against {@code normalised_name}. Uses {@code ILIKE}
+     * to keep it case-insensitive regardless of the column collation
+     * (the {@code products} table doesn't force a particular
+     * collation, and the database may decide one). Limit + order by
+     * name keep results stable for the SPA's autocomplete.
+     */
+    private static final String SEARCH_BY_NAME_SQL =
+            "SELECT " + PRODUCT_COLS + " FROM products " +
+            "WHERE normalised_name ILIKE :prefix ESCAPE '\\' " +
+            "ORDER BY normalised_name ASC " +
+            "LIMIT :limit";
+
     @Override
     public Optional<Product> findByNormalisedName(String normalisedName, String unit) {
         var params = new MapSqlParameterSource()
@@ -75,6 +89,25 @@ public class JdbcProductRepository implements ProductRepository {
         var map = new java.util.HashMap<UUID, Product>();
         for (var row : rows) map.put(row.getKey(), row.getValue());
         return map;
+    }
+
+    @Override
+    public List<Product> searchByNormalisedName(String prefix, int limit) {
+        if (prefix == null || prefix.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        // ILIKE pattern: escape any literal '%' / '_' the user may
+        // have typed so they don't act as wildcards against the
+        // catalogue. The escape character is the backslash — none
+        // of the catalogue names currently contain one, but a
+        // future shop in another locale might.
+        String escaped = prefix.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        var params = new MapSqlParameterSource()
+                .addValue("prefix", escaped + "%")
+                .addValue("limit", limit);
+        return namedJdbc.query(SEARCH_BY_NAME_SQL, params, (rs, n) -> mapProduct(rs));
     }
 
     @Override

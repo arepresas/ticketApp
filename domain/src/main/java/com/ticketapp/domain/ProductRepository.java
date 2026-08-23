@@ -1,6 +1,7 @@
 package com.ticketapp.domain;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +44,29 @@ public interface ProductRepository {
      * invent rows).
      */
     Map<UUID, Product> findAllByIds(Collection<UUID> ids);
+
+    /**
+     * Search products whose canonical name starts with the supplied
+     * prefix (case-insensitive, after {@link
+     * Product#normalisedNameOf(String)}). Used by the ticket-detail
+     * autocomplete in the SPA — a user typing in the line-editor
+     * sees matching catalogue rows and the editor can render an
+     * icon to distinguish "already in DB" from "new".
+     *
+     * <p>Matches are returned ordered by name (so the most likely
+     * candidate is first), capped at {@code limit}. Empty input
+     * returns an empty list — the SPA handles the empty-input
+     * "show all" itself if it wants.
+     *
+     * <p>Like {@link #findByNormalisedName(String, String)}, the
+     * match key is {@code (normalisedName, unit)}; units are
+     * ignored for the SPA's hint-icon purpose — a "Bread" with no
+     * unit and a "Bread" with {@code kg} both visually read as the
+     * same product to the user, even though they collide in the
+     * catalogue. The {@link #findByNormalisedName} follow-up picks
+     * the exact row when the user commits the line.
+     */
+    List<Product> searchByNormalisedName(String prefix, int limit);
 
     /**
      * Insert (or update) a product row. The match key uniqueness is
