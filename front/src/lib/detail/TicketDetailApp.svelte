@@ -47,6 +47,7 @@
 		Plus,
 		Trash2,
 		Check as CheckIcon,
+		PackagePlus,
 		Save
 	} from '@lucide/svelte';
 
@@ -66,6 +67,7 @@
 		type ExtractedProductLine,
 		type CatalogueLine
 	} from '../api/tickets';
+	import { searchProducts, type ProductSummary } from '../api/products';
 	import { navigateBack } from '../navigation';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
@@ -336,6 +338,18 @@
 			]);
 			ticket = t;
 			extraction = ex;
+			// Pre-warm the per-line icon column: kick off one
+			// catalogue search per existing line so the green
+			// check / plus-circle shows up the moment the screen
+			// paints, instead of after the user's first keystroke.
+			// Also covers catalogue-sourced lines for DONE tickets
+			// — the same map indexes them by display position.
+			if (ex) {
+				bootstrapProductSearch(ex.products.map((p) => ({ productName: p.name })));
+			} else {
+				productSuggestions = {};
+				matchedProductId = {};
+			}
 			if (file) {
 				fileUrl = file.url;
 				fileContentType = file.contentType;
@@ -359,6 +373,8 @@
 			ticket = null;
 			extraction = null;
 			catalogue = null;
+			productSuggestions = {};
+			matchedProductId = {};
 			if (err instanceof TicketApiError) {
 				if (err.status === 404) {
 					errorMessage = 'This ticket is no longer available — it may have been deleted.';
@@ -696,6 +712,137 @@
 
 	function markDirty(): void {
 		if (!savingChanges) dirty = true;
+	}
+
+	/**
+	 * Per-line catalogue-match state, keyed by the row's display
+	 * index. Two separate maps because they update at different
+	 * cadences:
+	 *
+	 *   - `productSuggestions[i]` — the raw BFF payload for the
+	 *     current prefix. Drives the {@code <datalist>} autocomplete.
+	 *     Refreshed by debounced search on every keystroke / on
+	 *     initial load.
+	 *
+	 *   - `matchedProductId[i]` — set to the id of the existing
+	 *     product whose canonical name equals the current input
+	 *     (case-insensitive, after trimming). Drives the icon
+	 *     column: a green check when the line collides with a
+	 *     catalogue row, a plus-circle when it doesn't.
+	 *
+	 * <p>Using a per-index {@code Record} keeps the {@code {#each}}
+	 * keyed-by-index happy (Svelte 5 reuses rows on identity, not
+	 * on key changes). The map is rebuilt from scratch on line
+	 * removal — row indices shift in the array, and stale map
+	 * entries past the new length would just sit there inert.
+	 */
+	let productSuggestions = $state<Record<number, ProductSummary[]>>({});
+	let matchedProductId = $state<Record<number, string | null>>({});
+
+	/** Per-line debounce timers so a fast typer doesn't fire one
+	 * search per keystroke. Keyed by row index. */
+	const searchTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+	/** Cap on autocomplete size — mirrors the BFF default. The SPA
+	 * surfaces up to 10 rows of suggestions in the datalist. */
+	const PRODUCT_SUGGEST_LIMIT = 10;
+
+	/**
+	 * Debounced lookup. Called on the name input's {@code oninput}
+	 * (after {@code markDirty}) and once per line at extraction
+	 * load. Resolves with the raw API response; the caller is
+	 * responsible for updating {@code productSuggestions} and the
+	 * derived {@code matchedProductId} once the response lands.
+	 */
+	function scheduleProductSearch(lineIndex: number, query: string): void {
+		const existing = searchTimers.get(lineIndex);
+		if (existing) clearTimeout(existing);
+		// 250 ms mirrors the title-field save debounce — fast enough
+		// to feel responsive on the first character, slow enough to
+		// skip the search for users who type a full word.
+		searchTimers.set(
+			lineIndex,
+			setTimeout(() => {
+				void runProductSearch(lineIndex, query);
+			}, 250)
+		);
+	}
+
+	async function runProductSearch(lineIndex: number, query: string): Promise<void> {
+		const token = readSessionToken();
+		if (!token) return;
+		const trimmed = query.trim();
+		if (!trimmed) {
+			// Empty input — drop the suggestions and the "in DB"
+			// flag; the icon can't say either way against an empty
+			// string.
+			productSuggestions = { ...productSuggestions, [lineIndex]: [] };
+			matchedProductId = { ...matchedProductId, [lineIndex]: null };
+			return;
+		}
+		try {
+			const results = await searchProducts(token, trimmed, PRODUCT_SUGGEST_LIMIT);
+			// Stale-response guard: if the user has kept typing
+			// while this fetch was in flight, the response we just
+			// resolved is for an older prefix. Compare the trimmed
+			// input used to start this fetch against what the input
+			// currently holds; if it changed, drop the result
+			// without touching state. The next debounced fire
+			// supersedes this one.
+			const currentLine =
+				displayLines.length > lineIndex ? displayLines[lineIndex] : null;
+			const currentTrimmed = (currentLine?.name ?? '').trim();
+			if (currentTrimmed !== trimmed) return;
+			productSuggestions = { ...productSuggestions, [lineIndex]: results };
+			matchedProductId = {
+				...matchedProductId,
+				[lineIndex]: findMatch(results, trimmed)
+			};
+		} catch (err) {
+			// Don't surface a yellow toast for a transient catalogue
+			// hiccup — the autocomplete silently clears and the
+			// icon falls back to "new". The user's typed text is
+			// unaffected.
+			console.warn('product search failed', err);
+			productSuggestions = { ...productSuggestions, [lineIndex]: [] };
+			matchedProductId = { ...matchedProductId, [lineIndex]: null };
+		}
+	}
+
+	/**
+	 * Match picker — returns the catalogue row whose display
+	 * {@code name} equals the user's typed prefix (case-insensitive
+	 * after trim), or {@code null} when the prefix isn't yet a
+	 * known catalogue name. The BFF's ILIKE prefix search
+	 * surfaces both "Bread" and "Bread 1kg" for the prefix
+	 * {@code "br"}; we want "Bread" to read as matched once the
+	 * user has typed enough characters to pin the canonical name.
+	 */
+	function findMatch(results: ProductSummary[], trimmed: string): string | null {
+		const needle = trimmed.toLowerCase();
+		for (const p of results) {
+			if (p.name.trim().toLowerCase() === needle) return p.id;
+		}
+		return null;
+	}
+
+	/**
+	 * Bootstrap the per-line search state when a ticket loads. One
+	 * call per existing line so the icon column shows the right
+	 * colour the moment the detail screen paints, without waiting
+	 * for the user to start typing.
+	 */
+	function bootstrapProductSearch(lines: { productName: string | null }[]): void {
+		// Build the records clean — previous ticket's state must
+		// not bleed into this one.
+		productSuggestions = {};
+		matchedProductId = {};
+		lines.forEach((line, i) => {
+			const trimmed = (line.productName ?? '').trim();
+			if (trimmed) {
+				void runProductSearch(i, trimmed);
+			}
+		});
 	}
 
 	async function saveChanges(): Promise<void> {
@@ -1208,6 +1355,14 @@
 									<table class="w-full text-sm">
 										<thead class="text-left text-xs uppercase tracking-wide text-muted-foreground">
 											<tr>
+												<!--
+													Narrow icon column header (no
+													label — the per-row icons are
+													self-explanatory). Keeps the
+													"Item" column visually aligned
+													with the input below.
+												-->
+												<th class="w-6 py-2 pr-1 font-medium" aria-label="Catalogue match"></th>
 												<th class="min-w-[12rem] py-2 pr-1 font-medium">Item</th>
 												<th class="py-2 pr-1 text-right font-medium">Qty</th>
 												<th class="py-2 pr-1 font-medium">Unit</th>
@@ -1230,11 +1385,115 @@
 											-->
 											{#each displayLines as product, i (i)}
 												<tr data-testid="product-line">
+													<!--
+														Icon column. Tells the user
+														whether the typed name
+														collides with an existing
+														product row before commit:
+														  * green check
+														    (CheckCircle2) — the
+														    typed name matches a
+														    catalogue row, so
+														    saving will reuse the
+														    existing product id
+														  * grey plus-circle
+														    (PackagePlus) — no
+														    match, the normaliser
+														    will create a new
+														    product row on DONE.
+														Read-only tickets still
+														show the icon so the user
+														sees what was matched
+														against the catalogue when
+														the line was validated.
+
+														Native {@code title}
+														attribute powers the
+														tooltip — same shape as
+														the existing in-app
+														hints ({@code <input>},
+														{@code <button>}
+														aria-label fall back to
+														title for browsers that
+														prefer it). Short copy:
+														the user already saw the
+														icon; the tooltip is the
+														explanation, not the
+														intro.
+													-->
+													<td class="w-6 py-1.5 pr-1 text-center">
+														{#if matchedProductId[i]}
+															<!--
+																Wrap the SVG icon in an
+																HTML span so the
+																native {@code title}
+																attribute actually
+																renders a tooltip.
+																The HTML {@code title}
+																attribute on a raw
+																{@code <svg>} is
+																ignored by most
+																browsers — the spec
+																demands a
+																{@code <title>} child
+																element on SVG, which
+																lucide-svelte cannot
+																inject. The span gets
+																the tooltip; the icon
+																keeps the aria-label so
+																screen readers still
+																read the right state.
+															-->
+															<span
+																title="Already in the catalogue — saving will reuse this product row"
+															>
+																<CheckCircle2
+																	class="size-4 text-emerald-600"
+																	aria-label="Matches an existing catalogue row"
+																	data-testid="product-match-icon"
+																	data-match="existing"
+																/>
+															</span>
+														{:else if product.name.trim().length > 0}
+															<span
+																title="New product — will be added to the catalogue on save"
+															>
+																<PackagePlus
+																	class="size-4 text-muted-foreground"
+																	aria-label="New product (not yet in the catalogue)"
+																	data-testid="product-match-icon"
+																	data-match="new"
+																/>
+															</span>
+														{/if}
+													</td>
 													<td class="min-w-[12rem] py-1.5 pr-1">
+														<!--
+															Datalist autocomplete:
+															browsers render the
+															matching rows as a
+															dropdown the user can
+															pick from. Picking
+															fills the input with
+															the option's display
+															label; the next
+															debounced search
+															resolves the canonical
+															{@code Product.id} so
+															the icon flips to the
+															green check. The
+															datalist id is keyed by
+															row index — list= is the
+															hook the input uses.
+														-->
 														<input
 															type="text"
 															bind:value={product.name}
-															oninput={markDirty}
+															oninput={() => {
+																markDirty();
+																scheduleProductSearch(i, product.name);
+															}}
+															list={`product-suggest-${i}`}
 															maxlength="255"
 															required
 															readonly={!editable}
@@ -1243,6 +1502,37 @@
 															data-testid="product-name-input"
 															class="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 														/>
+														<datalist id={`product-suggest-${i}`}>
+															{#each (productSuggestions[i] ?? []) as s (s.id)}
+																<!--
+																	value= the bare name so
+																	picking fills the
+																	input with
+																	"Bread" (not
+																	"Bread (kg)"). The
+																	{@code label}
+																	attribute still
+																	shows "(unit)" in
+																	the dropdown so the
+																	user knows which
+																	row they're picking
+																	when two products
+																	share a name but
+																	differ on unit. With
+																	just {@code name}
+																	in the input,
+																	{@code findMatch}
+																	resolves to the
+																	catalogue row and
+																	the icon flips to
+																	the green check.
+																-->
+																<option
+																	value={s.name}
+																	label={s.label}
+																></option>
+															{/each}
+														</datalist>
 													</td>
 													<td class="py-1.5 pr-1">
 														<input
