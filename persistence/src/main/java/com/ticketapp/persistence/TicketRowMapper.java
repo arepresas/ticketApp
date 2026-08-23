@@ -53,8 +53,12 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         // ON_ERROR / CANCELLED) carry NULL here. getObject(..., UUID.class)
         // returns null for SQL NULL and forwards as-is to the domain.
         UUID shopId = rs.getObject("shop_id", UUID.class);
+        // ocr_text is nullable too — populated at upload time by the
+        // BFF's OCR step; pre-V15 rows and uploads where the provider
+        // could not transcribe anything stay NULL.
+        String ocrText = rs.getString("ocr_text");
         return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */

@@ -1632,6 +1632,38 @@
 								></div>
 							</div>
 						</div>
+
+						<!--
+							OCR transcript card. Sits inside the same
+							right-pane section as the preview card, so it
+							inherits the user-clamped preview width.
+							Renders only when the backend stored a
+							transcription; the empty / pre-OCR / PDF
+							cases collapse the section entirely so the
+							user sees nothing rather than a "No text"
+							placeholder. The transcript scrolls
+							independently of the image so a long Lidl
+							receipt can sit next to a small thumbnail
+							without evicting the file.
+						-->
+						{#if ticket.ocrText}
+							<section
+								class="mt-3 flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+								data-testid="ocr-card"
+								aria-label="OCR transcript"
+							>
+								<header class="flex items-center justify-between gap-3 border-b border-border p-3">
+									<div class="flex items-center gap-2 text-sm font-medium">
+										<FileText class="size-4 text-muted-foreground" />
+										OCR transcript
+									</div>
+								</header>
+								<pre
+									class="max-h-64 overflow-auto whitespace-pre-wrap break-words p-3 text-xs leading-snug text-foreground"
+									data-testid="ocr-text"
+								>{ticket.ocrText}</pre>
+							</section>
+						{/if}
 					</section>
 				</div>
 

@@ -23,7 +23,8 @@ const sampleCreated: CreatedTicket = {
 	fileName: 'receipt.pdf',
 	sizeBytes: 2048,
 	errorMessage: null,
-	attempts: 0
+	attempts: 0,
+	ocrText: null
 };
 
 const sampleExtraction: TicketExtraction = {

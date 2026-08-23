@@ -103,13 +103,13 @@ class TicketExtractionServiceTest {
     private static Ticket sampleTicket(UUID id) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null);
+                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null);
     }
 
     private static Ticket sampleTicket(UUID id, byte[] bytes) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null);
+                "image/png", "r.png", bytes, null, 0, null, null);
     }
 
     @Test
@@ -275,7 +275,7 @@ class TicketExtractionServiceTest {
         byte[] bytes = new byte[]{1, 2, 3, 4};
         Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null);
+                "image/png", "r.png", bytes, null, 0, null, null);
         when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(png));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
