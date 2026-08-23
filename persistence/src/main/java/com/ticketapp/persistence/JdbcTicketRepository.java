@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -41,7 +42,8 @@ public class JdbcTicketRepository implements TicketRepository {
 
     private static final String SELECT_COLS =
             "id, owner_id, title, description, status, created_at, updated_at, " +
-            "content_type, file_name, file_data, error_message, attempts, shop_id";
+            "content_type, file_name, file_data, error_message, attempts, shop_id, " +
+            "ocr_text";
 
     /** Single source of truth for the SELECT prefix used in every read query. */
     private static final String SELECT_PREFIX = "SELECT ";
@@ -49,8 +51,9 @@ public class JdbcTicketRepository implements TicketRepository {
     private static final String UPSERT_SQL = """
             INSERT INTO tickets
                 (id, owner_id, title, description, status, created_at, updated_at,
-                 content_type, file_name, file_data, error_message, attempts, shop_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 content_type, file_name, file_data, error_message, attempts, shop_id,
+                 ocr_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 owner_id = EXCLUDED.owner_id,
                 title = EXCLUDED.title,
@@ -62,7 +65,8 @@ public class JdbcTicketRepository implements TicketRepository {
                 file_data = EXCLUDED.file_data,
                 error_message = EXCLUDED.error_message,
                 attempts = EXCLUDED.attempts,
-                shop_id = EXCLUDED.shop_id
+                shop_id = EXCLUDED.shop_id,
+                ocr_text = EXCLUDED.ocr_text
             """;
 
     @Override
@@ -103,27 +107,61 @@ public class JdbcTicketRepository implements TicketRepository {
             ps.setString(5, ticket.status().name());
             ps.setObject(6, OffsetDateTime.ofInstant(ticket.createdAt(), ZoneOffset.UTC));
             ps.setObject(7, OffsetDateTime.ofInstant(ticket.updatedAt(), ZoneOffset.UTC));
-            // file columns are nullable — setNull keeps existing rows valid
-            // while letting uploads populate all three.
-            if (ticket.contentType() == null) ps.setNull(8, Types.VARCHAR);
-            else ps.setString(8, ticket.contentType());
-            if (ticket.fileName() == null) ps.setNull(9, Types.VARCHAR);
-            else ps.setString(9, ticket.fileName());
-            if (ticket.fileData() == null) ps.setNull(10, Types.BINARY);
-            else ps.setBytes(10, ticket.fileData());
-            if (ticket.errorMessage() == null) ps.setNull(11, Types.VARCHAR);
-            else ps.setString(11, ticket.errorMessage());
+            // Each nullable column routes through the same
+            // bindNullable helpers — the per-column if/else lived
+            // inline previously and ballooned the cognitive complexity
+            // of this method past Sonar's ceiling. Pulling the
+            // null-handling into one-liners keeps the column list
+            // scannable and the SQL types centrally typed (changes to
+            // a column's SQL type land in one place instead of seven).
+            bindStringOrNull(ps, 8, ticket.contentType(), Types.VARCHAR);
+            bindStringOrNull(ps, 9, ticket.fileName(), Types.VARCHAR);
+            bindBytesOrNull(ps, 10, ticket.fileData(), Types.BINARY);
+            bindStringOrNull(ps, 11, ticket.errorMessage(), Types.VARCHAR);
             ps.setInt(12, ticket.attempts());
-            // shop_id is nullable: most tickets have no shop row until
-            // the normaliser runs on the DONE transition. setNull keeps
-            // pre-existing rows valid; the new write path sets it
-            // alongside the catalogue write inside the same
-            // transaction.
-            if (ticket.shopId() == null) ps.setNull(13, Types.OTHER);
-            else ps.setObject(13, ticket.shopId());
+            bindObjectOrNull(ps, 13, ticket.shopId(), Types.OTHER);
+            bindStringOrNull(ps, 14, ticket.ocrText(), Types.LONGVARCHAR);
             return ps;
         });
         return ticket;
+    }
+
+    /**
+     * Set a nullable {@code VARCHAR} parameter: null when
+     * {@code value} is null, else the String value with the supplied
+     * SQL type. Keeps the {@link #save} method flat without
+     * per-column if/else branches.
+     */
+    private static void bindStringOrNull(PreparedStatement ps, int idx,
+                                         String value, int sqlType) throws SQLException {
+        if (value == null) ps.setNull(idx, sqlType);
+        else ps.setString(idx, value);
+    }
+
+    /**
+     * Set a nullable byte-array parameter ({@code BINARY}). Mirrors
+     * {@link #bindStringOrNull} — the only difference is the typed
+     * setter; using two helpers avoids an untyped
+     * {@link java.sql.PreparedStatement#setObject} round-trip on
+     * every null.
+     */
+    private static void bindBytesOrNull(PreparedStatement ps, int idx,
+                                        byte[] value, int sqlType) throws SQLException {
+        if (value == null) ps.setNull(idx, sqlType);
+        else ps.setBytes(idx, value);
+    }
+
+    /**
+     * Set a nullable {@link UUID} parameter (or any other JDBC
+     * type the driver knows how to handle with {@code setObject}).
+     * Same null-handling as the string and bytes variants — kept as
+     * a separate helper so the SQL type for shop_id (UUID column →
+     * {@code Types.OTHER}) lives next to the binding it belongs to.
+     */
+    private static void bindObjectOrNull(PreparedStatement ps, int idx,
+                                          Object value, int sqlType) throws SQLException {
+        if (value == null) ps.setNull(idx, sqlType);
+        else ps.setObject(idx, value);
     }
 
     @Override

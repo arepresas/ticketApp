@@ -82,6 +82,8 @@ public class TicketController {
 
     private final com.ticketapp.bff.ai.TicketExtractionService extractionService;
 
+    private final com.ticketapp.bff.ai.DocumentTextExtractionSyncService documentTextExtractionService;
+
     @GetMapping
     public List<TicketResponse> list() {
         AuthenticatedUser user = CurrentUser.get();
@@ -199,9 +201,19 @@ public class TicketController {
         // persistence layer.
         Ticket created = repository.save(Ticket.open(
                 user.id(), title, desc, contentType, file.getOriginalFilename(), bytes));
-        log.info("Created ticket {} for user {} (file={} {} bytes)",
-                created.id(), user.id(), file.getOriginalFilename(), bytes.length);
-        return ResponseEntity.status(201).body(TicketResponse.of(created));
+        // OCR step: runs the provider's document-text extraction
+        // against the freshly-saved bytes and stamps the verbatim
+        // transcription onto the row so the upload preview can show
+        // image + text. The service is intentionally non-throwing:
+        // an OCR failure never aborts the upload (the file is
+        // already persisted; the structured-extraction scheduler
+        // still picks the ticket up). See
+        // DocumentTextExtractionSyncService#runOnUpload.
+        Ticket withOcr = documentTextExtractionService.runOnUpload(created);
+        log.info("Created ticket {} for user {} (file={} {} bytes, ocr={} chars)",
+                withOcr.id(), user.id(), file.getOriginalFilename(), bytes.length,
+                withOcr.ocrText() == null ? 0 : withOcr.ocrText().length());
+        return ResponseEntity.status(201).body(TicketResponse.of(withOcr));
     }
 
     /**
@@ -709,6 +721,13 @@ public class TicketController {
      * {@code ownerId} is included so the UI can render owner-aware
      * affordances and so the wire response is round-trippable to the
      * domain type when needed (tests, audit logs).
+     * {@code ocrText} is the verbatim OCR transcription produced at
+     * upload time (see the BFF's {@code DocumentTextExtractionSyncService}).
+     * {@code null} for tickets that predate the OCR step, or when
+     * the provider returned no text — the SPA renders the image
+     * preview either way, but uses the transcript when present so
+     * the user can sanity-check the upload without opening the
+     * file.
      */
     public record TicketResponse(
             UUID id,
@@ -722,7 +741,8 @@ public class TicketController {
             String fileName,
             Integer sizeBytes,
             String errorMessage,
-            Integer attempts) {
+            Integer attempts,
+            String ocrText) {
 
         static TicketResponse of(Ticket t) {
             Integer size = t.fileData() == null ? null : t.fileData().length;
@@ -730,7 +750,8 @@ public class TicketController {
                     t.id(), t.ownerId(), t.title(), t.description(), t.status(),
                     t.createdAt(), t.updatedAt(),
                     t.contentType(), t.fileName(), size,
-                    t.errorMessage(), t.attempts());
+                    t.errorMessage(), t.attempts(),
+                    t.ocrText());
         }
     }
 }

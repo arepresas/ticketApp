@@ -44,15 +44,30 @@ export type CreatedTicket = {
 	 * that have never failed (or whose error was cleared by a status flip).
 	 */
 	errorMessage: string | null;
-	/**
-	 * Number of times the AI extraction pipeline has been triggered for
-	 * this ticket. Incremented by the BFF orchestrator on every
-	 * `processTicket` call (success or failure). Manual PATCH
-	 * `/status → OPEN` does NOT bump the counter — it's a tally of AI
-	 * attempts, not of user retries. Surfaced in the dashboard so the
-	 * user can see how many tries a stuck extraction has burned.
-	 */
+/**
+ * Number of times the AI extraction pipeline has been triggered for
+ * this ticket. Incremented by the BFF orchestrator on every
+ * `processTicket` call (success or failure). Manual PATCH
+ * `/status → OPEN` does NOT bump the counter — it's a tally of AI
+ * attempts, not of user retries. Surfaced in the dashboard so the
+ * user can see how many tries a stuck extraction has burned.
+ */
 	attempts: number;
+	/**
+	 * Verbatim OCR transcription of the uploaded document (image or
+	 * PDF), produced by the BFF's upload-time OCR step (see the
+	 * `DocumentTextExtractor` port on the backend). `null` when:
+	 *
+	 *   - the upload pre-dates the OCR step (older rows),
+	 *   - the upload had no file attached (metadata-only),
+	 *   - the OCR provider could not transcribe the document (blank
+	 *     receipt, model refusal, transport failure).
+	 *
+	 * The upload preview renders the value verbatim below the file
+	 * thumbnail when present; the detail screen exposes it as a
+	 * dedicated panel for sanity-checking the receipt.
+	 */
+	ocrText: string | null;
 };
 
 const parseError = async (res: Response): Promise<string> => {

@@ -98,6 +98,7 @@ class TicketExtractionNormaliserTest {
                 new byte[]{1, 2, 3},
                 null,
                 0,
+                null,
                 null);
     }
 

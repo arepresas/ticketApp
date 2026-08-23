@@ -111,7 +111,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         null, OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
         assertEquals("id", ex.getMessage());
     }
 
@@ -121,7 +121,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), null, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
         assertEquals("ownerId", ex.getMessage());
     }
 
@@ -131,7 +131,7 @@ class TicketTest {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, null, "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
         assertEquals("title", ex.getMessage());
     }
 
@@ -141,7 +141,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", null, now, now,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
     }
 
     @Test
@@ -150,7 +150,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
     }
 
     @Test
@@ -159,7 +159,7 @@ class TicketTest {
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
-                        null, null, null, null, 0, null));
+                        null, null, null, null, 0, null, null));
     }
 
     @Test
@@ -169,9 +169,23 @@ class TicketTest {
         Instant now = Instant.now();
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
-                null, null, null, "   ", 0, null);
+                null, null, null, "   ", 0, null, null);
 
         assertNull(t.errorMessage());
+    }
+
+    @Test
+    void constructorNormalisesBlankOcrTextToNull() {
+        // Same normalisation rule as errorMessage: a blank OCR
+        // transcription is meaningless, so the constructor collapses
+        // it to null and the read path sees a clean "no text"
+        // signal regardless of what the provider returned.
+        Instant now = Instant.now();
+        Ticket t = new Ticket(
+                UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                null, null, null, null, 0, null, "   ");
+
+        assertNull(t.ocrText());
     }
 
     @Test
@@ -183,7 +197,7 @@ class TicketTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Ticket(
                         UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, -1, null));
+                        null, null, null, null, -1, null, null));
     }
 
     @Test
@@ -196,7 +210,7 @@ class TicketTest {
         Instant now = Instant.now();
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                null, null, null, null, 0, null);
+                null, null, null, null, 0, null, null);
 
         assertNull(t.shopId());
     }
@@ -232,9 +246,9 @@ class TicketTest {
         UUID id = UUID.randomUUID();
         Instant created = Instant.parse("2026-07-05T17:00:00Z");
         Ticket a = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0, null);
+                null, null, null, "msg", 0, null, null);
         Ticket b = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0, null);
+                null, null, null, "msg", 0, null, null);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());

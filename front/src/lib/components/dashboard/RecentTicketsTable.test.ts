@@ -35,7 +35,8 @@ const sample: CreatedTicket[] = [
 		fileName: 'mercadona.png',
 		sizeBytes: 12345,
 		errorMessage: null,
-		attempts: 1
+		attempts: 1,
+		ocrText: 'MERCADONA\n...'
 	},
 	{
 		id: 't-002',
@@ -48,7 +49,8 @@ const sample: CreatedTicket[] = [
 		fileName: 'lidl.pdf',
 		sizeBytes: 2048,
 		errorMessage: null,
-		attempts: 0
+		attempts: 0,
+		ocrText: null
 	},
 	{
 		id: 't-003',
@@ -61,7 +63,8 @@ const sample: CreatedTicket[] = [
 		fileName: null,
 		sizeBytes: null,
 		errorMessage: null,
-		attempts: 0
+		attempts: 0,
+		ocrText: null
 	},
 	{
 		id: 't-004',
@@ -74,7 +77,8 @@ const sample: CreatedTicket[] = [
 		fileName: 'broken.jpg',
 		sizeBytes: 4096,
 		errorMessage: 'status=502 MiniMax returned 500: provider overloaded',
-		attempts: 3
+		attempts: 3,
+		ocrText: null
 	}
 ];
 

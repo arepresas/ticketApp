@@ -31,7 +31,8 @@ public record Ticket(
         byte[] fileData,
         String errorMessage,
         int attempts,
-        UUID shopId
+        UUID shopId,
+        String ocrText
 ) {
 
     public Ticket {
@@ -48,6 +49,15 @@ public record Ticket(
         // normaliser runs on the DONE transition. A non-null value
         // must reference a real shops row — the FK constraint
         // (V13) enforces that at the SQL layer.
+        // ocrText is the verbatim transcription of the uploaded image
+        // (or PDF page) produced at upload time by the OCR port
+        // (see domain.ai.DocumentTextExtractor). Nullable because the
+        // upload may have happened before the OCR step landed, the
+        // provider may have declined to transcribe (blank image), or
+        // the upload was a metadata-only ticket (no bytes). The
+        // BFF normalises blank → null so callers never have to test
+        // both.
+        if (ocrText != null && ocrText.isBlank()) ocrText = null;
     }
 
     /**
@@ -71,7 +81,7 @@ public record Ticket(
                               byte[] fileData) {
         Instant now = Instant.now();
         return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData, null, 0, null);
+                now, now, contentType, fileName, fileData, null, 0, null, null);
     }
 
     /**
@@ -86,7 +96,7 @@ public record Ticket(
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
         return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData, cleared, attempts, shopId);
+                contentType, fileName, fileData, cleared, attempts, shopId, ocrText);
     }
 
     /**
@@ -103,7 +113,7 @@ public record Ticket(
             throw new IllegalArgumentException("title must not be blank");
         }
         return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
     }
 
     /**
@@ -115,7 +125,7 @@ public record Ticket(
     public Ticket withDescription(String newDescription) {
         String sanitized = newDescription == null ? "" : newDescription;
         return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
     }
 
     /**
@@ -136,7 +146,7 @@ public record Ticket(
     public Ticket markError(String message) {
         return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
                 createdAt, Instant.now(),
-                contentType, fileName, fileData, message, attempts, shopId);
+                contentType, fileName, fileData, message, attempts, shopId, ocrText);
     }
 
     /**
@@ -154,7 +164,7 @@ public record Ticket(
      */
     public Ticket incrementAttempts() {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts + 1, shopId);
+                contentType, fileName, fileData, errorMessage, attempts + 1, shopId, ocrText);
     }
 
     /**
@@ -169,7 +179,27 @@ public record Ticket(
      */
     public Ticket withShopId(UUID newShopId) {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, newShopId);
+                contentType, fileName, fileData, errorMessage, attempts, newShopId, ocrText);
+    }
+
+    /**
+     * Stamp the verbatim OCR transcription produced at upload time.
+     * Called by the BFF's upload flow (see
+     * {@code DocumentTextExtractionSyncService}) once the
+     * {@link com.ticketapp.domain.ai.DocumentTextExtractor} returns.
+     * Passing {@code null} (or a blank string, which the compact
+     * constructor normalises to {@code null}) clears any previously
+     * stored transcription — the upload flow does this on the
+     * no-text outcome so the column reflects "OCR said: empty".
+     *
+     * <p>Does NOT bump {@code updatedAt}: the OCR text is part of
+     * the upload payload, not a user-driven edit, so the dashboard
+     * sort would mislead the operator by surfacing "just updated"
+     * for every image that happens to come back without text.
+     */
+    public Ticket withOcrText(String newOcrText) {
+        return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
+                contentType, fileName, fileData, errorMessage, attempts, shopId, newOcrText);
     }
 
     @Override
@@ -188,13 +218,15 @@ public record Ticket(
                 && Arrays.equals(fileData, other.fileData)
                 && java.util.Objects.equals(errorMessage, other.errorMessage)
                 && attempts == other.attempts
-                && java.util.Objects.equals(shopId, other.shopId);
+                && java.util.Objects.equals(shopId, other.shopId)
+                && java.util.Objects.equals(ocrText, other.ocrText);
     }
 
     @Override
     public int hashCode() {
         int h = java.util.Objects.hash(id, ownerId, title, description, status,
-                createdAt, updatedAt, contentType, fileName, errorMessage, attempts, shopId);
+                createdAt, updatedAt, contentType, fileName, errorMessage, attempts,
+                shopId, ocrText);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
@@ -206,7 +238,7 @@ public record Ticket(
                 + ", contentType=" + contentType + ", fileName=" + fileName
                 + ", fileData=" + Arrays.toString(fileData)
                 + ", errorMessage=" + errorMessage + ", attempts=" + attempts
-                + ", shopId=" + shopId + "]";
+                + ", shopId=" + shopId + ", ocrText=" + ocrText + "]";
     }
 
     /**

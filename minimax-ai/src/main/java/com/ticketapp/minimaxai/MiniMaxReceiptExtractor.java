@@ -255,26 +255,11 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
     }
 
     private static String stripThinkBlocks(String s) {
-        StringBuilder out = new StringBuilder(s.length());
-        int cursor = 0;
-        while (cursor < s.length()) {
-            int open = s.indexOf("<think>", cursor);
-            if (open < 0) {
-                out.append(s, cursor, s.length());
-                return out.toString().trim();
-            }
-            out.append(s, cursor, open);
-            int close = s.indexOf("</think>", open + "<think>".length());
-            if (close < 0) {
-                // Unclosed think block — model ran out of tokens mid
-                // reasoning. Drop the rest of the string; the caller
-                // will see a blank payload and raise a clear error
-                // rather than try to parse half-formed JSON.
-                return out.toString().trim();
-            }
-            cursor = close + "</think>".length();
-        }
-        return out.toString().trim();
+        // Delegates to the shared helper on MiniMaxApiClient so
+        // there's exactly one implementation of the
+        // <think>...</think> stripping algorithm. The extraction
+        // path and the OCR path both use it.
+        return MiniMaxApiClient.stripThinkBlocks(s);
     }
 
     private static String extractFirstJsonObject(String s) {

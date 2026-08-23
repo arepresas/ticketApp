@@ -81,6 +81,78 @@ public final class MiniMaxApiClient {
     }
 
     /**
+     * Ask MiniMax to transcribe the text printed in the supplied
+     * image. Used by the OCR step that runs at upload time
+     * (see {@link com.ticketapp.domain.ai.ImageTextExtractor}) so
+     * the SPA can show the verbatim text alongside the image
+     * preview.
+     *
+     * <p>Sibling of {@link #extractReceipt(ReceiptInput)} but
+     * intentionally simpler: no JSON parsing, no category mapping,
+     * no PDF routing. The model is told to return plain text and
+     * nothing else, with {@code temperature: 0} so the same image
+     * yields the same text on retry. We deliberately don't set
+     * {@code response_format: json_object} — the model's prose
+     * reply is the wire shape we want.
+     *
+     * @return the model's verbatim transcription, stripped of
+     *         {@code <think>...</think>} blocks the thinking-style
+     *         models like to emit. May be empty when the image
+     *         carries no readable text.
+     */
+    public String transcribeImage(String model, byte[] imageBytes, String mimeType)
+            throws java.io.IOException {
+        log.info("MiniMax OCR request: model={} bytes={} mime={}",
+                model, imageBytes.length, mimeType);
+
+        ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                .model(model)
+                .addSystemMessage(OCR_PROMPT)
+                .temperature(0.0)
+                // OCR can return arbitrarily long receipts (Lidl with
+                // 30+ line items) so the budget is generous. The
+                // extraction path uses 16384; OCR is verbatim so it
+                // should fit easily within that envelope.
+                .maxCompletionTokens(16384)
+                .addUserMessageOfArrayOfContentParts(
+                        List.of(imagePart(imageBytes, mimeType)))
+                .build();
+
+        ChatCompletion completion = sendChatRequest(params);
+        return stripThinkBlocks(extractAssistantText(completion));
+    }
+
+    /**
+     * Drop {@code <think>...</think>} blocks from a model's raw
+     * reply. Shared by {@link #transcribeImage(String, byte[], String)}
+     * (OCR) and {@link MiniMaxReceiptExtractor} (structured
+     * extraction) — both read the same thinking-style models, so the
+     * strip logic lives here. Unclosed blocks are dropped to
+     * end-of-string so a model that ran out of tokens mid-reasoning
+     * never leaks partial chain-of-thought into the caller's
+     * output.
+     */
+    public static String stripThinkBlocks(String s) {
+        if (s == null || s.isEmpty()) return s;
+        StringBuilder out = new StringBuilder(s.length());
+        int cursor = 0;
+        while (cursor < s.length()) {
+            int open = s.indexOf("<think>", cursor);
+            if (open < 0) {
+                out.append(s, cursor, s.length());
+                return out.toString().trim();
+            }
+            out.append(s, cursor, open);
+            int close = s.indexOf("</think>", open + "<think>".length());
+            if (close < 0) {
+                return out.toString().trim();
+            }
+            cursor = close + "</think>".length();
+        }
+        return out.toString().trim();
+    }
+
+    /**
      * Ask MiniMax to extract structured receipt data from the given
      * input. The {@code input} is either an image (the {@code bytes}
      * + {@code mimeType} pair) or plain text already extracted from
@@ -127,16 +199,44 @@ public final class MiniMaxApiClient {
                     List.of(imagePart(input.bytes(), input.mimeType())));
         }
 
-        // Use withRawResponse() so we can read the body on every
-        // failure path. Critical: read the body as bytes FIRST, then
-        // attempt to parse it — that way a parse failure
-        // (OpenAIInvalidDataException when Jackson chokes on non-JSON)
-        // doesn't lose the raw response. The SDK's parse() reads
-        // the body stream and closes it; if the bytes are bad we
-        // have nothing to log without doing it ourselves.
+        ChatCompletion completion = sendChatRequest(params.build());
+        return extractAssistantText(completion);
+    }
+
+    /**
+     * Send a {@code chat.completions} request and parse the response.
+     *
+     * <p>Centralised wire I/O: every {@code chat/completions} call
+     * (extraction, OCR) walks this same path, so the duplicated try /
+     * catch / parse blocks that lived in
+     * {@link #extractReceipt(ReceiptInput)} and
+     * {@link #transcribeImage(String, byte[], String)} were lifted
+     * here. The helper:
+     * <ul>
+     *   <li>Translates SDK exceptions
+     *       ({@link OpenAIServiceException}, generic
+     *       {@link RuntimeException} for DNS / connect / timeout)
+     *       into a domain {@link MiniMaxApiException} with the
+     *       upstream HTTP status code where applicable.</li>
+     *   <li>Reads the response body as bytes before attempting to
+     *       parse, so a parse failure doesn't lose the raw reply
+     *       (the SDK's {@code parse()} consumes the body stream and
+     *       would otherwise discard it on failure).</li>
+     *   <li>Closes the {@code withRawResponse} in {@code finally}
+     *       so the underlying HTTP connection returns to the pool
+     *       even when parsing throws.</li>
+     * </ul>
+     *
+     * @return the parsed {@link ChatCompletion} for the caller to
+     *         inspect (assistant text, content parts, etc.)
+     * @throws MiniMaxApiException on any HTTP / parse / network
+     *                            failure the provider surfaces
+     */
+    private ChatCompletion sendChatRequest(ChatCompletionCreateParams params)
+            throws java.io.IOException {
         com.openai.core.http.HttpResponseFor<ChatCompletion> resp;
         try {
-            resp = client.chat().completions().withRawResponse().create(params.build());
+            resp = client.chat().completions().withRawResponse().create(params);
         } catch (OpenAIServiceException e) {
             // The SDK throws a typed exception per status: 401, 429,
             // 500, etc. All extend OpenAIServiceException. The
@@ -157,18 +257,14 @@ public final class MiniMaxApiClient {
                 throw new MiniMaxApiException(status,
                         "MiniMax returned " + status + ": " + truncate(bodyText));
             }
-            // 2xx path — parse manually with the SDK's mapper so we
-            // own the bytes and the typed object alike.
-            ChatCompletion completion;
             try {
-                completion = com.openai.core.ObjectMappers.jsonMapper()
+                return com.openai.core.ObjectMappers.jsonMapper()
                         .readValue(bodyBytes, ChatCompletion.class);
             } catch (Exception parseError) {
                 throw new MiniMaxApiException(status,
                         "MiniMax returned " + status + " but the body is not valid JSON: "
                                 + truncate(bodyText) + " | parse error: " + parseError.getMessage());
             }
-            return extractAssistantText(completion);
         } finally {
             resp.close();
         }
@@ -365,5 +461,47 @@ public final class MiniMaxApiClient {
             - The sum of every product's line_total must equal total_amount.
             - currency defaults to EUR if no symbol is visible.
             - shop fields: include only what you can read from the receipt header or footer (address printed at the top, phone/tax id printed at the bottom of a Spanish or French receipt). Omit any field you can't read; never guess.
+            """;
+
+    /**
+     * System prompt for the OCR step. Asks the model to act as a
+     * verbatim transcriber and return only the printed text it can
+     * read in the image. The "no JSON, no markdown, no commentary"
+     * rules are the OCR equivalent of the extraction prompt's
+     * schema constraints: the SPA renders the reply directly into
+     * the upload preview, so any markup from the model shows up as
+     * junk on screen.
+     *
+     * <p>"Do not invent or guess" mirrors the extraction prompt's
+     * "omit fields you can't read" rule — a model that hallucinates
+     * phone numbers or addresses onto a blurry photo is worse than
+     * a model that returns nothing. The empty-output escape hatch
+     * lets the caller distinguish "the model couldn't see any text"
+     * (blank reply → drop the field) from "the model garbled the
+     * reply" (markdown reply → fail closed, fall through to the
+     * structured-extraction step).
+     */
+    public static final String OCR_PROMPT = """
+            You are an OCR engine.
+
+            OUTPUT RULES — read first, comply strictly:
+            1. Output ONLY the text visible in the image, verbatim,
+               in reading order. No JSON, no markdown, no code
+               fences, no preamble, no commentary, no labels.
+            2. Do NOT include any reasoning, chain-of-thought,
+               analysis, or thinking blocks. In particular, do NOT
+               emit a <think>...</think> block. Reason internally
+               and silently if you must, but the reply you emit
+               must be text you can read in the image.
+            3. If text is unreadable (blurry, cropped, too small),
+               write '?' for the unreadable portion. Never invent
+               or guess.
+            4. If the image carries no text at all (a photo of an
+               object, a blank page), reply with a single empty
+               line. Do not explain why.
+            5. Preserve line breaks where they help the reader —
+               store name on its own line, product list indented,
+               total at the bottom. The user will see this verbatim
+               in the upload preview.
             """;
 }

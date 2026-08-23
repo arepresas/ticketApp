@@ -86,6 +86,12 @@
 		status: 'idle' | 'uploading' | 'done' | 'error';
 		// Server-assigned id, populated on success.
 		createdId?: string;
+		// OCR transcription returned by the BFF on upload (see the
+		// backend's DocumentTextExtractor + TicketResponse.ocrText).
+		// Empty for failed OCR / metadata-only rows; the preview row
+		// collapses the section when blank so a long Lidl receipt
+		// doesn't crowd out a busy upload queue.
+		ocrText?: string | null;
 		// Local-rejection reason or upload error message.
 		error?: string;
 	};
@@ -263,6 +269,7 @@
 				const created = await createTicket(token, file);
 				target.status = 'done';
 				target.createdId = created.id;
+				target.ocrText = created.ocrText;
 			} catch (err: unknown) {
 				target.status = 'error';
 				target.error =
@@ -409,6 +416,26 @@
 										>
 											{p.error}
 										</p>
+									{/if}
+									<!--
+										OCR preview. Only rendered when the
+										ticket is created and the provider
+										returned non-empty text. Pre-upload
+										rows stay empty (we don't OCR on the
+										client — that's the BFF's job); rows
+										where the provider returned no text
+										collapse this section entirely so the
+										user sees a clean status line, not a
+										"No text detected" placeholder. The
+										preserves-formatting class keeps the
+										model's line breaks visible on long
+										receipts.
+									-->
+									{#if p.status === 'done' && p.ocrText}
+										<pre
+											class="mt-2 max-h-32 overflow-auto rounded-md border border-border bg-muted/40 p-2 text-xs leading-snug text-muted-foreground whitespace-pre-wrap break-words"
+											data-testid="preview-ocr"
+										>{p.ocrText}</pre>
 									{/if}
 								</div>
 								<button
