@@ -50,11 +50,13 @@ class TicketTest {
 
     @Test
     void statusEnumHasExpectedValues() {
-        // 5 lifecycle states: OPEN, IN_PROGRESS, ON_ERROR, DONE, CANCELLED.
-        // ON_ERROR was added alongside the error_message column so the
-        // scheduler can mark a ticket as terminally failed instead of
-        // reverting to OPEN (which caused silent infinite retry loops).
-        assertEquals(5, List.of(Ticket.Status.values()).size());
+        // 6 lifecycle states: OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR,
+        // DONE, CANCELLED. IN_ANALYSIS was added to differentiate
+        // "AI is currently being called" from "AI is done, awaiting
+        // user validation" — the badge is a separate colour in the
+        // dashboard so the operator can tell the two apart without
+        // reading the underlying extraction row.
+        assertEquals(6, List.of(Ticket.Status.values()).size());
     }
 
     @Test

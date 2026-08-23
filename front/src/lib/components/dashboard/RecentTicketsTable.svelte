@@ -77,21 +77,32 @@
 	let retryError = $state<string | null>(null);
 
 	// Status → readable label. Mirrors PendingTicketsApp so the user
-	// sees the same word on both screens.
+	// sees the same word on both screens. IN_ANALYSIS is the
+	// "the AI is currently being called" state — the scheduler sets
+	// it before invoking TicketExtractionService.processTicket, and
+	// the orchestrator flips it to IN_PROGRESS once the provider
+	// call returns. The dashboard badge colour distinguishes the
+	// two so the operator can tell "AI is working" from "AI is
+	// done, awaiting your validation" at a glance.
 	const STATUS_LABEL: Record<TicketStatus, string> = {
 		OPEN: 'Open',
+		IN_ANALYSIS: 'In analysis',
 		IN_PROGRESS: 'In progress',
 		ON_ERROR: 'Error',
 		DONE: 'Done',
 		CANCELLED: 'Cancelled'
 	};
 
-	// Status → pill colours. Open/In progress keep their "needs
-	// attention" amber/sky; Error stands out in red so the operator
-	// notices it; terminal states (Done, Cancelled) get emerald/zinc
-	// so the table scannability matches the rest of the dashboard.
+	// Status → pill colours. Open keeps blue (neutral / waiting
+	// for scheduler); In analysis uses sky to read as "actively
+	// working" without alarming; In progress stays amber (needs
+	// your attention); Error stands out in red; terminal states
+	// (Done, Cancelled) get emerald/zinc so the table scannability
+	// matches the rest of the dashboard.
 	const statusBadgeClass: Record<TicketStatus, string> = {
 		OPEN: 'bg-blue-500/10 text-blue-700 ring-1 ring-inset ring-blue-500/20 dark:text-blue-300',
+		IN_ANALYSIS:
+			'bg-sky-500/10 text-sky-700 ring-1 ring-inset ring-sky-500/20 dark:text-sky-300',
 		IN_PROGRESS:
 			'bg-amber-500/10 text-amber-700 ring-1 ring-inset ring-amber-500/20 dark:text-amber-300',
 		ON_ERROR:

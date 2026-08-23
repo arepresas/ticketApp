@@ -16,6 +16,10 @@ import com.ticketapp.persistence.JdbcTicketExtractionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +32,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -84,8 +90,14 @@ class TicketExtractionServiceTest {
         extractions = mock(TicketExtractionRepository.class);
         jdbcExtractions = mock(JdbcTicketExtractionRepository.class);
         receiptExtractor = mock(ReceiptExtractor.class);
+        // Real TransactionTemplate over a no-op transaction manager:
+        // the callbacks must actually run (the saves happen inside
+        // them), but there is no DB to commit to in a unit test.
+        PlatformTransactionManager tm = mock(PlatformTransactionManager.class);
+        when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
-                tickets, extractions, jdbcExtractions, receiptExtractor);
+                tickets, extractions, jdbcExtractions, receiptExtractor,
+                new TransactionTemplate(tm));
     }
 
     private static Ticket sampleTicket(UUID id) {
@@ -101,7 +113,12 @@ class TicketExtractionServiceTest {
     }
 
     @Test
-    void successPathPersistsExtractionAndLeavesTicketInProgress() throws Exception {
+    void successPathPersistsExtractionAndFlipsInAnalysisToInProgress() throws Exception {
+        // The orchestrator's two-save dance: IN_ANALYSIS at the
+        // start (the "AI is being called" state) and IN_PROGRESS on
+        // success (the "AI is done, awaiting your validation"
+        // state). The dashboard badge colour flips from sky to
+        // amber when the second save lands.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
@@ -127,6 +144,11 @@ class TicketExtractionServiceTest {
         boolean processed = service.processTicket(open);
 
         assertThat(processed).isTrue();
+        // The first save is the IN_ANALYSIS pre-set (with the
+        // attempts counter bumped); the second save is the
+        // IN_PROGRESS flip on success.
+        verify(tickets, atLeast(2)).save(any(Ticket.class));
+        verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
         verify(tickets).save(argThat(t -> t.status() == Status.IN_PROGRESS));
         verify(jdbcExtractions).recordAttempt(id);
         ArgumentCaptor<TicketExtraction> cap = ArgumentCaptor.forClass(TicketExtraction.class);
@@ -139,6 +161,35 @@ class TicketExtractionServiceTest {
         assertThat(saved.rawResponse()).isEqualTo("{\"merchant\":\"Mercadona\"}");
         // No revert to OPEN on the success path.
         verify(tickets, never()).save(argThat(t -> t.status() == Status.OPEN && t.id().equals(id)));
+    }
+
+    @Test
+    void inAnalysisSaveIsCommittedBeforeTheProviderCall() throws Exception {
+        // Regression pin for the transaction-segmentation fix: the
+        // IN_ANALYSIS save must happen BEFORE receiptExtractor.extract()
+        // is invoked, in a transaction segment that has already
+        // committed by the time the provider call starts. With the old
+        // single-@Transactional design both saves shared one
+        // transaction, so during the whole AI round-trip other readers
+        // still saw OPEN — the dashboard badge never showed "In
+        // analysis" while the AI worked.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(receiptExtractor.extract(any())).thenReturn(
+                new ReceiptExtraction(
+                        new ReceiptExtractionResult(
+                                "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
+                                List.of(), BigDecimal.ONE, "EUR"),
+                        "{}", MODEL));
+
+        service.processTicket(open);
+
+        InOrder order = inOrder(tickets, receiptExtractor);
+        order.verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS));
+        order.verify(receiptExtractor).extract(any());
     }
 
     @Test
@@ -157,11 +208,15 @@ class TicketExtractionServiceTest {
         boolean processed = service.processTicket(open);
 
         assertThat(processed).isFalse();
-        // Two saves: first IN_PROGRESS at the start of the call, then
-        // ON_ERROR after the failure. Neither transitions back to
-        // OPEN — the failure is terminal from the scheduler's POV.
+        // Two saves: first IN_ANALYSIS at the start of the call, then
+        // ON_ERROR after the failure. The transition goes
+        // IN_ANALYSIS → ON_ERROR directly (no IN_PROGRESS in
+        // between — there's nothing to validate when the AI
+        // never produced a structured extraction). Neither
+        // transitions back to OPEN — the failure is terminal from
+        // the scheduler's POV.
         verify(tickets, times(2)).save(any(Ticket.class));
-        verify(tickets).save(argThat(t -> t.status() == Status.IN_PROGRESS));
+        verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS));
         verify(tickets).save(argThat(t ->
                 t.status() == Status.ON_ERROR
                         && t.errorMessage() != null
@@ -284,7 +339,7 @@ class TicketExtractionServiceTest {
         boolean processed = service.processTicket(open);
 
         assertThat(processed).isFalse();
-        // Only the initial IN_PROGRESS save — the ON_ERROR save was
+        // Only the initial IN_ANALYSIS save — the ON_ERROR save was
         // skipped because the refresh returned empty.
         verify(tickets, times(1)).save(any(Ticket.class));
     }
@@ -297,7 +352,7 @@ class TicketExtractionServiceTest {
         // and failure — so the number reflects reality regardless of
         // outcome. Counter starts at 0 on the fixture, so the
         // persisted save should carry attempts == 1 on the first
-        // (IN_PROGRESS) save.
+        // (IN_ANALYSIS) save.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
@@ -317,9 +372,9 @@ class TicketExtractionServiceTest {
 
         service.processTicket(open);
 
-        // First save is the IN_PROGRESS flip with attempts bumped to 1.
+        // First save is the IN_ANALYSIS pre-set with attempts bumped to 1.
         verify(tickets).save(argThat(t ->
-                t.status() == Status.IN_PROGRESS && t.attempts() == 1));
+                t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
     }
 
     @Test
@@ -328,7 +383,7 @@ class TicketExtractionServiceTest {
         // reflected on the ON_ERROR save too. The orchestrator calls
         // markError which re-reads via owner-scoped findById before
         // writing ON_ERROR — in production that re-read lands on the
-        // DB row persisted by the IN_PROGRESS save, so the bumped
+        // DB row persisted by the IN_ANALYSIS save, so the bumped
         // counter survives the failure path. The mock has to simulate
         // that round-trip: the saved ticket becomes the next findById
         // answer, otherwise the mock returns the original (attempts=0)
@@ -351,13 +406,13 @@ class TicketExtractionServiceTest {
 
         service.processTicket(open);
 
-        // Two saves: IN_PROGRESS (attempts==1) then ON_ERROR
+        // Two saves: IN_ANALYSIS (attempts==1) then ON_ERROR
         // (attempts==1, errorMessage set). The counter does NOT
         // increment again on the failure path — incrementAttempts()
         // is called once per processTicket invocation.
         verify(tickets, times(2)).save(any(Ticket.class));
         verify(tickets).save(argThat(t ->
-                t.status() == Status.IN_PROGRESS && t.attempts() == 1));
+                t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
         verify(tickets).save(argThat(t ->
                 t.status() == Status.ON_ERROR && t.attempts() == 1));
     }

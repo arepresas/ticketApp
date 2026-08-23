@@ -33,6 +33,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>Return only the authenticated user's
  *       {@link Ticket.Status#OPEN}, {@link Ticket.Status#IN_PROGRESS},
  *       and {@link Ticket.Status#ON_ERROR} tickets, newest first.
+ *       IN_ANALYSIS is included so a ticket the scheduler is
+ *       currently feeding to the provider surfaces in the work
+ *       queue — useful for "is this stuck?" triage while a long
+ *       extract is in flight.
  *       ON_ERROR is included so a failed ticket is visible on the
  *       operator's work queue — it needs manual retry or
  *       cancellation, both surfaced via the same UI.</li>
@@ -160,15 +164,18 @@ class PendingTicketsIT {
         UUID owner = ownerId();
         Ticket openOld = tickets.save(Ticket.open(owner, "old-open.pdf", "first",
                 "application/pdf", "old.pdf", new byte[]{1}));
-        Ticket inProgress = tickets.save(Ticket.open(owner, "wip.pdf", "second",
-                "application/pdf", "wip.pdf", new byte[]{2}));
-        Ticket errored = tickets.save(Ticket.open(owner, "broken.pdf", "third",
-                "application/pdf", "broken.pdf", new byte[]{3}));
-        Ticket done = tickets.save(Ticket.open(owner, "done.pdf", "fourth",
-                "application/pdf", "done.pdf", new byte[]{4}));
-        Ticket cancelled = tickets.save(Ticket.open(owner, "cancelled.pdf", "fifth",
-                "application/pdf", "cancelled.pdf", new byte[]{5}));
+        Ticket inAnalysis = tickets.save(Ticket.open(owner, "ai-working.pdf", "second",
+                "application/pdf", "ai-working.pdf", new byte[]{2}));
+        Ticket inProgress = tickets.save(Ticket.open(owner, "wip.pdf", "third",
+                "application/pdf", "wip.pdf", new byte[]{3}));
+        Ticket errored = tickets.save(Ticket.open(owner, "broken.pdf", "fourth",
+                "application/pdf", "broken.pdf", new byte[]{4}));
+        Ticket done = tickets.save(Ticket.open(owner, "done.pdf", "fifth",
+                "application/pdf", "done.pdf", new byte[]{5}));
+        Ticket cancelled = tickets.save(Ticket.open(owner, "cancelled.pdf", "sixth",
+                "application/pdf", "cancelled.pdf", new byte[]{6}));
 
+        tickets.save(inAnalysis.withStatus(Ticket.Status.IN_ANALYSIS));
         tickets.save(inProgress.withStatus(Ticket.Status.IN_PROGRESS));
         tickets.save(errored.markError("MiniMax returned 500"));
         tickets.save(done.withStatus(Ticket.Status.DONE));
@@ -183,12 +190,18 @@ class PendingTicketsIT {
                 .getResponseBody();
 
         assertThat(body).isNotNull();
+        // IN_ANALYSIS is included in the pending set so a ticket the
+        // scheduler is currently feeding to the provider shows up in
+        // the work queue — the operator sees a stuck "AI is working"
+        // row right next to the genuine pending and failed tickets.
         assertThat(body).extracting(TicketController.TicketResponse::id)
-                .containsExactlyInAnyOrder(openOld.id(), inProgress.id(), errored.id())
+                .containsExactlyInAnyOrder(
+                        openOld.id(), inAnalysis.id(), inProgress.id(), errored.id())
                 .doesNotContain(done.id(), cancelled.id());
         assertThat(body).extracting(TicketController.TicketResponse::status)
                 .containsOnly(
                         Ticket.Status.OPEN,
+                        Ticket.Status.IN_ANALYSIS,
                         Ticket.Status.IN_PROGRESS,
                         Ticket.Status.ON_ERROR);
         // Bytes never leave the wire — sizeBytes is the only signal.
@@ -198,6 +211,8 @@ class PendingTicketsIT {
         // above doesn't hide a missing-seed bug.
         assertThat(tickets.findById(openOld.id(), owner)).hasValueSatisfying(
                 t -> assertThat(t.status()).isEqualTo(Ticket.Status.OPEN));
+        assertThat(tickets.findById(inAnalysis.id(), owner)).hasValueSatisfying(
+                t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_ANALYSIS));
         assertThat(tickets.findById(inProgress.id(), owner)).hasValueSatisfying(
                 t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
         assertThat(tickets.findById(errored.id(), owner)).hasValueSatisfying(

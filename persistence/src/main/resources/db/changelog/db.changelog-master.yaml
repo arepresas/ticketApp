@@ -35,3 +35,6 @@ databaseChangeLog:
   - include:
       file: changes/V13__add_ticket_shop_id.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V14__add_ticket_status_in_analysis.sql
+      relativeToChangelogFile: true

@@ -26,7 +26,7 @@ export class TicketApiError extends Error {
 	}
 }
 
-export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';
+export type TicketStatus = 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';
 
 export type CreatedTicket = {
 	id: string;

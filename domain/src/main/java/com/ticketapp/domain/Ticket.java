@@ -210,13 +210,39 @@ public record Ticket(
     }
 
     /**
-     * Lifecycle states. {@link #ON_ERROR} is the terminal failure
-     * state for the scheduled extraction pipeline: a ticket reaches
-     * it when the AI provider call throws (non-2xx, parse failure,
-     * empty reply, etc.) and is not retried automatically. Manual
-     * intervention via PATCH {@code /api/tickets/{id}/status} moves
-     * it back to {@link #OPEN} (clears the error message) or
-     * {@link #CANCELLED}.
+     * Lifecycle states.
+     *
+     * <p>The happy path runs:
+     * {@link #OPEN} → (scheduler picks) → {@link #IN_ANALYSIS} → (AI
+     * finishes) → {@link #IN_PROGRESS} → (user marks) → {@link #DONE}.
+     *
+     * <ul>
+     *   <li>{@link #OPEN} — user-uploaded, waiting for the scheduler
+     *       to pick it up. Also the manual-retry target: a PATCH
+     *       {@code /api/tickets/{id}/status} → {@code OPEN} re-enqueues
+     *       an {@code ON_ERROR} ticket for the next tick.</li>
+     *   <li>{@link #IN_ANALYSIS} — the scheduler pre-set this state
+     *       before invoking {@code processTicket}; the orchestrator
+     *       holds it while the AI provider call is in flight. UI
+     *       badge colour distinguishes it from
+     *       {@link #IN_PROGRESS} so the user can see "the AI is
+     *       working on it" vs "the AI is done, awaiting your
+     *       validation".</li>
+     *   <li>{@link #IN_PROGRESS} — the AI finished (extraction row
+     *       written). The ticket is now waiting for the user to
+     *       validate via PATCH {@code /api/tickets/{id}/status} →
+     *       {@code DONE} or {@code CANCELLED}.</li>
+     *   <li>{@link #ON_ERROR} — terminal failure of the AI pipeline.
+     *       The next cron tick filters on {@link #OPEN} only so a
+     *       failed ticket is not retried automatically. Manual
+     *       intervention (Reset / Mark as OPEN) clears the error and
+     *       re-enqueues.</li>
+     *   <li>{@link #DONE} — user-validated terminal state. The detail
+     *       screen goes read-only.</li>
+     *   <li>{@link #CANCELLED} — user-dismissed terminal state.</li>
+     * </ul>
      */
-    public enum Status { OPEN, IN_PROGRESS, ON_ERROR, DONE, CANCELLED }
+    public enum Status {
+        OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR, DONE, CANCELLED
+    }
 }
