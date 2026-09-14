@@ -38,7 +38,7 @@
         <spring-boot.version>4.1.1</spring-boot.version>
         <jacoco.version>0.8.15</jacoco.version>
         <pdfbox.version>3.0.8</pdfbox.version>
-        <openai-java.version>4.52.0</openai-java.version>
+        <openai-java.version>4.63.1</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
@@ -160,7 +160,7 @@
                 <plugin>
                     <groupId>org.sonarsource.scanner.maven</groupId>
                     <artifactId>sonar-maven-plugin</artifactId>
-                    <version>5.7.0.6970</version>
+                    <version>5.8.0.7211</version>
                 </plugin>
             </plugins>
         </pluginManagement>
