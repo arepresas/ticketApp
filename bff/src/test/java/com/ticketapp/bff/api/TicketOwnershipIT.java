@@ -6,6 +6,7 @@ import com.ticketapp.bff.auth.SessionRepository;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.UserRepository;
 import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.TicketExtractionQueue;
 import com.ticketapp.domain.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,6 +70,9 @@ class TicketOwnershipIT {
 
     @Autowired
     TicketRepository tickets;
+
+    @Autowired
+    TicketExtractionQueue extractionQueue;
 
     @Autowired
     UserRepository users;
@@ -311,8 +315,9 @@ class TicketOwnershipIT {
         Ticket aOpen = seedTicket(userA.id(), "a-open.pdf");
         Ticket bOpen = seedTicket(userB.id(), "b-open.pdf");
 
-        // System-scope: returns both.
-        List<Ticket> open = tickets.findOpenForExtraction(10);
+        // System-scope: returns both. Uses the queue port — the
+        // owner-scoped repository cannot reach this path by type.
+        List<Ticket> open = extractionQueue.findOpenForExtraction(10);
         assertThat(open).extracting(Ticket::id)
                 .contains(aOpen.id(), bOpen.id());
     }

@@ -10,53 +10,56 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Unit tests for {@link TicketAppException}. Pins the contract that
  * callers downstream (the BFF, the persistence layer) rely on: the
- * exception carries a stable {@code value} (error code) and an HTTP
- * status, and the message is propagated verbatim.
+ * exception is unchecked, carries a stable {@code code}, and the
+ * message is propagated verbatim. No HTTP status lives here — that
+ * mapping belongs to the edge handler.
  */
 class TicketAppExceptionTest {
 
     @Test
-    void carriesMessageValueAndHttpCode() {
+    void carriesCodeAndMessage() {
         TicketAppException e = new TicketAppException(
-                "ticket already extracted", "TICKET_ALREADY_EXTRACTED", 409);
+                "TICKET_ALREADY_EXTRACTED", "ticket already extracted");
 
         assertEquals("ticket already extracted", e.getMessage());
-        assertEquals("TICKET_ALREADY_EXTRACTED", e.getValue());
-        assertEquals(409, e.getHttpCode());
+        assertEquals("TICKET_ALREADY_EXTRACTED", e.code());
+    }
+
+    @Test
+    void isUnchecked() {
+        assertTrue(new TicketAppException("X", "m") instanceof RuntimeException,
+                "domain exceptions must not force checked handling");
+    }
+
+    @Test
+    void carriesCause() {
+        IllegalStateException cause = new IllegalStateException("root");
+        TicketAppException e = new TicketAppException("X", "m", cause);
+
+        assertEquals(cause, e.getCause());
+    }
+
+    @Test
+    void rejectsNullCode() {
+        assertThrows(NullPointerException.class,
+                () -> new TicketAppException(null, "m"));
     }
 
     @Test
     void rejectsNullMessage() {
         assertThrows(NullPointerException.class,
-                () -> new TicketAppException(null, "X", 400));
+                () -> new TicketAppException("X", null));
     }
 
     @Test
-    void rejectsNullValue() {
-        assertThrows(NullPointerException.class,
-                () -> new TicketAppException("m", null, 400));
-    }
-
-    @Test
-    void rejectsNullHttpCode() {
-        assertThrows(NullPointerException.class,
-                () -> new TicketAppException("m", "X", null));
-    }
-
-    @Test
-    void toStringIncludesValueAndHttpCode() {
-        // Lombok's default @ToString on an Exception subclass renders
-        // the subclass fields but skips the inherited Throwable.message
-        // (and our @EqualsAndHashCode(callSuper = false) follows the
-        // same pattern). Verify the subclass-specific fields appear —
-        // they're what an operator greps a WARN log line for.
-        TicketAppException e = new TicketAppException("oops", "OOPS", 500);
+    void toStringIncludesCode() {
+        TicketAppException e = new TicketAppException("OOPS", "oops");
 
         String rendered = e.toString();
         assertNotNull(rendered);
         assertTrue(rendered.contains("OOPS"),
-                "expected toString to contain value: " + rendered);
-        assertTrue(rendered.contains("500"),
-                "expected toString to contain httpCode: " + rendered);
+                "expected toString to contain code: " + rendered);
+        assertTrue(rendered.contains("TicketAppException"),
+                "expected toString to contain class name: " + rendered);
     }
 }
