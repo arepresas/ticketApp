@@ -1,7 +1,6 @@
 package com.ticketapp.minimaxai;
 
 import com.openai.client.OpenAIClient;
-import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.core.JsonValue;
 import com.openai.errors.OpenAIServiceException;
 import com.openai.models.ResponseFormatJsonObject;
@@ -17,12 +16,9 @@ import lombok.ToString;
 import lombok.experimental.Accessors;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -48,37 +44,11 @@ import java.util.Optional;
  * security posture — see ADR 0006 "Privacy" consequences.
  */
 @Slf4j
-@Component
 @RequiredArgsConstructor
 public final class MiniMaxApiClient {
 
     private final OpenAIClient client;
-
-    /**
-     * Factory. Builds an OpenAI-compatible SDK client pointed at
-     * MiniMax with the operator's credentials and wraps it. Used by
-     * production wiring (the autoconfig calls {@link #create} in
-     * its {@code @Bean} method) and by tests that want a real-shaped
-     * SDK client.
-     *
-     * <p>{@code apiKey} must be non-blank and not the dev
-     * placeholder — the {@link #requireKey} check fails fast at
-     * boot so the scheduler doesn't accidentally run with a
-     * missing credential.
-     */
-    public static MiniMaxApiClient create(String baseUrl,
-                                          String apiKey,
-                                          String model,
-                                          Duration timeout) {
-        Objects.requireNonNull(model, "model");
-        requireKey(apiKey);
-        OpenAIClient client = OpenAIOkHttpClient.builder()
-                .baseUrl(baseUrl)
-                .apiKey(apiKey)
-                .timeout(timeout)
-                .build();
-        return new MiniMaxApiClient(client);
-    }
+    private final com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties properties;
 
     /**
      * Ask MiniMax to transcribe the text printed in the supplied
@@ -93,7 +63,9 @@ public final class MiniMaxApiClient {
      * nothing else, with {@code temperature: 0} so the same image
      * yields the same text on retry. We deliberately don't set
      * {@code response_format: json_object} — the model's prose
-     * reply is the wire shape we want.
+     * reply is the wire shape we want. Sampling temperature and token
+     * budget come from {@code MinimaxAiProperties} so the operator can
+     * tune cost without a redeploy.
      *
      * @return the model's verbatim transcription, stripped of
      *         {@code <think>...</think>} blocks the thinking-style
@@ -108,12 +80,10 @@ public final class MiniMaxApiClient {
         ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
                 .model(model)
                 .addSystemMessage(OCR_PROMPT)
-                .temperature(0.0)
+                .temperature(properties.temperature())
                 // OCR can return arbitrarily long receipts (Lidl with
-                // 30+ line items) so the budget is generous. The
-                // extraction path uses 16384; OCR is verbatim so it
-                // should fit easily within that envelope.
-                .maxCompletionTokens(16384)
+                // 30+ line items) so the budget is generous.
+                .maxCompletionTokens(properties.maxCompletionTokens())
                 .addUserMessageOfArrayOfContentParts(
                         List.of(imagePart(imageBytes, mimeType)))
                 .build();
@@ -168,22 +138,15 @@ public final class MiniMaxApiClient {
         ChatCompletionCreateParams.Builder params = ChatCompletionCreateParams.builder()
                 .model(input.model())
                 .addSystemMessage(EXTRACTION_PROMPT)
-                .temperature(0.0)      // deterministic JSON
-                // 16384 covers complex receipts (~15 products with
-                // multiple discount lines each) on MiniMax-M3, which
-                // is a thinking-style model — it burns a non-trivial
-                // share of its budget on chain-of-thought before
-                // emitting JSON. The upstream default (~1024) cuts
-                // off mid-JSON. 4096 was too tight (2026-07-05
-                // incident — receipt c57f2dc9...). 8192 was the
-                // previous default and handles ~10 products
-                // comfortably. Bumping to 16384 covers the worst
-                // observed case (Lidl receipt, 7+ products with
-                // per-line loyalty discounts, 2026-07-13) where
-                // 8192 was exhausted in the thinking block alone.
-                // Dial down if per-ticket cost becomes a concern,
-                // once the prompt stops producing long reasoning.
-                .maxCompletionTokens(16384)
+                .temperature(properties.temperature())
+                // Token budget comes from properties so the operator can
+                // tune cost without a redeploy. History: default ~1024
+                // cut off mid-JSON; 4096 too tight (2026-07-05 incident);
+                // 8192 handled ~10 products; 16384 covers the worst
+                // observed case (Lidl, 7+ products with loyalty
+                // discounts, 2026-07-13) where 8192 died in the
+                // thinking block alone.
+                .maxCompletionTokens(properties.maxCompletionTokens())
                 // Constrain the model to emit a JSON object. Without
                 // this, MiniMax-M3 occasionally wraps the reply in
                 // markup (<output>...</output>, <|refusal|>...) which
@@ -317,14 +280,6 @@ public final class MiniMaxApiClient {
                 ChatCompletionContentPartText.builder()
                         .text(text)
                         .build());
-    }
-
-    private static String requireKey(String key) {
-        if (key == null || key.isBlank() || "dev-placeholder".equals(key)) {
-            throw new IllegalArgumentException(
-                    "MINIMAX_API_KEY is missing or set to the dev placeholder");
-        }
-        return key;
     }
 
     /** Input the extraction job feeds into the API call. */

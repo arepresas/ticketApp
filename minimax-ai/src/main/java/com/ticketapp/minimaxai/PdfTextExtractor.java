@@ -5,7 +5,6 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
-import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -33,7 +32,6 @@ import java.io.IOException;
  * page via {@link #rasterizeFirstPageAsPng(byte[])} and feed the PNG
  * to the model as a normal image upload.
  */
-@Component
 @Slf4j
 public class PdfTextExtractor {
 

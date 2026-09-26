@@ -97,7 +97,7 @@ class TicketExtractionServiceTest {
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
                 tickets, extractions, jdbcExtractions, receiptExtractor,
-                new TransactionTemplate(tm));
+                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2));
     }
 
     private static Ticket sampleTicket(UUID id) {
@@ -415,6 +415,61 @@ class TicketExtractionServiceTest {
                 t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
         verify(tickets).save(argThat(t ->
                 t.status() == Status.ON_ERROR && t.attempts() == 1));
+    }
+
+    @Test
+    void transientFailureIsRetriedThenSucceeds() throws Exception {
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(receiptExtractor.extract(any()))
+                .thenThrow(new ReceiptExtractionException(503, "overloaded"))
+                .thenReturn(new ReceiptExtraction(
+                        new ReceiptExtractionResult(
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                List.of(), new BigDecimal("1.20"), "EUR"),
+                        "{}", MODEL));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isTrue();
+        verify(receiptExtractor, times(2)).extract(any());
+        verify(tickets).save(argThat(t -> t.status() == Status.IN_PROGRESS));
+    }
+
+    @Test
+    void clientErrorFailsFastWithoutRetry() throws Exception {
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+        when(receiptExtractor.extract(any()))
+                .thenThrow(new ReceiptExtractionException(400, "bad request"));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isFalse();
+        verify(receiptExtractor, times(1)).extract(any());
+        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR));
+    }
+
+    @Test
+    void persistentTransientFailureGivesUpAfterConfiguredAttempts() throws Exception {
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+        when(receiptExtractor.extract(any()))
+                .thenThrow(new ReceiptExtractionException(500, "boom"));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isFalse();
+        verify(receiptExtractor, times(2)).extract(any());
+        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR));
     }
 
     private void verifyNoExtractorCall() throws Exception {

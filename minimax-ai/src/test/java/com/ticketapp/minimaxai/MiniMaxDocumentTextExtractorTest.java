@@ -60,7 +60,7 @@ class MiniMaxDocumentTextExtractorTest {
         client = mock(MiniMaxApiClient.class);
         pdfExtractor = mock(PdfTextExtractor.class);
         properties = new MinimaxAiProperties(
-                "https://api.minimax.io/v1", "sk-test", "MiniMax-M3", 30_000L);
+                "https://api.minimax.io/v1", "sk-test", "MiniMax-M3", 30_000L, 0.0, 16384);
         extractor = new MiniMaxDocumentTextExtractor(client, properties, pdfExtractor);
     }
 

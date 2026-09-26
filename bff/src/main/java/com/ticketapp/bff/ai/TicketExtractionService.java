@@ -73,6 +73,42 @@ import java.util.UUID;
 public class TicketExtractionService {
 
     /**
+     * Call the provider port with retries for transient failures.
+     *
+     * <p>Total attempts = {@code max(1, retryAttempts)}: {@code 1} is
+     * the initial call, the rest are retries. Retriable = no HTTP
+     * response (status 0: network, timeout, parse) plus 429 and 5xx.
+     * Other 4xx (bad key, bad request) fail fast — retrying them
+     * burns budget for nothing. No sleep between attempts: the
+     * scheduler's cron is the backoff, and {@code Thread.sleep} is
+     * banned outside tests.
+     */
+    private ReceiptExtraction extractWithRetry(Ticket ticket) throws ReceiptExtractionException {
+        int maxAttempts = Math.max(1, properties.retryAttempts());
+        ReceiptExtractionRequest request = new ReceiptExtractionRequest(
+                ticket.fileData(), ticket.contentType());
+        ReceiptExtractionException lastFailure = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return receiptExtractor.extract(request);
+            } catch (ReceiptExtractionException e) {
+                lastFailure = e;
+                if (!isRetriable(e) || attempt == maxAttempts) {
+                    throw e;
+                }
+                log.warn("Extraction attempt {}/{} failed for ticket {} (retriable status={}): {}",
+                        attempt, maxAttempts, ticket.id(), e.statusCode(), e.getMessage());
+            }
+        }
+        throw lastFailure;
+    }
+
+    static boolean isRetriable(ReceiptExtractionException e) {
+        int status = e.statusCode();
+        return status == 0 || status == 429 || (status >= 500 && status <= 599);
+    }
+
+    /**
      * Cap on the persisted error message. The provider exception text
      * can include the full raw model reply (4096+ chars in the worst
      * case — see the {@code <think>} stripping incident from
@@ -89,6 +125,7 @@ public class TicketExtractionService {
     private final JdbcTicketExtractionRepository jdbcTicketExtractionRepository;
     private final ReceiptExtractor receiptExtractor;
     private final TransactionTemplate tx;
+    private final AiProperties properties;
 
     /**
      * Process one ticket end-to-end. Returns {@code true} when an
@@ -124,11 +161,10 @@ public class TicketExtractionService {
         try {
             // No transaction active here — this is the long external
             // HTTP round-trip the segmentation exists to keep out of
-            // the connection pool's way.
-            ReceiptExtraction extraction = receiptExtractor.extract(
-                    new ReceiptExtractionRequest(
-                            ticket.fileData(),
-                            ticket.contentType()));
+            // the connection pool's way. Retried up to
+            // `ticketapp.ai.retry-attempts` total attempts for transient
+            // failures (network, 429, 5xx); client errors fail fast.
+            ReceiptExtraction extraction = extractWithRetry(ticket);
             TicketExtraction persisted = new TicketExtraction(
                     ticket.id(),
                     extraction.result().merchant(),

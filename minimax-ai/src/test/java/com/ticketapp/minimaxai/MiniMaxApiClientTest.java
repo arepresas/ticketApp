@@ -16,7 +16,6 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,9 +53,10 @@ class MiniMaxApiClientTest {
         when(client.chat()).thenReturn(chat);
         when(chat.completions()).thenReturn(completions);
         when(completions.withRawResponse()).thenReturn(completionsRaw);
-        // The autoconfig injects an OpenAIClient via Spring DI; tests
-        // instantiate the wrapper directly with a Mockito stub.
-        api = new MiniMaxApiClient(client);
+        // The autoconfig injects OpenAIClient + properties via Spring DI;
+        // tests instantiate the wrapper directly with a Mockito stub.
+        api = new MiniMaxApiClient(client, new com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties(
+                "https://api.minimax.io/v1", "k", "MiniMax-M3", 30_000L, 0.0, 16384));
     }
 
     @Test
@@ -175,21 +175,6 @@ class MiniMaxApiClientTest {
         assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x")))
                 .isInstanceOf(MiniMaxApiException.class)
                 .hasMessageContaining("connection reset");
-    }
-
-    @Test
-    void productionFactoryRejectsPlaceholderKey() {
-        assertThatThrownBy(() -> MiniMaxApiClient.create(
-                "https://api.minimax.io/v1", "dev-placeholder", "MiniMax-M3", Duration.ofSeconds(5)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("MINIMAX_API_KEY");
-    }
-
-    @Test
-    void productionFactoryRejectsBlankKey() {
-        assertThatThrownBy(() -> MiniMaxApiClient.create(
-                "https://api.minimax.io/v1", "  ", "MiniMax-M3", Duration.ofSeconds(5)))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

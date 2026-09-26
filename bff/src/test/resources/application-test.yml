@@ -30,6 +30,8 @@ ticketapp:
       api-key: "test-api-key-not-used"
       model: "MiniMax-M3"
       timeout-ms: 30000
+      temperature: 0.0
+      max-completion-tokens: 16384
 
 bff:
   jwt:

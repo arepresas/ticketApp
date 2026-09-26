@@ -6,8 +6,6 @@ import com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.stereotype.Component;
-
 /**
  * MiniMax-backed implementation of {@link DocumentTextExtractor}.
  *
@@ -48,11 +46,10 @@ import org.springframework.stereotype.Component;
  * a different {@code <dependency>} for OCR and the BFF gets a new
  * implementation for free.
  *
- * <p>Wired as a {@code @Component} under the same package scanned
- * by the autoconfiguration, so a future local-Tesseract module
+ * <p>Wired as an explicit {@code @Bean} in the autoconfiguration,
+ * so a future local-Tesseract module
  * follows the same drop-in pattern.
  */
-@Component
 @Slf4j
 @RequiredArgsConstructor
 public final class MiniMaxDocumentTextExtractor implements DocumentTextExtractor {

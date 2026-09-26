@@ -62,4 +62,6 @@ ticketapp:
       base-url: ${MINIMAX_BASE_URL}
       model: ${MINIMAX_MODEL}
       timeout-ms: ${MINIMAX_TIMEOUT_MS}
+      temperature: ${MINIMAX_TEMPERATURE}
+      max-completion-tokens: ${MINIMAX_MAX_COMPLETION_TOKENS}
       api-key: ${MINIMAX_API_KEY}

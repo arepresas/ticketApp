@@ -1,5 +1,7 @@
 package com.ticketapp.minimaxai.autoconfigure;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 
@@ -14,7 +16,8 @@ import org.springframework.validation.annotation.Validated;
  * <p>Why a separate properties class from the BFF's
  * {@code AiProperties}? The BFF owns provider-agnostic knobs
  * (kill switch, cron, batch size); this class owns
- * provider-specific knobs (base URL, key, model id, timeout). The
+ * provider-specific knobs (base URL, key, model id, timeout,
+ * sampling temperature, token budget). The
  * split keeps the BFF free of provider imports while still letting
  * an operator tune the active provider without code changes.
  *
@@ -31,5 +34,7 @@ public record MinimaxAiProperties(
         @NotBlank String baseUrl,
         @NotBlank String apiKey,
         @NotBlank String model,
-        @Positive long timeoutMs
+        @Positive long timeoutMs,
+        @DecimalMin("0.0") @DecimalMax("2.0") double temperature,
+        @Positive int maxCompletionTokens
 ) { }
