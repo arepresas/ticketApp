@@ -1,24 +1,41 @@
 package com.ticketapp.domain.exceptions;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.ToString;
+import java.util.Objects;
 
-@Getter
-@ToString
-@EqualsAndHashCode(callSuper = false)
-public class TicketAppException extends Exception{
-  private final String value;
+/**
+ * Base type for domain failures with a stable machine-readable code.
+ *
+ * <p>Unchecked: domain errors cross module boundaries toward a single
+ * HTTP-edge handler (future {@code ProblemDetail} advice) instead of
+ * being declared at every layer. The {@code code} (e.g.
+ * {@code TICKET_NOT_FOUND}) is what logs and API responses switch
+ * on; the message stays human-readable and operator-oriented.
+ *
+ * <p>Deliberately HTTP-agnostic: status mapping lives at the edge,
+ * not in the domain. No Lombok by project rule: the domain module
+ * depends only on {@code java.*}.
+ */
+public class TicketAppException extends RuntimeException {
 
-  private final Integer httpCode;
+    private final String code;
 
-  public TicketAppException(
-    @NonNull final String message,
-    @NonNull final String value,
-    @NonNull final Integer httpCode) {
-    super(message);
-    this.value = value;
-    this.httpCode = httpCode;
-  }
+    public TicketAppException(String code, String message) {
+        super(Objects.requireNonNull(message, "message"));
+        this.code = Objects.requireNonNull(code, "code");
+    }
+
+    public TicketAppException(String code, String message, Throwable cause) {
+        super(Objects.requireNonNull(message, "message"), cause);
+        this.code = Objects.requireNonNull(code, "code");
+    }
+
+    public String code() {
+        return code;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName()
+                + "[code=" + code + ", message=" + getMessage() + "]";
+    }
 }
