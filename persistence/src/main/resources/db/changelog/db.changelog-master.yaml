@@ -41,3 +41,12 @@ databaseChangeLog:
   - include:
       file: changes/V15__add_ticket_ocr_text.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V16__add_ticket_version.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V17__add_products_trgm_index.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V18__drop_legacy_raw_response.sql
+      relativeToChangelogFile: true

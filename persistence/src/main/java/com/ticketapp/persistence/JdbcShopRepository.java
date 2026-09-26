@@ -126,10 +126,9 @@ public class JdbcShopRepository implements ShopRepository {
         String phone       = rs.getString("phone");
         String taxId       = rs.getString("tax_id");
         String website     = rs.getString("website");
-        var ts = rs.getTimestamp("created_at");
-        var createdAt = ts != null ? ts.toInstant() : java.time.Instant.now();
+        var createdAt = rs.getObject("created_at", java.time.OffsetDateTime.class);
         return new Shop(id, name, normalised,
                 addressLine, postalCode, city, country, phone, taxId, website,
-                createdAt);
+                createdAt != null ? createdAt.toInstant() : java.time.Instant.now());
     }
 }

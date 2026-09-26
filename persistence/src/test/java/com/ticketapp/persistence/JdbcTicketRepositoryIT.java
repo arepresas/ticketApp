@@ -2,6 +2,8 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.TicketSummary;
+import com.ticketapp.domain.exceptions.OptimisticLockException;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
@@ -230,5 +233,118 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         repository.save(Ticket.open(OWNER, "any.pdf", "x"));
 
         assertThat(repository.findByStatusIn(Set.of(Ticket.Status.OPEN), null)).isEmpty();
+    }
+
+    @Test
+    void saveBumpsVersionOnUpdate() {
+        Ticket created = repository.save(Ticket.open(OWNER, "v.pdf", ""));
+        assertThat(created.version()).isEqualTo(0);
+
+        Ticket updated = repository.save(created.withStatus(Ticket.Status.DONE));
+
+        assertThat(updated.version()).isEqualTo(1);
+        assertThat(repository.findById(created.id(), OWNER).orElseThrow().version())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void staleSaveThrowsOptimisticLockAndKeepsWinner() {
+        Ticket created = repository.save(Ticket.open(OWNER, "race.pdf", ""));
+        Ticket winner = repository.save(created.withStatus(Ticket.Status.DONE));
+
+        assertThatThrownBy(() -> repository.save(created.withStatus(Ticket.Status.CANCELLED)))
+                .isInstanceOf(OptimisticLockException.class);
+
+        Ticket loaded = repository.findById(created.id(), OWNER).orElseThrow();
+        assertThat(loaded.status()).isEqualTo(Ticket.Status.DONE);
+        assertThat(loaded.version()).isEqualTo(winner.version());
+    }
+
+    @Test
+    void recordAttemptDoesNotMutateTicketStatus() {
+        Ticket t = repository.save(Ticket.open(OWNER, "r.png", "r"));
+        repository.recordAttempt(t.id());
+        Ticket reloaded = repository.findById(t.id(), OWNER).orElseThrow();
+        assertThat(reloaded.status()).isEqualTo(Ticket.Status.OPEN);
+    }
+
+    @Test
+    void findSummariesReportsSizeWithoutBlobs() {
+        byte[] bytes = new byte[]{1, 2, 3, 4};
+        Ticket t = repository.save(Ticket.open(OWNER, "r.png", "x",
+                "image/png", "r.png", bytes));
+
+        List<TicketSummary> summaries = repository.findSummariesByStatusIn(
+                Set.of(Ticket.Status.OPEN), OWNER);
+
+        assertThat(summaries).extracting(TicketSummary::id).contains(t.id());
+        TicketSummary got = summaries.stream()
+                .filter(s -> s.id().equals(t.id())).findFirst().orElseThrow();
+        assertThat(got.sizeBytes()).isEqualTo(bytes.length);
+        assertThat(got.title()).isEqualTo("r.png");
+    }
+
+    @Test
+    void findSummariesMapsMissingFileToNullSize() {
+        // octet_length(NULL) is NULL: a metadata-only ticket must
+        // read back as null size (same as the detail path), not a
+        // fake 0-byte size.
+        Ticket t = repository.save(Ticket.open(OWNER, "meta", ""));
+
+        List<TicketSummary> summaries = repository.findSummariesByStatusIn(
+                Set.of(Ticket.Status.OPEN), OWNER);
+
+        TicketSummary got = summaries.stream()
+                .filter(s -> s.id().equals(t.id())).findFirst().orElseThrow();
+        assertThat(got.sizeBytes()).isNull();
+    }
+
+    @Test
+    void saveInsertEnforcesZeroVersion() {
+        // A previously-read copy whose row was deleted must not
+        // smuggle its stale version into the re-insert: new rows
+        // always start at 0.
+        Ticket created = repository.save(Ticket.open(OWNER, "gone.pdf", ""));
+        Ticket stale = repository.save(created.withStatus(Ticket.Status.DONE));
+        repository.deleteById(created.id(), OWNER);
+
+        Ticket reinserted = repository.save(stale);
+
+        assertThat(reinserted.version()).isEqualTo(0);
+        assertThat(repository.findById(created.id(), OWNER).orElseThrow().version())
+                .isEqualTo(0);
+    }
+
+    @Test
+    void findSummariesIsOwnerScoped() {
+        Ticket mine = repository.save(Ticket.open(OWNER, "mine", ""));
+        Ticket theirs = repository.save(Ticket.open(OTHER_OWNER, "theirs", ""));
+
+        List<TicketSummary> summaries = repository.findSummariesByStatusIn(
+                Set.of(Ticket.Status.OPEN), OWNER);
+
+        assertThat(summaries).extracting(TicketSummary::id)
+                .contains(mine.id())
+                .doesNotContain(theirs.id());
+    }
+
+    @Test
+    void findOpenForExtractionExcludesExtractedTickets() {
+        // The anti-join lives in SQL: an OPEN ticket with an
+        // extraction row must not surface, without the job
+        // loading every extracted id into memory.
+        Ticket pending = repository.save(Ticket.open(OWNER, "pending.png", ""));
+        Ticket done = repository.save(Ticket.open(OWNER, "done.png", ""));
+        jdbc.update(
+                "INSERT INTO ticket_extractions (ticket_id, merchant, purchase_date, category,"
+                        + " products, total_amount, currency, model, extracted_at,"
+                        + " raw_response_text, extraction_payload)"
+                        + " VALUES (?, 'Mercadona', CURRENT_DATE, 'food', '[]'::jsonb,"
+                        + " 1.20, 'EUR', 'MiniMax-M3', now(), '{}', '{}'::jsonb)",
+                done.id());
+
+        assertThat(repository.findOpenForExtraction(10)).extracting(Ticket::id)
+                .contains(pending.id())
+                .doesNotContain(done.id());
     }
 }

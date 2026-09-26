@@ -99,7 +99,8 @@ class TicketExtractionNormaliserTest {
                 null,
                 0,
                 null,
-                null);
+                null,
+                0);
     }
 
     private TicketExtraction extraction(UUID ticketId, String merchant,

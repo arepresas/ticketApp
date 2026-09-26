@@ -35,16 +35,27 @@ public interface TicketRepository {
      * System-scope query: return up to {@code limit} tickets in
      * {@link Ticket.Status#OPEN} that have no extraction row yet,
      * ordered oldest-first so the oldest pending work drains first.
-     * Called by {@code TicketExtractionJob} (cron-driven, no user
-     * session). The controller path MUST NOT call this — it bypasses
-     * ownership.
+     * The "no extraction yet" filter runs in SQL (anti-join),
+     * not in memory. Called by {@code TicketExtractionJob}
+     * (cron-driven, no user session). The controller path MUST NOT
+     * call this — it bypasses ownership.
      */
     List<Ticket> findOpenForExtraction(int limit);
 
     /**
-     * Persist (insert on conflict update). The owner comes from the
+     * Persist (insert or guarded update). The owner comes from the
      * entity, so the caller's identity must already be encoded in
      * {@link Ticket#ownerId()}.
+     *
+     * <p>Optimistic locking: the write only applies when the row's
+     * {@code version} still matches the entity's; on success the
+     * returned copy carries the bumped version. A stale copy throws
+     * {@link com.ticketapp.domain.exceptions.OptimisticLockException}
+     * instead of silently overwriting the winner — callers decide
+     * whether to re-read and retry or to let the other writer win.
+     * A missing row is inserted with version 0 enforced (the
+     * caller's version is ignored on this path) and the returned
+     * copy reflects the stored row.
      */
     Ticket save(Ticket ticket);
 
@@ -67,4 +78,19 @@ public interface TicketRepository {
      *                 empty set is allowed and returns an empty list.
      */
     List<Ticket> findByStatusIn(Set<Ticket.Status> statuses, UUID ownerId);
+
+    /**
+     * Owner-scoped status filter returning lightweight
+     * {@link TicketSummary} rows — same filter as
+     * {@link #findByStatusIn} but without the receipt blobs (no
+     * {@code file_data}, no {@code ocr_text}; the size travels as
+     * {@code sizeBytes}). Used by the dashboard list views so a
+     * backlog of tickets never loads megabytes of attachments into
+     * memory. Single-ticket paths ({@link #findById}) keep
+     * returning the full {@link Ticket}.
+     *
+     * @param statuses non-empty set of statuses to match. Passing an
+     *                 empty set is allowed and returns an empty list.
+     */
+    List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, UUID ownerId);
 }

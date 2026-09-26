@@ -95,10 +95,10 @@ public class JdbcPriceRepository implements PriceRepository {
         UUID productId = rs.getObject("product_id", UUID.class);
         UUID ticketId = rs.getObject("ticket_id", UUID.class);
         BigDecimal amount = rs.getBigDecimal("amount");
-        var createdAtTs = rs.getTimestamp("created_at");
-        var updatedAtTs = rs.getTimestamp("updated_at");
-        var createdAt = createdAtTs != null ? createdAtTs.toInstant() : java.time.Instant.now();
-        var updatedAt = updatedAtTs != null ? updatedAtTs.toInstant() : createdAt;
+        var createdAtOdt = rs.getObject("created_at", java.time.OffsetDateTime.class);
+        var updatedAtOdt = rs.getObject("updated_at", java.time.OffsetDateTime.class);
+        var createdAt = createdAtOdt != null ? createdAtOdt.toInstant() : java.time.Instant.now();
+        var updatedAt = updatedAtOdt != null ? updatedAtOdt.toInstant() : createdAt;
         return new Price(id, productId, ticketId, amount, createdAt, updatedAt);
     }
 }

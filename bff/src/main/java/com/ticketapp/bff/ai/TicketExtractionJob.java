@@ -2,7 +2,6 @@ package com.ticketapp.bff.ai;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,21 +10,16 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * Scheduled bean that drives the AI extraction pipeline (ADR 0006).
  *
  * <p>Tick contract:
  * <ol>
- *   <li>Fetch up to {@code batch-size} OPEN tickets across all
- *       owners (system scope) via
- *       {@link TicketRepository#findOpenForExtraction(int)}.</li>
- *   <li>Exclude any ticket that already has a row in
- *       {@code ticket_extractions} (joined in-process via
- *       {@link com.ticketapp.domain.TicketExtractionRepository#findExtractedTicketIds()}
- *       — single round-trip instead of N point lookups).</li>
+ *   <li>Fetch up to {@code batch-size} OPEN tickets without an
+ *       extraction row across all owners (system scope) via
+ *       {@link TicketRepository#findOpenForExtraction(int)} — the
+ *       exclusion runs as a SQL anti-join, not an in-memory list.</li>
  *   <li>For each remaining ticket, delegate to
  *       {@link TicketExtractionService#processTicket(Ticket)}.</li>
  * </ol>
@@ -51,7 +45,6 @@ public class TicketExtractionJob {
 
     private final TicketRepository tickets;
     private final TicketExtractionService service;
-    private final TicketExtractionRepository extractions;
     private final AiProperties properties;
 
     /**
@@ -71,15 +64,13 @@ public class TicketExtractionJob {
         log.info("Extraction tick started: batchSize={}", properties.batchSize());
 
         long started = System.currentTimeMillis();
-        Set<UUID> extractedIds = new java.util.HashSet<>(extractions.findExtractedTicketIds());
         List<Ticket> candidates = tickets.findOpenForExtraction(properties.batchSize()).stream()
                 // Defence in depth: the SQL filter already restricts
-                // to OPEN, but if a future migration broadens the
-                // query we don't want to silently start extracting
-                // DONE/ON_ERROR tickets. Cheap status recheck at the
-                // edge of the system.
+                // to OPEN without an extraction row, but if a future
+                // migration broadens the query we don't want to
+                // silently start extracting DONE/ON_ERROR tickets.
+                // Cheap status recheck at the edge of the system.
                 .filter(t -> Status.OPEN.equals(t.status()))
-                .filter(t -> !extractedIds.contains(t.id()))
                 .toList();
         if (candidates.isEmpty()) {
             log.debug("No OPEN tickets to extract on this tick");

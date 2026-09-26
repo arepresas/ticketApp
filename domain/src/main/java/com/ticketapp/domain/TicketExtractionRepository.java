@@ -1,6 +1,5 @@
 package com.ticketapp.domain;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,12 +19,13 @@ public interface TicketExtractionRepository {
     Optional<TicketExtraction> findByTicketId(UUID ticketId);
 
     /**
-     * Persist a new extraction. The primary key is the ticket id, so
-     * re-extracting the same ticket is a constraint violation on the
-     * caller side — callers must check {@link #findByTicketId} first
-     * or accept the exception. We intentionally do not expose an
-     * upsert here: re-extraction should be an explicit, observable
-     * action (delete then insert), not a silent overwrite.
+     * Persist a new extraction. The primary key is the ticket id;
+     * re-saving an already-extracted ticket is a no-op (the
+     * implementation ignores the duplicate) so a scheduler retry
+     * racing the first write cannot fail the tick. Callers keep the
+     * {@link #findByTicketId} pre-check as the fast path — the
+     * no-op is the safety net for the race window, not the primary
+     * guard.
      */
     TicketExtraction save(TicketExtraction extraction);
 
@@ -46,11 +46,4 @@ public interface TicketExtractionRepository {
      * not-found path; the BFF translates to 404.
      */
     TicketExtraction replace(TicketExtraction extraction);
-
-    /**
-     * Return the ticket ids of all tickets that already have an
-     * extraction. Used by the scheduler to filter its candidate set
-     * in a single round-trip instead of N point lookups.
-     */
-    List<UUID> findExtractedTicketIds();
 }

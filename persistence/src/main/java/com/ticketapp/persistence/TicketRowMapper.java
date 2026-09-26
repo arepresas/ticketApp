@@ -57,8 +57,9 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         // BFF's OCR step; pre-V15 rows and uploads where the provider
         // could not transcribe anything stay NULL.
         String ocrText = rs.getString("ocr_text");
+        long version = rs.getLong("version");
         return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */

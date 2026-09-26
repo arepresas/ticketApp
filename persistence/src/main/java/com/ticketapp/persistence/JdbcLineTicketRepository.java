@@ -103,10 +103,10 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
         UUID priceId = rs.getObject("price_id", UUID.class);
         var quantity = rs.getBigDecimal("quantity");
         var lineTotal = rs.getBigDecimal("line_total");
-        var createdAtTs = rs.getTimestamp("created_at");
-        var updatedAtTs = rs.getTimestamp("updated_at");
-        var createdAt = createdAtTs != null ? createdAtTs.toInstant() : java.time.Instant.now();
-        var updatedAt = updatedAtTs != null ? updatedAtTs.toInstant() : createdAt;
+        var createdAtOdt = rs.getObject("created_at", java.time.OffsetDateTime.class);
+        var updatedAtOdt = rs.getObject("updated_at", java.time.OffsetDateTime.class);
+        var createdAt = createdAtOdt != null ? createdAtOdt.toInstant() : java.time.Instant.now();
+        var updatedAt = updatedAtOdt != null ? updatedAtOdt.toInstant() : createdAt;
         return new LineTicket(id, ticketId, productId, priceId,
                 quantity, lineTotal, createdAt, updatedAt);
     }
