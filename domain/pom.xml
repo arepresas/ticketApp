@@ -20,11 +20,8 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-        </dependency>
+        <!-- No Lombok, no other compile deps: the domain module
+             depends only on java.* by project rule (backend.md). -->
     </dependencies>
 
     <build>

@@ -1,28 +1,24 @@
 package com.ticketapp.domain.ai;
 
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.ToString;
-import lombok.experimental.Accessors;
-
 /**
  * Provider-neutral exception thrown by a {@link ReceiptExtractor}
  * when extraction cannot complete (ADR 0007).
  *
- * <p>Provider implementations are responsible for translating their
- * internal failures (HTTP 4xx/5xx, timeouts, parse errors, content
- * filters) into this single type so the orchestrator never depends on
- * a provider-specific exception class.
+ * <p>Unchecked: orchestrators may let it propagate to a boundary
+ * handler instead of declaring it at every layer. Provider
+ * implementations are responsible for translating their internal
+ * failures (HTTP 4xx/5xx, timeouts, parse errors, content filters)
+ * into this single type so the orchestrator never depends on a
+ * provider-specific exception class.
  *
  * <p>Carries an optional {@link #statusCode()} mirroring the upstream
  * HTTP status when applicable. {@code 0} means the failure did not
  * involve an HTTP response (connection refused, parse error, etc.).
+ *
+ * <p>No Lombok by project rule: the domain module depends only on
+ * {@code java.*}.
  */
-@Getter
-@ToString
-@EqualsAndHashCode(callSuper = false)
-@Accessors(fluent = true)
-public class ReceiptExtractionException extends Exception {
+public class ReceiptExtractionException extends RuntimeException {
 
     private final int statusCode;
 
@@ -36,4 +32,13 @@ public class ReceiptExtractionException extends Exception {
         this.statusCode = statusCode;
     }
 
+    public int statusCode() {
+        return statusCode;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName()
+                + "[statusCode=" + statusCode + ", message=" + getMessage() + "]";
+    }
 }

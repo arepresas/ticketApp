@@ -2,7 +2,7 @@ package com.ticketapp.bff.ai;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.TicketExtractionQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -18,16 +18,17 @@ import java.util.List;
  * <ol>
  *   <li>Fetch up to {@code batch-size} OPEN tickets without an
  *       extraction row across all owners (system scope) via
- *       {@link TicketRepository#findOpenForExtraction(int)} — the
+ *       {@link TicketExtractionQueue#findOpenForExtraction(int)} — the
  *       exclusion runs as a SQL anti-join, not an in-memory list.</li>
  *   <li>For each remaining ticket, delegate to
  *       {@link TicketExtractionService#processTicket(Ticket)}.</li>
  * </ol>
  *
  * <p>Why a system-scope query? The cron runs without a user session
- * — there is no {@code ownerId} to pass. The repository port exposes
- * this path explicitly (system-only — controller paths never call
- * it) and orders oldest-first so the backlog drains FIFO.
+ * — there is no {@code ownerId} to pass. The queue port exposes
+ * this path explicitly (system-only — controller paths depend on
+ * the owner-scoped repository instead) and orders oldest-first so
+ * the backlog drains FIFO.
  *
  * <p>The job is a no-op when {@code ticketapp.ai.enabled=false} (test
  * profile). The kill switch is read once at startup — flipping it at
@@ -43,7 +44,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TicketExtractionJob {
 
-    private final TicketRepository tickets;
+    private final TicketExtractionQueue tickets;
     private final TicketExtractionService service;
     private final AiProperties properties;
 

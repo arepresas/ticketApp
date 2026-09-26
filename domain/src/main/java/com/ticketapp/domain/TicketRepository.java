@@ -15,11 +15,11 @@ import java.util.UUID;
  * not match is the contract — the BFF translates that to a 404, so
  * existence itself is not leaked across tenants.
  *
- * <p>The single unscoped read is
- * {@link #findOpenForExtraction(int)}, which exists for the
- * system-level scheduler (it processes tickets from any owner and
- * runs without a user session). The controller path MUST NOT call
- * it.
+ * <p>The single unscoped read used to live here as
+ * {@code findOpenForExtraction} — it now lives on
+ * {@link TicketExtractionQueue} so the ownership bypass is visible
+ * in the type system. The controller path MUST NOT depend on that
+ * port.
  */
 public interface TicketRepository {
 
@@ -30,17 +30,6 @@ public interface TicketRepository {
      * the BFF's perspective to avoid leaking existence.
      */
     Optional<Ticket> findById(UUID id, UUID ownerId);
-
-    /**
-     * System-scope query: return up to {@code limit} tickets in
-     * {@link Ticket.Status#OPEN} that have no extraction row yet,
-     * ordered oldest-first so the oldest pending work drains first.
-     * The "no extraction yet" filter runs in SQL (anti-join),
-     * not in memory. Called by {@code TicketExtractionJob}
-     * (cron-driven, no user session). The controller path MUST NOT
-     * call this — it bypasses ownership.
-     */
-    List<Ticket> findOpenForExtraction(int limit);
 
     /**
      * Persist (insert or guarded update). The owner comes from the

@@ -94,6 +94,14 @@ public record Ticket(
      * failure reason so the dashboard no longer shows a stale error.
      * The orchestrator never sets {@code ON_ERROR} via this method;
      * it calls {@link #markError(String)} instead.
+     *
+     * <p>{@link Status#DONE} and {@link Status#CANCELLED} are
+     * terminal BY CONVENTION (the detail screen goes read-only at
+     * DONE, cancellation is a user dismissal), not by enforcement:
+     * re-validation (DONE → CANCELLED → DONE) is a pinned product
+     * flow, so the domain accepts any transition and the UI plus
+     * review keep the lifecycle honest. A guard here would turn
+     * that flow into a 500.
      */
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
@@ -261,9 +269,11 @@ public record Ticket(
                 + ", description=" + description + ", status=" + status
                 + ", createdAt=" + createdAt + ", updatedAt=" + updatedAt
                 + ", contentType=" + contentType + ", fileName=" + fileName
-                + ", fileData=" + Arrays.toString(fileData)
+                + ", fileData=" + (fileData == null ? "null" : fileData.length + " bytes")
                 + ", errorMessage=" + errorMessage + ", attempts=" + attempts
-                + ", shopId=" + shopId + ", ocrText=" + ocrText + ", version=" + version + "]";
+                + ", shopId=" + shopId
+                + ", ocrText=" + (ocrText == null ? "null" : ocrText.length() + " chars")
+                + ", version=" + version + "]";
     }
 
     /**
