@@ -2,7 +2,7 @@ package com.ticketapp.bff.ai;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.TicketExtractionQueue;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,21 +33,21 @@ import static org.mockito.Mockito.when;
  * short-circuit when the kill switch is off.
  *
  * <p>The scheduler is system-scope — it calls
- * {@link TicketRepository#findOpenForExtraction(int)} (no owner) so
+ * {@link TicketExtractionQueue#findOpenForExtraction(int)} (no owner) so
  * tests below stub that method, not the per-owner read paths.
  */
 class TicketExtractionJobTest {
 
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    private TicketRepository tickets;
+    private TicketExtractionQueue tickets;
     private TicketExtractionService service;
     private AiProperties properties;
     private TicketExtractionJob job;
 
     @BeforeEach
     void setUp() {
-        tickets = mock(TicketRepository.class);
+        tickets = mock(TicketExtractionQueue.class);
         service = mock(TicketExtractionService.class);
         properties = new AiProperties(
                 true,                                  // enabled

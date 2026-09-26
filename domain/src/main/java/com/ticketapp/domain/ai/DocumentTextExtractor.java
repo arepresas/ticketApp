@@ -31,9 +31,9 @@ package com.ticketapp.domain.ai;
  * <ul>
  *   <li>MiniMax today — sends image bytes as {@code image_url} with
  *       a "transcribe verbatim" prompt; for PDFs, extracts text via
- *       a provider-side {@link com.ticketapp.minimaxai.PdfTextExtractor}
- *       helper first and only falls back to the vision branch when
- *       the PDF carries no selectable text.</li>
+ *       a provider-side PDF text helper first and only falls back
+ *       to the vision branch when the PDF carries no selectable
+ *       text.</li>
  *   <li>A future local-Tesseract module — no network round-trip,
  *       suitable when the operator wants to skip the AI bill
  *       entirely for image-only OCR.</li>

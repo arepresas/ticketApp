@@ -418,4 +418,17 @@ class TicketTest {
         assertEquals(t.id(), stamped.id());
         assertEquals(t.status(), stamped.status());
     }
+
+    @Test
+    void toStringRedactsBlobsToSizes() {
+        Ticket t = Ticket.open(OWNER, "x", "d",
+                "image/png", "r.png", new byte[]{1, 2, 3}).withOcrText("hello");
+
+        String rendered = t.toString();
+
+        assertTrue(rendered.contains("3 bytes"),
+                "expected file size, not contents: " + rendered);
+        assertTrue(rendered.contains("5 chars"),
+                "expected ocr size, not contents: " + rendered);
+    }
 }

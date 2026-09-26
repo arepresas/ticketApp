@@ -1,6 +1,7 @@
 package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.TicketExtractionQueue;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.TicketSummary;
 import com.ticketapp.domain.exceptions.OptimisticLockException;
@@ -31,7 +32,7 @@ import java.util.UUID;
  * port and must not be reached from the controller layer.
  */
 @Repository
-public class JdbcTicketRepository implements TicketRepository {
+public class JdbcTicketRepository implements TicketRepository, TicketExtractionQueue {
 
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate namedJdbc;
