@@ -58,9 +58,9 @@ class MiniMaxReceiptExtractorTest {
         client = mock(MiniMaxApiClient.class);
         pdfExtractor = mock(PdfTextExtractor.class);
         properties = new MinimaxAiProperties(
-                "https://api.minimax.chat", "k", MODEL, 30_000L);
+                "https://api.minimax.chat", "k", MODEL, 30_000L, 0.0, 16384);
         extractor = new MiniMaxReceiptExtractor(
-                client, pdfExtractor, new ObjectMapper(), properties);
+                client, pdfExtractor, new ReceiptResponseParser(new ObjectMapper()), properties);
     }
 
     @Test

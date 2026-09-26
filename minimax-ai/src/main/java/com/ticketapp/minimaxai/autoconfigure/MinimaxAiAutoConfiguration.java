@@ -1,13 +1,18 @@
 package com.ticketapp.minimaxai.autoconfigure;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.ticketapp.minimaxai.MiniMaxApiClient;
+import com.ticketapp.minimaxai.MiniMaxDocumentTextExtractor;
+import com.ticketapp.minimaxai.MiniMaxReceiptExtractor;
+import com.ticketapp.minimaxai.PdfTextExtractor;
+import com.ticketapp.minimaxai.ReceiptResponseParser;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
 
 import java.time.Duration;
 
@@ -21,26 +26,12 @@ import java.time.Duration;
  * autowires the {@code ReceiptExtractor} port and gets the bean
  * from whichever AI module is on the classpath.
  *
- * <p>{@link ComponentScan} picks up the {@code @Component} classes
- * in {@code com.ticketapp.minimaxai}:
- * <ul>
- *   <li>{@link com.ticketapp.minimaxai.PdfTextExtractor} — no-arg
- *       helper for PDF text extraction.</li>
- *   <li>{@link com.ticketapp.minimaxai.MiniMaxApiClient} — wraps an
- *       {@link OpenAIClient}. Spring injects the bean declared
- *       below.</li>
- *   <li>{@link com.ticketapp.minimaxai.MiniMaxReceiptExtractor} — the
- *       {@code ReceiptExtractor} port implementation that wires
- *       everything together.</li>
- * </ul>
- *
- * <p>{@link EnableConfigurationProperties} binds the
- * operator-layer knobs under {@code ticketapp.ai.minimax.*} so
- * Spring auto-injects them into the {@link #openAIClient(MinimaxAiProperties)}
- * factory below.
+ * <p>One explicit {@code @Bean} per capability (no component scan):
+ * a future provider module copies this shape with its own beans,
+ * and two providers on the classpath fail with duplicate-bean
+ * instead of silent ambiguity.
  */
 @AutoConfiguration
-@ComponentScan(basePackages = "com.ticketapp.minimaxai")
 @EnableConfigurationProperties(MinimaxAiProperties.class)
 @Slf4j
 public class MinimaxAiAutoConfiguration {
@@ -49,8 +40,7 @@ public class MinimaxAiAutoConfiguration {
      * The OpenAI-compatible HTTP client. Built from the operator's
      * {@code baseUrl}, {@code apiKey}, and {@code timeoutMs}. The
      * OpenAI Java SDK does not ship its own Spring autoconfig, so we
-     * declare this here. The {@link com.ticketapp.minimaxai.MiniMaxApiClient}
-     * {@code @Component} consumes it via Spring DI.
+     * declare this here.
      *
      * <p>The INFO log on boot is intentional: when the
      * {@code baseUrl} is misconfigured (missing env var → empty
@@ -59,9 +49,13 @@ public class MinimaxAiAutoConfiguration {
      * {@code api.openai.com} instead of the actual provider. Logging
      * the resolved URL on boot gives the operator the answer in one
      * place rather than chasing logs.
+     *
+     * <p>Fails fast on a missing key so the scheduler doesn't run
+     * with a credential that can never succeed.
      */
     @Bean
     public OpenAIClient openAIClient(MinimaxAiProperties properties) {
+        requireKey(properties.apiKey());
         log.info("MiniMax OpenAI client configured: baseUrl={} model={} timeoutMs={}",
                 properties.baseUrl(), properties.model(), properties.timeoutMs());
         return OpenAIOkHttpClient.builder()
@@ -69,5 +63,44 @@ public class MinimaxAiAutoConfiguration {
                 .apiKey(properties.apiKey())
                 .timeout(Duration.ofMillis(properties.timeoutMs()))
                 .build();
+    }
+
+    @Bean
+    public MiniMaxApiClient miniMaxApiClient(OpenAIClient client, MinimaxAiProperties properties) {
+        return new MiniMaxApiClient(client, properties);
+    }
+
+    @Bean
+    public PdfTextExtractor pdfTextExtractor() {
+        return new PdfTextExtractor();
+    }
+
+    @Bean
+    public ReceiptResponseParser receiptResponseParser(ObjectMapper objectMapper) {
+        return new ReceiptResponseParser(objectMapper);
+    }
+
+    @Bean
+    public MiniMaxReceiptExtractor miniMaxReceiptExtractor(
+            MiniMaxApiClient client,
+            PdfTextExtractor pdfExtractor,
+            ReceiptResponseParser parser,
+            MinimaxAiProperties properties) {
+        return new MiniMaxReceiptExtractor(client, pdfExtractor, parser, properties);
+    }
+
+    @Bean
+    public MiniMaxDocumentTextExtractor miniMaxDocumentTextExtractor(
+            MiniMaxApiClient client,
+            MinimaxAiProperties properties,
+            PdfTextExtractor pdfExtractor) {
+        return new MiniMaxDocumentTextExtractor(client, properties, pdfExtractor);
+    }
+
+    private static void requireKey(String key) {
+        if (key == null || key.isBlank() || "dev-placeholder".equals(key)) {
+            throw new IllegalArgumentException(
+                    "MINIMAX_API_KEY is missing or set to the dev placeholder");
+        }
     }
 }

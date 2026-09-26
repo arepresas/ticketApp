@@ -50,3 +50,8 @@ ticketapp:
       # OpenAIIoException("Request failed") on every ticket.
       # Tune via MINIMAX_TIMEOUT_MS in .env when needed.
       timeout-ms: 120000
+      # Deterministic JSON: 0.0 so retries return the same text.
+      # Token budget: covers the worst observed case (Lidl, 7+
+      # products with loyalty discounts, 2026-07-13). Tune via env.
+      temperature: 0.0
+      max-completion-tokens: 16384
