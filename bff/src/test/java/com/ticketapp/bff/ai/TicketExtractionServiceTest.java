@@ -11,7 +11,8 @@ import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
 import com.ticketapp.domain.ai.ReceiptExtractor;
-import com.ticketapp.persistence.JdbcTicketExtractionRepository;
+import com.ticketapp.domain.exceptions.OptimisticLockException;
+import com.ticketapp.persistence.JdbcTicketRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,7 +81,7 @@ class TicketExtractionServiceTest {
 
     private TicketRepository tickets;
     private TicketExtractionRepository extractions;
-    private JdbcTicketExtractionRepository jdbcExtractions;
+    private JdbcTicketRepository jdbcTickets;
     private ReceiptExtractor receiptExtractor;
     private TicketExtractionService service;
 
@@ -88,7 +89,7 @@ class TicketExtractionServiceTest {
     void setUp() {
         tickets = mock(TicketRepository.class);
         extractions = mock(TicketExtractionRepository.class);
-        jdbcExtractions = mock(JdbcTicketExtractionRepository.class);
+        jdbcTickets = mock(JdbcTicketRepository.class);
         receiptExtractor = mock(ReceiptExtractor.class);
         // Real TransactionTemplate over a no-op transaction manager:
         // the callbacks must actually run (the saves happen inside
@@ -96,20 +97,20 @@ class TicketExtractionServiceTest {
         PlatformTransactionManager tm = mock(PlatformTransactionManager.class);
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
-                tickets, extractions, jdbcExtractions, receiptExtractor,
+                tickets, extractions, jdbcTickets, receiptExtractor,
                 new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2));
     }
 
     private static Ticket sampleTicket(UUID id) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null);
+                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
     }
 
     private static Ticket sampleTicket(UUID id, byte[] bytes) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null, null);
+                "image/png", "r.png", bytes, null, 0, null, null, 0);
     }
 
     @Test
@@ -150,7 +151,7 @@ class TicketExtractionServiceTest {
         verify(tickets, atLeast(2)).save(any(Ticket.class));
         verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
         verify(tickets).save(argThat(t -> t.status() == Status.IN_PROGRESS));
-        verify(jdbcExtractions).recordAttempt(id);
+        verify(jdbcTickets).recordAttempt(id);
         ArgumentCaptor<TicketExtraction> cap = ArgumentCaptor.forClass(TicketExtraction.class);
         verify(extractions).save(cap.capture());
         TicketExtraction saved = cap.getValue();
@@ -275,7 +276,7 @@ class TicketExtractionServiceTest {
         byte[] bytes = new byte[]{1, 2, 3, 4};
         Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null, null);
+                "image/png", "r.png", bytes, null, 0, null, null, 0);
         when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(png));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -470,6 +471,79 @@ class TicketExtractionServiceTest {
         assertThat(processed).isFalse();
         verify(receiptExtractor, times(2)).extract(any());
         verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR));
+    }
+
+    @Test
+    void lockConflictBeforeProviderCallSkipsWithoutClobbering() throws Exception {
+        // Another writer won the race before segment 1 committed.
+        // The service must not call the provider and must not mark
+        // error — the winner owns the row.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any())).thenThrow(new OptimisticLockException(id, "boom"));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isFalse();
+        verifyNoExtractorCall();
+        verify(tickets, never()).save(argThat(t -> t.status() == Status.ON_ERROR));
+    }
+
+    @Test
+    void segment2ConflictWithMovedOnTicketSkipsSilently() throws Exception {
+        // The row moved on while the provider call was in flight
+        // (user validated/cancelled meanwhile). The recovery re-read
+        // sees a non-IN_ANALYSIS status and leaves the winner alone.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        Ticket done = sampleTicket(id).withStatus(Status.DONE);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0))
+                .thenThrow(new OptimisticLockException(id, "boom"));
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
+        when(receiptExtractor.extract(any())).thenReturn(
+                new ReceiptExtraction(
+                        new ReceiptExtractionResult(
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                List.of(), new BigDecimal("1.20"), "EUR"),
+                        "{}", MODEL));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isFalse();
+        verify(tickets, never()).save(argThat(t -> t.status() == Status.ON_ERROR));
+    }
+
+    @Test
+    void segment2ConflictWithStaleAnalysisMarksError() throws Exception {
+        // The row is still IN_ANALYSIS after the lost race (crashed
+        // or concurrent run that never came back). Recovery lands it
+        // on ON_ERROR with a visible message instead of leaving it
+        // stuck where the OPEN-only cron never looks.
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        Ticket staleAnalysis = sampleTicket(id).withStatus(Status.IN_ANALYSIS);
+        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(tickets.save(any()))
+                .thenAnswer(inv -> inv.getArgument(0))
+                .thenThrow(new OptimisticLockException(id, "boom"))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(staleAnalysis));
+        when(receiptExtractor.extract(any())).thenReturn(
+                new ReceiptExtraction(
+                        new ReceiptExtractionResult(
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                List.of(), new BigDecimal("1.20"), "EUR"),
+                        "{}", MODEL));
+
+        boolean processed = service.processTicket(open);
+
+        assertThat(processed).isFalse();
+        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR
+                && t.errorMessage() != null
+                && t.errorMessage().contains("optimistic race")));
     }
 
     private void verifyNoExtractorCall() throws Exception {

@@ -2,7 +2,6 @@ package com.ticketapp.bff.ai;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +41,6 @@ class TicketExtractionJobTest {
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private TicketRepository tickets;
-    private TicketExtractionRepository extractions;
     private TicketExtractionService service;
     private AiProperties properties;
     private TicketExtractionJob job;
@@ -50,20 +48,19 @@ class TicketExtractionJobTest {
     @BeforeEach
     void setUp() {
         tickets = mock(TicketRepository.class);
-        extractions = mock(TicketExtractionRepository.class);
         service = mock(TicketExtractionService.class);
         properties = new AiProperties(
                 true,                                  // enabled
                 "0 */15 * * * *",
                 5,                                     // batchSize
                 2);                                    // retryAttempts
-        job = new TicketExtractionJob(tickets, service, extractions, properties);
+        job = new TicketExtractionJob(tickets, service, properties);
     }
 
     @Test
     void disabledJobIsNoOp() {
         AiProperties off = withEnabled(false);
-        job = new TicketExtractionJob(tickets, service, extractions, off);
+        job = new TicketExtractionJob(tickets, service, off);
 
         job.tick();
 
@@ -74,7 +71,6 @@ class TicketExtractionJobTest {
     @Test
     void emptyCandidateSetShortCircuits() {
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of());
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of());
 
         job.tick();
 
@@ -86,7 +82,6 @@ class TicketExtractionJobTest {
         Ticket t1 = openTicket();
         Ticket t2 = openTicket();
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t1, t2));
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of());
 
         job.tick();
 
@@ -101,7 +96,7 @@ class TicketExtractionJobTest {
         // doesn't silently start processing DONE/ON_ERROR tickets.
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.DONE, Instant.now(), Instant.now(),
-                null, null, null, null, 0, null, null);
+                null, null, null, null, 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -110,15 +105,21 @@ class TicketExtractionJobTest {
     }
 
     @Test
-    void alreadyExtractedTicketsAreSkipped() {
-        UUID extractedId = UUID.randomUUID();
-        Ticket t = openTicket(extractedId);
-        when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of(extractedId));
+    void candidatesFromRepositoryAreProcessedVerbatim() {
+        // The "already extracted" exclusion lives in SQL now
+        // (anti-join in findOpenForExtraction) — the job trusts
+        // whatever the repository returns and processes every OPEN
+        // row. Pinned here so a future re-addition of in-memory
+        // filtering catches the eye.
+        Ticket t1 = openTicket();
+        Ticket t2 = openTicket();
+        when(tickets.findOpenForExtraction(properties.batchSize()))
+                .thenReturn(List.of(t1, t2));
 
         job.tick();
 
-        verify(service, never()).processTicket(any());
+        verify(service).processTicket(t1);
+        verify(service).processTicket(t2);
     }
 
     @Test
@@ -132,7 +133,6 @@ class TicketExtractionJobTest {
         List<Ticket> capped = List.of(openTicket(), openTicket(), openTicket(),
                 openTicket(), openTicket());
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(capped);
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of());
 
         job.tick();
 
@@ -145,7 +145,7 @@ class TicketExtractionJobTest {
     void inProgressTicketsAreAlsoFilteredOut() {
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.IN_PROGRESS,
-                Instant.now(), Instant.now(), null, null, null, null, 0, null, null);
+                Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -161,7 +161,7 @@ class TicketExtractionJobTest {
         Ticket t = new Ticket(
                 UUID.randomUUID(), OWNER, "x", "", Status.ON_ERROR,
                 Instant.now(), Instant.now(), null, null, null,
-                "previous failure", 0, null, null);
+                "previous failure", 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -177,7 +177,6 @@ class TicketExtractionJobTest {
         Ticket good = openTicket();
         Ticket bad = openTicket();
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(good, bad));
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of());
         when(service.processTicket(good)).thenReturn(true);
         when(service.processTicket(bad)).thenThrow(new RuntimeException("DB down"));
 
@@ -195,7 +194,6 @@ class TicketExtractionJobTest {
         // caps the row count we scan per tick. Indirect verification:
         // capture the int argument and assert it equals the property.
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of());
-        when(extractions.findExtractedTicketIds()).thenReturn(List.of());
 
         job.tick();
 
@@ -212,7 +210,7 @@ class TicketExtractionJobTest {
 
     private static Ticket openTicket(UUID id) {
         return new Ticket(id, OWNER, "title", "", Status.OPEN,
-                Instant.now(), Instant.now(), null, null, null, null, 0, null, null);
+                Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
     }
 
     private static AiProperties withEnabled(boolean enabled) {

@@ -130,8 +130,8 @@ public class JdbcProductRepository implements ProductRepository {
         String name = rs.getString("name");
         String normalised = rs.getString("normalised_name");
         String unit = rs.getString("unit"); // nullable
-        var ts = rs.getTimestamp("created_at");
-        var createdAt = ts != null ? ts.toInstant() : java.time.Instant.now();
+        var odt = rs.getObject("created_at", java.time.OffsetDateTime.class);
+        var createdAt = odt != null ? odt.toInstant() : java.time.Instant.now();
         return new Product(id, name, normalised, unit, createdAt);
     }
 }

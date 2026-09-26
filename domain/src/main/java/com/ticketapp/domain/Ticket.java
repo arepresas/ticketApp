@@ -32,7 +32,8 @@ public record Ticket(
         String errorMessage,
         int attempts,
         UUID shopId,
-        String ocrText
+        String ocrText,
+        long version
 ) {
 
     public Ticket {
@@ -58,6 +59,7 @@ public record Ticket(
         // BFF normalises blank → null so callers never have to test
         // both.
         if (ocrText != null && ocrText.isBlank()) ocrText = null;
+        if (version < 0) throw new IllegalArgumentException("version must be >= 0");
     }
 
     /**
@@ -81,7 +83,7 @@ public record Ticket(
                               byte[] fileData) {
         Instant now = Instant.now();
         return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData, null, 0, null, null);
+                now, now, contentType, fileName, fileData, null, 0, null, null, 0);
     }
 
     /**
@@ -96,7 +98,7 @@ public record Ticket(
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
         return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData, cleared, attempts, shopId, ocrText);
+                contentType, fileName, fileData, cleared, attempts, shopId, ocrText, version);
     }
 
     /**
@@ -113,7 +115,7 @@ public record Ticket(
             throw new IllegalArgumentException("title must not be blank");
         }
         return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
     }
 
     /**
@@ -125,7 +127,7 @@ public record Ticket(
     public Ticket withDescription(String newDescription) {
         String sanitized = newDescription == null ? "" : newDescription;
         return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
     }
 
     /**
@@ -146,7 +148,7 @@ public record Ticket(
     public Ticket markError(String message) {
         return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
                 createdAt, Instant.now(),
-                contentType, fileName, fileData, message, attempts, shopId, ocrText);
+                contentType, fileName, fileData, message, attempts, shopId, ocrText, version);
     }
 
     /**
@@ -164,7 +166,7 @@ public record Ticket(
      */
     public Ticket incrementAttempts() {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts + 1, shopId, ocrText);
+                contentType, fileName, fileData, errorMessage, attempts + 1, shopId, ocrText, version);
     }
 
     /**
@@ -179,7 +181,7 @@ public record Ticket(
      */
     public Ticket withShopId(UUID newShopId) {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, newShopId, ocrText);
+                contentType, fileName, fileData, errorMessage, attempts, newShopId, ocrText, version);
     }
 
     /**
@@ -199,7 +201,29 @@ public record Ticket(
      */
     public Ticket withOcrText(String newOcrText) {
         return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId, newOcrText);
+                contentType, fileName, fileData, errorMessage, attempts, shopId, newOcrText, version);
+    }
+
+    /**
+     * Move to the next persistence version. Called by the JDBC
+     * save after a successful guarded write — the only forward
+     * path for the version. Normal code must not compute versions
+     * any other way.
+     */
+    public Ticket nextVersion() {
+        return withVersion(version + 1);
+    }
+
+    /**
+     * Stamp the persistence version after a successful guarded write.
+     * Called by the JDBC save — normal code must not call it directly;
+     * the version only moves forward through the repository (see
+     * {@link #nextVersion()}), except the insert path which always
+     * stamps 0 for a new row.
+     */
+    public Ticket withVersion(long newVersion) {
+        return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
+                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, newVersion);
     }
 
     @Override
@@ -219,14 +243,15 @@ public record Ticket(
                 && java.util.Objects.equals(errorMessage, other.errorMessage)
                 && attempts == other.attempts
                 && java.util.Objects.equals(shopId, other.shopId)
-                && java.util.Objects.equals(ocrText, other.ocrText);
+                && java.util.Objects.equals(ocrText, other.ocrText)
+                && version == other.version;
     }
 
     @Override
     public int hashCode() {
         int h = java.util.Objects.hash(id, ownerId, title, description, status,
                 createdAt, updatedAt, contentType, fileName, errorMessage, attempts,
-                shopId, ocrText);
+                shopId, ocrText, version);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
@@ -238,7 +263,7 @@ public record Ticket(
                 + ", contentType=" + contentType + ", fileName=" + fileName
                 + ", fileData=" + Arrays.toString(fileData)
                 + ", errorMessage=" + errorMessage + ", attempts=" + attempts
-                + ", shopId=" + shopId + ", ocrText=" + ocrText + "]";
+                + ", shopId=" + shopId + ", ocrText=" + ocrText + ", version=" + version + "]";
     }
 
     /**

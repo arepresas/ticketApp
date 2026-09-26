@@ -417,9 +417,9 @@ class TicketControllerIT {
                 INSERT INTO ticket_extractions
                   (ticket_id, merchant, purchase_date, category, products,
                    total_amount, currency, model, extracted_at,
-                   raw_response, raw_response_text, extraction_payload)
+                   raw_response_text, extraction_payload)
                 VALUES (?, ?, '2026-07-03', ?, ?::jsonb, ?, ?, 'test-model',
-                        now(), NULL, 'seeded', NULL)
+                        now(), 'seeded', NULL)
                 """,
                 ticketId, merchant, category, "[{\"name\":\"x\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1,\"lineTotal\":1}]",
                 total, currency);
@@ -680,10 +680,10 @@ class TicketControllerIT {
                 INSERT INTO ticket_extractions
                   (ticket_id, merchant, purchase_date, category, products,
                    total_amount, currency, model, extracted_at,
-                   raw_response, raw_response_text, extraction_payload)
+                   raw_response_text, extraction_payload)
                 VALUES (?, ?, '2026-07-03', 'food', ?::jsonb,
                         100, 'EUR', 'test-model',
-                        now(), NULL, 'seeded', NULL)
+                        now(), 'seeded', NULL)
                 """,
                 ticketId, merchant, productsJson);
     }

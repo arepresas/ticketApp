@@ -6,6 +6,7 @@ import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.TicketSummary;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -87,14 +88,11 @@ public class TicketController {
     @GetMapping
     public List<TicketResponse> list() {
         AuthenticatedUser user = CurrentUser.get();
-        // No owner-scoped "list all" exists on the port — the
-        // controller uses the status-filter overload with the user's
-        // own id to cover OPEN + IN_PROGRESS + ON_ERROR + DONE +
-        // CANCELLED in one pass. A wider scan with no status filter
-        // would be cheaper if the dashboard ever needs it; until
-        // then this single query covers everything.
+        // Lightweight projection: the dashboard list never needs the
+        // receipt blobs (see findSummariesByStatusIn). Single-ticket
+        // paths below keep returning the full ticket.
         Set<Ticket.Status> all = Set.of(Ticket.Status.values());
-        return repository.findByStatusIn(all, user.id()).stream()
+        return repository.findSummariesByStatusIn(all, user.id()).stream()
                 .map(TicketResponse::of)
                 .toList();
     }
@@ -140,7 +138,7 @@ public class TicketController {
                 Ticket.Status.IN_ANALYSIS,
                 Ticket.Status.IN_PROGRESS,
                 Ticket.Status.ON_ERROR);
-        return repository.findByStatusIn(pending, user.id()).stream()
+        return repository.findSummariesByStatusIn(pending, user.id()).stream()
                 .map(TicketResponse::of)
                 .collect(Collectors.toList());
     }
@@ -752,6 +750,21 @@ public class TicketController {
                     t.contentType(), t.fileName(), size,
                     t.errorMessage(), t.attempts(),
                     t.ocrText());
+        }
+
+        /**
+         * List-view mapping. Summaries carry no blobs and no OCR
+         * text (the upload and detail screens read those through
+         * the single-ticket paths), so both wire as absent here.
+         */
+        static TicketResponse of(TicketSummary s) {
+            return new TicketResponse(
+                    s.id(), s.ownerId(), s.title(), s.description(), s.status(),
+                    s.createdAt(), s.updatedAt(),
+                    s.contentType(), s.fileName(),
+                    s.sizeBytes() == null ? null : s.sizeBytes().intValue(),
+                    s.errorMessage(), s.attempts(),
+                    null);
         }
     }
 }

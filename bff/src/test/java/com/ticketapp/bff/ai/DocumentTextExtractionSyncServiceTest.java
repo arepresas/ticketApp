@@ -56,7 +56,7 @@ class DocumentTextExtractionSyncServiceTest {
     private static Ticket ticketWithFile(UUID id, String mime) {
         return new Ticket(id, OWNER, "r.png", "", Ticket.Status.OPEN,
                 Instant.now(), Instant.now(),
-                mime, "r.png", new byte[]{1, 2, 3}, null, 0, null, null);
+                mime, "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
     }
 
     @Test
@@ -148,7 +148,7 @@ class DocumentTextExtractionSyncServiceTest {
         UUID id = UUID.randomUUID();
         Ticket meta = new Ticket(id, OWNER, "title", "", Ticket.Status.OPEN,
                 Instant.now(), Instant.now(),
-                null, null, null, null, 0, null, null);
+                null, null, null, null, 0, null, null, 0);
 
         Ticket returned = service.runOnUpload(meta);
 
@@ -165,7 +165,7 @@ class DocumentTextExtractionSyncServiceTest {
         UUID id = UUID.randomUUID();
         Ticket broken = new Ticket(id, OWNER, "x", "", Ticket.Status.OPEN,
                 Instant.now(), Instant.now(),
-                null, "name.bin", new byte[]{1, 2, 3}, null, 0, null, null);
+                null, "name.bin", new byte[]{1, 2, 3}, null, 0, null, null, 0);
 
         Ticket returned = service.runOnUpload(broken);
 

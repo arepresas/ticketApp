@@ -9,7 +9,8 @@ import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractor;
-import com.ticketapp.persistence.JdbcTicketExtractionRepository;
+import com.ticketapp.domain.exceptions.OptimisticLockException;
+import com.ticketapp.persistence.JdbcTicketRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -73,6 +74,37 @@ import java.util.UUID;
 public class TicketExtractionService {
 
     /**
+     * Recover a segment-1 IN_ANALYSIS orphaned by a lost segment-2
+     * race. If the winner moved the ticket on, their state stands
+     * and there is nothing to do. If it is still IN_ANALYSIS (a
+     * crashed or concurrent run that will never come back for it,
+     * and the cron only selects OPEN), land it on ON_ERROR with a
+     * visible message so the user can re-queue via PATCH to OPEN
+     * instead of staring at a stuck badge.
+     *
+     * <p>A concurrent run still in flight loses its own segment-2
+     * race against this mark and skips — the ticket converges to a
+     * visible ON_ERROR rather than a silent stuck row.
+     */
+    private void recoverStaleAnalysis(UUID id, Ticket marked) {
+        try {
+            tx.executeWithoutResult(status ->
+                    ticketRepository.findById(id, marked.ownerId()).ifPresent(current -> {
+                        if (current.status() == Status.IN_ANALYSIS) {
+                            ticketRepository.save(current.markError(truncate(
+                                    "lost optimistic race during extraction;"
+                                            + " re-queue via PATCH to OPEN")));
+                        } else {
+                            log.info("Ticket {} changed during extraction; winner state {} stands",
+                                    id, current.status());
+                        }
+                    }));
+        } catch (OptimisticLockException e) {
+            log.debug("Ticket {} changed while recovering; skipping", id);
+        }
+    }
+
+    /**
      * Call the provider port with retries for transient failures.
      *
      * <p>Total attempts = {@code max(1, retryAttempts)}: {@code 1} is
@@ -122,7 +154,7 @@ public class TicketExtractionService {
 
     private final TicketRepository ticketRepository;
     private final TicketExtractionRepository ticketExtractionRepository;
-    private final JdbcTicketExtractionRepository jdbcTicketExtractionRepository;
+    private final JdbcTicketRepository jdbcTicketRepository;
     private final ReceiptExtractor receiptExtractor;
     private final TransactionTemplate tx;
     private final AiProperties properties;
@@ -151,12 +183,23 @@ public class TicketExtractionService {
         // failure path lands it on ON_ERROR. The badge colours
         // distinguish the two: IN_ANALYSIS = sky (working),
         // IN_PROGRESS = amber (awaiting user).
-        Ticket marked = tx.execute(status -> {
-            jdbcTicketExtractionRepository.recordAttempt(id);
-            Ticket t = ticket.incrementAttempts().withStatus(Status.IN_ANALYSIS);
-            ticketRepository.save(t);
-            return t;
-        });
+        Ticket marked;
+        try {
+            marked = tx.execute(status -> {
+                jdbcTicketRepository.recordAttempt(id);
+                Ticket t = ticket.incrementAttempts().withStatus(Status.IN_ANALYSIS);
+                // Chain the save result: it carries the bumped
+                // version the next segment must write against. The
+                // pre-save copy is stale from here on.
+                return ticketRepository.save(t);
+            });
+        } catch (OptimisticLockException e) {
+            // Another writer (user PATCH, concurrent tick) won the
+            // race between our read and this write. Their write
+            // stands — do not clobber it with our state.
+            log.info("Ticket {} changed concurrently; skipping extraction", id);
+            return false;
+        }
 
         try {
             // No transaction active here — this is the long external
@@ -186,10 +229,19 @@ public class TicketExtractionService {
             // DONE; we want the audit log to show the intermediate
             // state regardless. Built off `marked` so the bumped
             // attempts counter survives the transition.
-            tx.executeWithoutResult(status -> {
-                ticketExtractionRepository.save(persisted);
-                ticketRepository.save(marked.withStatus(Status.IN_PROGRESS));
-            });
+            try {
+                tx.executeWithoutResult(status -> {
+                    ticketExtractionRepository.save(persisted);
+                    ticketRepository.save(marked.withStatus(Status.IN_PROGRESS));
+                });
+            } catch (OptimisticLockException e) {
+                // The row moved while the provider call was in
+                // flight (user action). The segment never committed,
+                // so nothing was persisted — recover instead of
+                // leaving the segment-1 IN_ANALYSIS behind.
+                recoverStaleAnalysis(id, marked);
+                return false;
+            }
             log.info("Extracted ticket {} → merchant='{}' total={} {}",
                     id, persisted.merchant(),
                     persisted.totalAmount(), persisted.currency());
@@ -228,9 +280,16 @@ public class TicketExtractionService {
      * system-scope path.
      */
     private void markError(Ticket ticket, String message) {
-        tx.executeWithoutResult(status ->
-                ticketRepository.findById(ticket.id(), ticket.ownerId()).ifPresent(t ->
-                        ticketRepository.save(t.markError(truncate(message)))));
+        try {
+            tx.executeWithoutResult(status ->
+                    ticketRepository.findById(ticket.id(), ticket.ownerId()).ifPresent(t ->
+                            ticketRepository.save(t.markError(truncate(message)))));
+        } catch (OptimisticLockException e) {
+            // Lost a micro-race with another writer after the
+            // re-read. Their write stands; the error mark is stale
+            // news next to a fresher user action.
+            log.debug("Ticket {} changed while marking error; skipping", ticket.id());
+        }
     }
 
     /** Trim a message to the column budget so a giant raw-reply cannot bloat the row. */

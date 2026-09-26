@@ -14,6 +14,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,14 +24,9 @@ import java.util.UUID;
  * round-trip uses an injected {@link ObjectMapper} so we don't carry
  * a static field.
  *
- * <p>The {@code raw_response} column is JSONB (legacy, V4) and
- * {@code raw_response_text} is TEXT (V5). During the V5 → V6
- * transition window both columns coexist: {@code raw_response_text}
- * is the source of truth for new rows, {@code raw_response} is
- * still populated for the pre-V5 backfill. The mapper prefers the
- * TEXT column and falls back to the JSONB one when the TEXT column
- * is SQL NULL (e.g. a row written before V5 ran the backfill — not
- * expected, but cheap to guard against).
+ * <p>{@code raw_response_text} is the TEXT column carrying the
+ * provider's verbatim reply (V5; the legacy JSONB column was
+ * dropped in V18).
  *
  * <p>If a future read path needs to query into the response, a
  * dedicated view can use Postgres {@code jsonb_path_query} without
@@ -54,15 +50,10 @@ final class ExtractionRowMapper {
         String currency = rs.getString("currency");
         String model = rs.getString("model");
         Instant extractedAt = readInstant(rs, "extracted_at");
-        // Prefer the TEXT column (V5+); fall back to the legacy JSONB
-        // column for any pre-V5 row that somehow slipped past the
-        // backfill. Both reads go through getString — the JSONB column
-        // yields its canonical text representation, which is fine
-        // because the domain only carries it as an opaque string.
+        // Source of truth since V5: the TEXT column carrying the
+        // provider's verbatim reply. The legacy JSONB column was
+        // dropped in V18.
         String rawResponse = rs.getString("raw_response_text");
-        if (rawResponse == null) {
-            rawResponse = rs.getString("raw_response");
-        }
         // extraction_payload (V7+) — JSONB or null for pre-V7 rows.
         String extractionPayload = rs.getString("extraction_payload");
 
@@ -96,8 +87,8 @@ final class ExtractionRowMapper {
     }
 
     private static Instant readInstant(ResultSet rs, String column) throws SQLException {
-        var ts = rs.getTimestamp(column);
-        return ts == null ? null : ts.toInstant();
+        OffsetDateTime t = rs.getObject(column, OffsetDateTime.class);
+        return t == null ? null : t.toInstant();
     }
 
     /**

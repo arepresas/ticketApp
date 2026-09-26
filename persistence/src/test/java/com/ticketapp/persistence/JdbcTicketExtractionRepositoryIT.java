@@ -43,9 +43,6 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     TicketExtractionRepository extractions;
 
     @Autowired
-    JdbcTicketExtractionRepository jdbcExtractions;
-
-    @Autowired
     JdbcTemplate jdbc;
 
     @BeforeEach
@@ -81,25 +78,23 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void recordAttemptDoesNotMutateTicketStatus() {
-        UUID ownerId = OWNER;
-        Ticket t = tickets.save(Ticket.open(ownerId, "r.png", "r"));
-        jdbcExtractions.recordAttempt(t.id());
-        Ticket reloaded = tickets.findById(t.id(), ownerId).orElseThrow();
-        assertThat(reloaded.status()).isEqualTo(Ticket.Status.OPEN);
-    }
+    void duplicateSaveIsIgnored() {
+        // Scheduler retry racing the first write: the second save
+        // for the same ticket_id is a no-op, not a PK violation.
+        // The pre-check in the orchestrator stays the fast path;
+        // this is the safety net for the race window.
+        Ticket t = tickets.save(Ticket.open(OWNER, "r.png", "r"));
+        TicketExtraction ext = sample(t.id(), "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4), List.of());
 
-    @Test
-    void findExtractedTicketIdsReturnsAllPersistedIds() {
-        Ticket t1 = tickets.save(Ticket.open(OWNER, "a.png", "x"));
-        Ticket t2 = tickets.save(Ticket.open(OWNER, "b.png", "y"));
-        Ticket t3 = tickets.save(Ticket.open(OWNER, "c.png", "z"));
-        extractions.save(sample(t1.id(), "A", LocalDate.of(2026, Month.JANUARY, 1), List.of()));
-        extractions.save(sample(t2.id(), "B", LocalDate.of(2026, Month.FEBRUARY, 2), List.of()));
-        // t3 has no extraction
+        extractions.save(ext);
+        extractions.save(ext);
 
-        List<UUID> ids = extractions.findExtractedTicketIds();
-        assertThat(ids).containsExactlyInAnyOrder(t1.id(), t2.id()).doesNotContain(t3.id());
+        assertThat(extractions.findByTicketId(t.id())).isPresent();
+        Integer rows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?",
+                Integer.class, t.id());
+        assertThat(rows).isEqualTo(1);
     }
 
     @Test

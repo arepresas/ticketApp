@@ -1,5 +1,6 @@
 package com.ticketapp.bff;
 
+import com.ticketapp.bff.api.TicketController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.UserRepository;
@@ -132,7 +133,7 @@ class BffApplicationIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Ticket.class)
+                .expectBody(TicketController.TicketResponse.class)
                 .value(t -> assertThat(t.title()).isEqualTo("smoke"));
 
         // CHANGE STATUS
@@ -141,7 +142,7 @@ class BffApplicationIT {
                 .bodyValue(new com.ticketapp.bff.api.TicketController.ChangeStatusRequest(Ticket.Status.IN_PROGRESS))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(Ticket.class)
+                .expectBody(TicketController.TicketResponse.class)
                 .value(t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
 
         // DELETE
@@ -166,7 +167,7 @@ class BffApplicationIT {
         web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .exchange().expectStatus().isOk()
-                .expectBodyList(Ticket.class)
-                .value(list -> assertThat(list).extracting(Ticket::title).contains("list-seed"));
+                .expectBodyList(TicketController.TicketResponse.class)
+                .value(list -> assertThat(list).extracting(TicketController.TicketResponse::title).contains("list-seed"));
     }
 }
