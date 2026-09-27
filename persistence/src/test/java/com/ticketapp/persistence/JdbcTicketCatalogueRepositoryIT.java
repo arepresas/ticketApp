@@ -115,6 +115,18 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void softDeletedTicketIsInvisible() {
+        // The soft-delete sink must not be distinguishable from a
+        // missing ticket: this port replaced a controller that used
+        // to pre-read the ticket, so the status filter has to live
+        // here or a deleted ticket keeps serving its catalogue.
+        UUID ticketId = seedNormalisedTicket(OWNER);
+        jdbc.update("UPDATE tickets SET status = 'DELETED' WHERE id = ?", ticketId);
+
+        assertThat(repository.findByTicketId(ticketId, OWNER)).isEmpty();
+    }
+
+    @Test
     void ticketWithoutShopIsEmpty() {
         UUID ticketId = UUID.randomUUID();
         jdbc.update("""

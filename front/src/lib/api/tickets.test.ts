@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	createTicket,
+	deleteTicket,
 	getTicket,
 	getTicketExtraction,
 	getTicketFile,
@@ -283,6 +284,36 @@ describe('updateTicketStatus', () => {
 			mockResponse({ message: 'not found' }, { status: 404, ok: false })
 		);
 		await expect(updateTicketStatus('tok', 'nope', 'DONE')).rejects.toMatchObject({
+			name: 'TicketApiError',
+			status: 404
+		});
+	});
+});
+
+describe('deleteTicket', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('DELETEs /api/tickets/{id} with the Bearer token', async () => {
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			new Response(null, { status: 204 })
+		);
+
+		await deleteTicket('tok', sampleCreated.id);
+
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe(`/api/tickets/${sampleCreated.id}`);
+		expect(init.method).toBe('DELETE');
+		expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok');
+	});
+
+	it('throws TicketApiError on 404 (missing, foreign or already deleted)', async () => {
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			mockResponse({ message: 'not found' }, { status: 404, ok: false })
+		);
+		await expect(deleteTicket('tok', 'nope')).rejects.toMatchObject({
 			name: 'TicketApiError',
 			status: 404
 		});

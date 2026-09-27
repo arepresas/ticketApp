@@ -127,10 +127,12 @@ Constraints, defaults, and nullability that the diagram can't safely express inl
 ### `tickets`
 
 - `status` — `VARCHAR(32) NOT NULL`, CHECK in
-  `('OPEN','IN_ANALYSIS','IN_PROGRESS','ON_ERROR','DONE','CANCELLED')`
-  (widened in V8 for `ON_ERROR`, again in V14 for `IN_ANALYSIS`). The CHECK is
-  hand-rewritten per addition, so a new status means touching the enum and a
-  migration together — there is no test asserting the two agree.
+  `('OPEN','IN_ANALYSIS','IN_PROGRESS','ON_ERROR','DONE','CANCELLED','DELETED')`
+  (widened in V8 for `ON_ERROR`, V14 for `IN_ANALYSIS`, V20 for `DELETED`).
+  `DELETED` is the soft-delete sink: every read filters it out, so a deleted row
+  behaves exactly as a missing one. The CHECK is hand-rewritten on each
+  addition, so adding a status means touching the enum and a migration together
+  — there is no test asserting the two agree.
 - `content_type`, `file_name`, `file_data` — nullable (added in V3; pre-V3 rows have NULLs).
 - `last_extraction_attempt_at` — nullable; populated by the scheduler on every tick (success or failure).
 - `error_message` — nullable; populated when extraction fails and the ticket transitions to `ON_ERROR`. Cleared via `PATCH /api/tickets/{id}/status` to `OPEN` or `CANCELLED`.

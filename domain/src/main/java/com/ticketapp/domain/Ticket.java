@@ -307,9 +307,14 @@ public record Ticket(
      *   <li>{@link #DONE} — user-validated terminal state. The detail
      *       screen goes read-only.</li>
      *   <li>{@link #CANCELLED} — user-dismissed terminal state.</li>
+     *   <li>{@link #DELETED} — soft-delete sink. Set by
+     *       {@code DELETE /api/tickets/{id}} instead of removing the
+     *       row. Deleted tickets are invisible: every repository
+     *       read filters them out, so they behave as missing (404)
+     *       on all paths. Nothing leaves this state.</li>
      * </ul>
      */
     public enum Status {
-        OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR, DONE, CANCELLED
+        OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR, DONE, CANCELLED, DELETED
     }
 }

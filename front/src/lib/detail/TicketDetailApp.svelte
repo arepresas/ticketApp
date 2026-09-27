@@ -61,6 +61,7 @@
 		replaceTicketExtraction,
 		getTicketCatalogue,
 		retryTicket,
+		deleteTicket,
 		TicketApiError,
 		type CreatedTicket,
 		type TicketExtraction,
@@ -602,6 +603,27 @@
 				errorMessage = `Could not mark as ${status} (${err.status}): ${err.message}`;
 			} else {
 				errorMessage = `Could not mark as ${status}: ${err instanceof Error ? err.message : 'unknown error'}`;
+			}
+		} finally {
+			acting = false;
+		}
+	}
+
+	async function deleteTicketAction(): Promise<void> {
+		if (!ticketId || acting) return;
+		const token = readSessionToken();
+		if (!token) return;
+		acting = true;
+		errorMessage = null;
+		try {
+			await deleteTicket(token, ticketId);
+			window.dispatchEvent(new CustomEvent('ticket:updated'));
+			close();
+		} catch (err: unknown) {
+			if (err instanceof TicketApiError) {
+				errorMessage = `Could not delete ticket (${err.status}): ${err.message}`;
+			} else {
+				errorMessage = `Could not delete ticket: ${err instanceof Error ? err.message : 'unknown error'}`;
 			}
 		} finally {
 			acting = false;
@@ -2013,6 +2035,26 @@
 						Mark as done
 					</button>
 					{/if}
+				</footer>
+				{/if}
+				<!--
+					Cancelled tickets are out of the pipeline — the only
+					thing left to do with them is delete. Soft delete on
+					the BFF (row flips to DELETED, history stays); the
+					dashboard drops it from every list afterwards.
+				-->
+				{#if ticket?.status === 'CANCELLED'}
+				<footer class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+					<button
+						type="button"
+						onclick={() => void deleteTicketAction()}
+						disabled={acting}
+						data-testid="delete-ticket"
+						class="inline-flex items-center justify-center gap-2 rounded-md border border-destructive/40 bg-background px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						<Trash2 class="size-4" />
+						Delete ticket
+					</button>
 				</footer>
 				{/if}
 			{/if}

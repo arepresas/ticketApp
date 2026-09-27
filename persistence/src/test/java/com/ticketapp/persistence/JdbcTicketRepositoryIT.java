@@ -99,13 +99,27 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void ownerScopedDeleteRemovesTicket() {
+    void ownerScopedDeleteFlipsToDeletedAndHides() {
         Ticket t = repository.save(Ticket.open(OWNER, "to-delete", ""));
 
         boolean removed = repository.deleteById(t.id(), OWNER);
 
         assertThat(removed).isTrue();
+        // Soft delete: the row flips to DELETED and every read
+        // treats it as missing — but the row itself survives for
+        // audit (raw SQL still sees it).
         assertThat(repository.findById(t.id(), OWNER)).isEmpty();
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM tickets WHERE id = ?", String.class, t.id()))
+                .isEqualTo("DELETED");
+    }
+
+    @Test
+    void repeatedDeleteReportsFalse() {
+        Ticket t = repository.save(Ticket.open(OWNER, "twice", ""));
+        assertThat(repository.deleteById(t.id(), OWNER)).isTrue();
+
+        assertThat(repository.deleteById(t.id(), OWNER)).isFalse();
     }
 
     @Test
@@ -392,12 +406,13 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void saveInsertEnforcesZeroVersion() {
-        // A previously-read copy whose row was deleted must not
-        // smuggle its stale version into the re-insert: new rows
-        // always start at 0.
+        // A previously-read copy whose row vanished out-of-band
+        // (raw SQL delete here; user-erase cascades in prod) must
+        // not smuggle its stale version into the re-insert: new
+        // rows always start at 0.
         Ticket created = repository.save(Ticket.open(OWNER, "gone.pdf", ""));
         Ticket stale = repository.save(created.withStatus(Ticket.Status.DONE));
-        repository.deleteById(created.id(), OWNER);
+        jdbc.update("DELETE FROM tickets WHERE id = ?", created.id());
 
         Ticket reinserted = repository.save(stale);
 

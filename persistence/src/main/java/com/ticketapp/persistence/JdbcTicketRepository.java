@@ -91,12 +91,15 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
 
     @Override
     public Optional<Ticket> findById(UUID id, UUID ownerId) {
-        // Single round-trip with both predicates — the row is invisible
-        // when either doesn't match. No "exists then check" two-step
-        // that would let an attacker probe ticket ids.
+        // Single round-trip with all three predicates — the row is
+        // invisible when any doesn't match. Soft-deleted tickets
+        // behave as missing on every path (no separate "is
+        // deleted" signal leaks existence either). No "exists then
+        // check" two-step that would let an attacker probe ids.
         return jdbc.query(
                 SELECT_PREFIX + SELECT_COLS
-                        + " FROM tickets WHERE id = ? AND owner_id = ?",
+                        + " FROM tickets WHERE id = ? AND owner_id = ?"
+                        + " AND status <> 'DELETED'",
                 mapper,
                 id, ownerId
         ).stream().findFirst();
@@ -266,8 +269,12 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
 
     @Override
     public boolean deleteById(UUID id, UUID ownerId) {
+        // Soft delete: flip to DELETED, keep the row (and its
+        // extraction/catalogue history) for audit. Already-deleted
+        // rows report false so a repeated DELETE reads as 404.
         int rows = jdbc.update(
-                "DELETE FROM tickets WHERE id = ? AND owner_id = ?",
+                "UPDATE tickets SET status = 'DELETED', updated_at = now()"
+                        + " WHERE id = ? AND owner_id = ? AND status <> 'DELETED'",
                 id, ownerId);
         return rows > 0;
     }
@@ -279,8 +286,11 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         }
         // NamedParameterJdbcTemplate expands the IN-list safely — never
         // concatenate the values into the SQL string (database.md rule).
+        // DELETED rows are excluded in SQL even when the caller passes
+        // every status: soft-deleted tickets never surface in lists.
         String sql = SELECT_PREFIX + SELECT_COLS
                 + " FROM tickets WHERE owner_id = :owner AND status IN (:statuses)"
+                + " AND status <> 'DELETED'"
                 + " ORDER BY created_at DESC";
         var params = new MapSqlParameterSource()
                 .addValue("owner", ownerId)
@@ -295,6 +305,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         }
         String sql = SELECT_PREFIX + SUMMARY_COLS
                 + " FROM tickets WHERE owner_id = :owner AND status IN (:statuses)"
+                + " AND status <> 'DELETED'"
                 + " ORDER BY created_at DESC";
         var params = new MapSqlParameterSource()
                 .addValue("owner", ownerId)

@@ -99,14 +99,24 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void deleteTicketCascadesExtraction() {
+    void softDeleteKeepsExtractionForAudit() {
+        // Soft delete flips the ticket row but never removes it, so
+        // the ON DELETE CASCADE never fires through the app path and
+        // the extraction stays queryable for audit. (Physical removal
+        // only happens through user-erase cascades.)
         Ticket t = tickets.save(Ticket.open(OWNER, "c.png", "z"));
         extractions.save(sample(t.id(), "X", LocalDate.of(2026, Month.JANUARY, 1), List.of()));
         assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
 
         boolean removed = tickets.deleteById(t.id(), OWNER);
         assertThat(removed).isTrue();
-        assertThat(extractions.findByTicketId(t.id(), OWNER)).isEmpty();
+        // The ticket disappears from every read (status DELETED is
+        // filtered out) while the extraction row survives for audit.
+        // The read stays owner-scoped, so "survives" never means
+        // "visible to another user" — and no endpoint reaches it,
+        // because every controller gates on findById first.
+        assertThat(tickets.findById(t.id(), OWNER)).isEmpty();
+        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
     }
 
     private static TicketExtraction sample(UUID id, String merchant, LocalDate date,

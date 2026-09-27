@@ -15,6 +15,12 @@ import java.util.UUID;
 /**
  * JDBC adapter for {@link TicketCatalogueRepository}.
  *
+ * <p>The soft-delete sink ({@code DELETED}) is filtered here rather
+ * than by a pre-read in the controller: this port replaced a
+ * controller that used to look the ticket up first, and a ticket the
+ * caller must not see must not be distinguishable from a missing one
+ * at any layer.
+ *
  * <p>Three queries instead of the five the controller used to issue:
  * the shop (one row), then the lines with their product and price
  * master rows joined in. The owner predicate is applied to the
@@ -36,6 +42,7 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
             FROM tickets t
             JOIN shops s ON s.id = t.shop_id
             WHERE t.id = :ticket AND t.owner_id = :owner
+              AND t.status <> 'DELETED'
             """;
 
     private static final String LINES_SQL =
@@ -47,6 +54,7 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
             LEFT JOIN products p ON p.id = l.product_id
             LEFT JOIN prices pr ON pr.id = l.price_id
             WHERE l.ticket_id = :ticket AND t.owner_id = :owner
+              AND t.status <> 'DELETED'
             ORDER BY l.created_at ASC, l.id ASC
             """;
 

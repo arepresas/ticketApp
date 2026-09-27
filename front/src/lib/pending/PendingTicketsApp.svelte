@@ -76,7 +76,8 @@
 		IN_PROGRESS: 'In progress',
 		ON_ERROR: 'Error',
 		DONE: 'Done',
-		CANCELLED: 'Cancelled'
+		CANCELLED: 'Cancelled',
+		DELETED: 'Deleted'
 	};
 
 	function statusBadgeClass(status: TicketStatus): string {
@@ -92,6 +93,8 @@
 			case 'DONE':
 				return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-emerald-500/20';
 			case 'CANCELLED':
+				return 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 ring-zinc-500/20';
+			case 'DELETED':
 				return 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 ring-zinc-500/20';
 		}
 	}

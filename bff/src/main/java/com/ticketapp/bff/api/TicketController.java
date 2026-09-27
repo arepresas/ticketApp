@@ -195,9 +195,11 @@ public class TicketController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         AuthenticatedUser user = CurrentUser.get();
-        // Owner-scoped delete: returns false (→ 404) when the ticket
-        // doesn't exist or belongs to another user. Same response for
-        // both cases — never leak existence.
+        // Soft delete: flips the row to DELETED (history stays for
+        // audit) and every read path treats it as missing from then
+        // on. Returns false (→ 404) when the ticket doesn't exist,
+        // belongs to another user, or is already deleted — same
+        // response for all cases, never leak existence.
         boolean removed = repository.deleteById(id, user.id());
         return removed
                 ? ResponseEntity.noContent().<Void>build()

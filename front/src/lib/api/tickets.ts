@@ -26,7 +26,7 @@ export class TicketApiError extends Error {
 	}
 }
 
-export type TicketStatus = 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';
+export type TicketStatus = 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED' | 'DELETED';
 
 export type CreatedTicket = {
 	id: string;
@@ -334,6 +334,27 @@ export const updateTicketStatus = async (
  */
 export const retryTicket = async (token: string, id: string): Promise<CreatedTicket> => {
 	return updateTicketStatus(token, id, 'OPEN');
+};
+
+/**
+ * Soft-delete a ticket. DELETE {@code /api/tickets/{id}} on the BFF
+ * flips the row to DELETED instead of removing it (history stays
+ * for audit); every read path treats it as missing from then on.
+ *
+ * Throws {@link TicketApiError} on 4xx / 5xx; 404 when the ticket
+ * doesn't exist, belongs to another user, or is already deleted.
+ */
+export const deleteTicket = async (token: string, id: string): Promise<void> => {
+	const res = await fetch(`${API_BASE}/${id}`, {
+		method: 'DELETE',
+		headers: {
+			authorization: `Bearer ${token}`
+		}
+	});
+	if (!res.ok) {
+		bubbleAuthExpired(res);
+		throw new TicketApiError(await parseError(res), res.status);
+	}
 };
 
 /**
