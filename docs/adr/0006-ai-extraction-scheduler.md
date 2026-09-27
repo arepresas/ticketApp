@@ -1,9 +1,46 @@
 # ADR 0006: AI extraction scheduler for ticket metadata
 
-- Status: accepted
+- Status: accepted (D4 superseded 2026-09-27, see the amendment below)
 - Date: 2026-07-04
 - Deciders: arepresas
 - Related: backend, infrastructure, bff
+
+## Amendment: 2026-09-27 — D4 is superseded, D5's layout moved
+
+**D4 no longer describes the system.** The decision below ("a failed
+ticket reverts to `OPEN` and is retried on the next pass, no
+dead-letter") was implemented as a *terminal* failure instead: the
+ticket lands in `ON_ERROR` and nothing re-queues it on its own. Two
+states the ADR never sanctioned were added to the enum —
+`IN_ANALYSIS` (claimed by a worker before the provider call) and
+`ON_ERROR`. Recovery is a human action: `PATCH /api/tickets/{id}/status`
+back to `OPEN`, or re-issuing `DONE` to re-run the catalogue apply.
+
+Why the change is worth recording rather than just fixing: it moves
+the failure profile from "retry forever, forever spending tokens" to
+"at-most-once, visible to the user". Under sustained provider failure
+the original semantics would have re-billed every broken ticket on
+every tick, forever. The new semantics cost a manual retry.
+
+Two supporting decisions landed with it:
+
+- **Abandoned claims are re-queued.** A crash between the two
+  transaction segments used to strand a ticket in `IN_ANALYSIS`
+  forever, because the scheduler only ever looked at `OPEN`. The tick
+  now re-queues claims whose `last_extraction_attempt_at` is older than
+  `ticketapp.ai.stale-analysis-timeout` (default 10 min) before
+  picking candidates, so recovered work is eligible in the same tick.
+- **D5's property layout moved.** Provider knobs live under
+  `ticketapp.ai.{provider}.*` in the provider module, not
+  `ticketapp.ai.*` in the BFF. `ticketapp.ai.*` in the BFF is
+  provider-agnostic (`enabled`, `cron`, `batch-size`,
+  `retry-attempts`, `stale-analysis-timeout`).
+
+Also worth noting: D7 ("no test ever hits `api.minimax.chat`") was
+being violated — the upload-time OCR path ignored `ai.enabled`, so
+every IT that posted a file issued a real paid request. The kill
+switch now covers both entry points and the OCR port has a test
+double registered for the whole IT suite.
 
 ## Amendment: 2026-07-05
 
