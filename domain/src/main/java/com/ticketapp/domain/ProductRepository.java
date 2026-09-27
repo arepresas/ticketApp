@@ -69,11 +69,14 @@ public interface ProductRepository {
     List<Product> searchByNormalisedName(String prefix, int limit);
 
     /**
-     * Insert (or update) a product row. The match key uniqueness is
-     * enforced by the database — re-inserting the same
-     * {@code (normalisedName, unit)} tuple replaces the existing row
-     * but keeps the original {@code id}, which is the contract that
-     * {@code TicketExtractionNormaliser} relies on.
+     * Insert or update a product row, keyed on
+     * {@code (normalisedName, unit)} as enforced by the database.
+     *
+     * <p>Returns the row <em>as stored</em>, not the argument: on a
+     * match-key conflict the database keeps the original
+     * {@code id}, so the caller's freshly minted UUID is not the one
+     * on disk. Callers that need the id for a foreign key must use
+     * the returned value.
      */
     Product save(Product product);
 }

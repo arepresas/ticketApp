@@ -35,6 +35,10 @@ public interface PriceRepository {
      * ticket_id, amount)} UNIQUE index drives the upsert; re-saving
      * the same tuple bumps {@code updated_at} on the existing row
      * but keeps the same id.
+     *
+     * <p>Returns the row <em>as stored</em> — on conflict that is
+     * the existing row, not the argument, so callers must use the
+     * returned id for {@code line_tickets.price_id}.
      */
     Price save(Price price);
 }
