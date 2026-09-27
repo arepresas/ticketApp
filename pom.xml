@@ -33,9 +33,29 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
         <postgresql.version>42.7.13</postgresql.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <!--
+            Testcontainers 2.x, the version Spring Boot 4.1.1 already
+            manages. The old pin (1.21.4) held the tree below Boot's
+            managed line and dragged in a vulnerable
+            commons-compress (test scope). Drop the pin instead of
+            tracking it: Boot owns this version now.
+        -->
+        <testcontainers.version>2.0.5</testcontainers.version>
         <liquibase.version>5.0.4</liquibase.version>
         <spring-boot.version>4.1.1</spring-boot.version>
+        <!--
+            Tomcat patch override. Spring Boot 4.1.1 manages 11.0.24,
+            which is affected by three critical CVEs in the
+            container's DIGEST and FORM authenticators (Dependabot
+            #44, #45, #46). This app configures neither — auth is our
+            own session filter plus a Bearer token — so the
+            vulnerable code is not reachable today, but the bump is
+            free and keeps the criticals off the board. Remove this
+            property once Spring Boot ships 11.0.25+ (see
+            spring-projects/spring-boot#51476): it exists only because
+            there is no 4.1.2 release yet.
+        -->
+        <tomcat.version>11.0.25</tomcat.version>
         <jacoco.version>0.8.15</jacoco.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <openai-java.version>4.63.1</openai-java.version>
