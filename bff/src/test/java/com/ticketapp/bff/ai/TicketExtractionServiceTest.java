@@ -17,6 +17,7 @@ import com.ticketapp.persistence.JdbcTicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -206,7 +207,8 @@ class TicketExtractionServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "MiniMax returned 500"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                        "the AI provider returned 500"));
 
         boolean processed = service.processTicket(open);
 
@@ -224,7 +226,7 @@ class TicketExtractionServiceTest {
                 t.status() == Status.ON_ERROR
                         && t.errorMessage() != null
                         && t.errorMessage().contains("500")
-                        && t.errorMessage().contains("MiniMax returned 500")));
+                        && t.errorMessage().contains("the AI provider returned 500")));
         verify(extractions, never()).save(any());
     }
 
@@ -242,7 +244,8 @@ class TicketExtractionServiceTest {
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         String huge = "x".repeat(TicketExtractionService.ERROR_MESSAGE_MAX_CHARS + 500);
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(502, huge));
+                .thenThrow(new ReceiptExtractionException(502, false,
+                huge));
 
         service.processTicket(open);
 
@@ -316,7 +319,8 @@ class TicketExtractionServiceTest {
                                 "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
                                 List.of(), BigDecimal.ONE, "EUR"),
                         "{}", MODEL));
-        when(extractions.save(any())).thenThrow(new RuntimeException("DB boom"));
+        when(extractions.save(any())).thenThrow(
+                new DataIntegrityViolationException("DB boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -337,7 +341,8 @@ class TicketExtractionServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty()); // race: gone
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                        "boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -405,7 +410,8 @@ class TicketExtractionServiceTest {
         });
         when(tickets.findById(id, OWNER)).thenAnswer(inv -> Optional.of(stored.get()));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                "boom"));
 
         service.processTicket(open);
 
@@ -427,7 +433,8 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(503, "overloaded"))
+                .thenThrow(new ReceiptExtractionException(503, true,
+                        "overloaded"))
                 .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
                                 "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
@@ -449,7 +456,8 @@ class TicketExtractionServiceTest {
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(400, "bad request"));
+                .thenThrow(new ReceiptExtractionException(400, false,
+                "bad request"));
 
         boolean processed = service.processTicket(open);
 
@@ -466,7 +474,8 @@ class TicketExtractionServiceTest {
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, true,
+                        "boom"));
 
         boolean processed = service.processTicket(open);
 

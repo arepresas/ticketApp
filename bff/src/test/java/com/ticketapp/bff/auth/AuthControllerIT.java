@@ -11,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
+import org.springframework.http.MediaType;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,6 +64,24 @@ class AuthControllerIT {
                 .bodyValue(new AuthController.GoogleLoginRequest("bogus"))
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void rejectionResponseCarriesTheCodeButNoVerifierDetails() {
+        // The verifier's details carry exception class names and SDK
+        // messages. They are logged, never returned: this profile is
+        // not `local` (.rules/security.md, "Returning detailed error
+        // messages to clients in non-local profiles").
+        String body = web().post().uri("/api/auth/google")
+                .bodyValue(new AuthController.GoogleLoginRequest("bogus"))
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody(String.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(body).contains("invalid_google_token").doesNotContain("details");
     }
 
     @Test

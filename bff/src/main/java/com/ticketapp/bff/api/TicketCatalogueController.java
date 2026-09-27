@@ -6,7 +6,9 @@ import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.bff.security.CurrentUser;
 import lombok.RequiredArgsConstructor;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,6 +56,6 @@ public class TicketCatalogueController {
                 // One 404 for all four empty cases the port folds
                 // together: no such ticket, not yours, not normalised
                 // yet, no catalogue lines.
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 }
