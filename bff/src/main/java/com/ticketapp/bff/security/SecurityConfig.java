@@ -61,16 +61,22 @@ import com.nimbusds.jose.jwk.source.JWKSource;
  *
  * <h2>Validation chain</h2>
  * <ol>
- *   <li>Nimbus signature + exp (default).</li>
- *   <li>{@link SessionExistsValidator} — checks {@code auth_sessions}
- *       so a revoked or deleted session is rejected even before its
- *       JWT expiry.</li>
- *   <li>{@link JwtToAuthenticatedUserConverter} — runs after both, so
- *       it can rely on the claims being well-formed and the session
- *       being live. Builds an {@code AbstractAuthenticationToken}
- *       whose principal is the resolved {@link
- *       com.ticketapp.bff.auth.AuthenticatedUser}.</li>
+ *   <li>Nimbus signature + exp (default validators).</li>
+ *   <li>{@link JwtToAuthenticatedUserConverter} — resolves the
+ *       session and its owner in one join query, so a revoked,
+ *       expired or deleted session is rejected even before its JWT
+ *       expiry. Builds an {@code AbstractAuthenticationToken} whose
+ *       principal is the resolved {@link
+ *       com.ticketapp.domain.identity.AuthenticatedUser}.</li>
  * </ol>
+ *
+ * <h2>Unmatched paths</h2>
+ * Spring Security lets requests that match no chain through
+ * unsecured, so a catch-all {@link #fallbackChain} denies
+ * everything outside the two chains above. In particular this
+ * keeps the remaining actuator endpoints ({@code /actuator/info},
+ * {@code /actuator/metrics}) off the public internet — only
+ * {@code /actuator/health} is intentionally public.
  */
 @Configuration
 @Slf4j
@@ -97,7 +103,7 @@ public class SecurityConfig {
      * server filter (which would 401 it).
      */
     @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
+    @Order(1)
     SecurityFilterChain publicChain(HttpSecurity http) throws Exception {
         http
                 .securityMatcher("/api/auth/google", "/actuator/health")
@@ -116,6 +122,7 @@ public class SecurityConfig {
      * via the {@link /api/**} request matcher.
      */
     @Bean
+    @Order(2)
     SecurityFilterChain apiChain(HttpSecurity http,
                                  JwtDecoder jwtDecoder,
                                  JwtToAuthenticatedUserConverter jwtConverter) throws Exception {
@@ -135,23 +142,48 @@ public class SecurityConfig {
     }
 
     /**
+     * Catch-all — denies anything the two chains above do not match.
+     * Without this, Spring Security lets unmatched requests through
+     * with no authentication (that is how {@code /actuator/metrics}
+     * would otherwise end up public). Lowest precedence so it only
+     * fires when nothing else matched.
+     *
+     * <p>The {@code ERROR} dispatcher stays permitted: when a
+     * controller throws (400/404/…), Spring re-dispatches to
+     * {@code /error} through the chain stack, and denying that
+     * dispatch would mask every error status as 403.
+     */
+    @Bean
+    @Order(Ordered.LOWEST_PRECEDENCE)
+    SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/**")
+                .authorizeHttpRequests(a -> a
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
+                        .anyRequest().denyAll())
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable);
+        return http.build();
+    }
+
+    /**
      * Verifies incoming Bearer tokens. The secret is the same
      * {@code bff.jwt.secret} the login endpoint signs with, so a
      * token minted by {@link JwtEncoder} round-trips through this
-     * decoder. The custom {@link SessionExistsValidator} is
-     * appended to Nimbus' default validators (signature + exp).
+     * decoder with Nimbus' default validators (signature + exp).
+     * Session liveness is enforced one step later by
+     * {@link JwtToAuthenticatedUserConverter} in a single join query.
      */
     @Bean
-    JwtDecoder jwtDecoder(SessionExistsValidator sessionValidator) {
+    JwtDecoder jwtDecoder() {
         SecretKeySpec key = new SecretKeySpec(secretBytes, "HmacSHA256");
-        NimbusJwtDecoder decoder = NimbusJwtDecoder
+        return NimbusJwtDecoder
                 .withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
-        decoder.setJwtValidator(new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
-                org.springframework.security.oauth2.jwt.JwtValidators.createDefault(),
-                sessionValidator));
-        return decoder;
     }
 
     /**

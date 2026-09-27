@@ -1,9 +1,11 @@
 package com.ticketapp.bff;
 
+import com.ticketapp.bff.api.dto.ChangeStatusRequest;
+import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.api.TicketController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.AuthController;
-import com.ticketapp.bff.auth.UserRepository;
+import com.ticketapp.domain.identity.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -121,6 +123,17 @@ class BffApplicationIT {
     }
 
     @Test
+    void metricsEndpointIsNotPublic() {
+        // The fallback security chain denies everything outside
+        // /api/** except /actuator/health: metrics must not leak
+        // without a session (it was reachable before the catch-all
+        // chain existed because no chain matched it).
+        web().get().uri("/actuator/metrics")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
     void getChangeDeleteTicketViaHttp() {
         // Seed directly through the repository — the upload path is covered
         // by TicketControllerIT. This test exercises GET/PATCH/DELETE only.
@@ -133,16 +146,16 @@ class BffApplicationIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(TicketController.TicketResponse.class)
+                .expectBody(TicketResponse.class)
                 .value(t -> assertThat(t.title()).isEqualTo("smoke"));
 
         // CHANGE STATUS
         web().patch().uri("/api/tickets/{id}/status", seeded.id())
                 .header("authorization", "Bearer " + token)
-                .bodyValue(new com.ticketapp.bff.api.TicketController.ChangeStatusRequest(Ticket.Status.IN_PROGRESS))
+                .bodyValue(new ChangeStatusRequest(Ticket.Status.IN_PROGRESS))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(TicketController.TicketResponse.class)
+                .expectBody(TicketResponse.class)
                 .value(t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
 
         // DELETE
@@ -167,7 +180,7 @@ class BffApplicationIT {
         web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .exchange().expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
-                .value(list -> assertThat(list).extracting(TicketController.TicketResponse::title).contains("list-seed"));
+                .expectBodyList(TicketResponse.class)
+                .value(list -> assertThat(list).extracting(TicketResponse::title).contains("list-seed"));
     }
 }

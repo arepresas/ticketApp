@@ -1,6 +1,6 @@
 package com.ticketapp.bff.security;
 
-import com.ticketapp.bff.auth.AuthenticatedUser;
+import com.ticketapp.domain.identity.AuthenticatedUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

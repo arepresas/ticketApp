@@ -1,7 +1,9 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.bff.auth.AuthenticatedUser;
+import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.bff.security.CurrentUser;
+import com.ticketapp.bff.api.dto.ShopResponse;
+import com.ticketapp.bff.api.dto.UpdateShopRequest;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -131,54 +132,4 @@ public class ShopController {
         return n;
     }
 
-    /**
-     * Sparse PATCH body. A {@code null} field is "leave alone" — not
-     * "clear". An absent JSON key (omitted property) deserialises to
-     * {@code null}, so the wire form {@code {"city":"Madrid"}} updates
-     * only {@code city} and leaves the other six contact fields
-     * untouched. No field is required; an empty body is rejected at
-     * the controller level (it would be a no-op and a confusing one).
-     */
-    public record UpdateShopRequest(
-            String addressLine,
-            String postalCode,
-            String city,
-            String country,
-            String phone,
-            String taxId,
-            String website
-    ) {}
-
-    /**
-     * Full read shape — every column from {@link Shop}. The frontend
-     * can render {@code null} fields as "—" rather than " ".
-     */
-    public record ShopResponse(
-            UUID id,
-            String name,
-            String normalisedName,
-            String addressLine,
-            String postalCode,
-            String city,
-            String country,
-            String phone,
-            String taxId,
-            String website,
-            Instant createdAt
-    ) {
-        public static ShopResponse of(Shop shop) {
-            return new ShopResponse(
-                    shop.id(),
-                    shop.name(),
-                    shop.normalisedName(),
-                    shop.addressLine(),
-                    shop.postalCode(),
-                    shop.city(),
-                    shop.country(),
-                    shop.phone(),
-                    shop.taxId(),
-                    shop.website(),
-                    shop.createdAt());
-        }
-    }
 }

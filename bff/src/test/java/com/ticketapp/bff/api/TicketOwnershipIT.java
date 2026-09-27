@@ -1,10 +1,12 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.api.dto.ChangeStatusRequest;
+import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.auth.AuthController;
-import com.ticketapp.bff.auth.AuthenticatedUser;
-import com.ticketapp.bff.auth.SessionRepository;
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.SessionRepository;
 import com.ticketapp.bff.auth.TestGoogleConfig;
-import com.ticketapp.bff.auth.UserRepository;
+import com.ticketapp.domain.identity.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtractionQueue;
 import com.ticketapp.domain.TicketRepository;
@@ -118,7 +120,7 @@ class TicketOwnershipIT {
      * Create a second user directly (bypassing Google) and mint a
      * real session JWT for it. Mirrors what the production login
      * flow does in {@code AuthController#issue}: persist a row in
-     * {@code auth_sessions} (so the {@code SessionExistsValidator}
+     * {@code auth_sessions} (so the session lookup
      * recognises the token) and emit a signed JWT with the matching
      * {@code sub} / {@code jti} claims.
      */
@@ -130,8 +132,8 @@ class TicketOwnershipIT {
 
     /**
      * Mint a Bearer token for an already-persisted user. Persists a
-     * matching row in {@code auth_sessions} (so the
-     * {@code SessionExistsValidator} recognises it) and emits a
+     * matching row in {@code auth_sessions} (so the converter's
+     * session lookup recognises it) and emits a
      * signed JWT with the same {@code sub} / {@code jti} pair.
      * Mirrors what the production login flow does in
      * {@code AuthController#issue}.
@@ -175,26 +177,26 @@ class TicketOwnershipIT {
         Ticket b1 = seedTicket(userB.id(), "b1.pdf");
 
         // User A: only a1 and a2.
-        List<TicketController.TicketResponse> listA = web().get().uri("/api/tickets")
+        List<TicketResponse> listA = web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(listA).extracting(TicketController.TicketResponse::id)
+        assertThat(listA).extracting(TicketResponse::id)
                 .containsExactlyInAnyOrder(a1.id(), a2.id())
                 .doesNotContain(b1.id());
 
         // User B: only b1.
-        List<TicketController.TicketResponse> listB = web().get().uri("/api/tickets")
+        List<TicketResponse> listB = web().get().uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(listB).extracting(TicketController.TicketResponse::id)
+        assertThat(listB).extracting(TicketResponse::id)
                 .containsExactly(b1.id())
                 .doesNotContain(a1.id(), a2.id());
     }
@@ -210,27 +212,27 @@ class TicketOwnershipIT {
         Ticket aOpen = seedTicket(userA.id(), "a-open.pdf");
         Ticket bOpen = seedTicket(userB.id(), "b-open.pdf");
 
-        List<TicketController.TicketResponse> pendingA = web()
+        List<TicketResponse> pendingA = web()
                 .get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(pendingA).extracting(TicketController.TicketResponse::id)
+        assertThat(pendingA).extracting(TicketResponse::id)
                 .containsExactlyInAnyOrder(aOpen.id())
                 .doesNotContain(bOpen.id());
 
-        List<TicketController.TicketResponse> pendingB = web()
+        List<TicketResponse> pendingB = web()
                 .get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(pendingB).extracting(TicketController.TicketResponse::id)
+        assertThat(pendingB).extracting(TicketResponse::id)
                 .containsExactly(bOpen.id())
                 .doesNotContain(aOpen.id());
     }
@@ -272,7 +274,7 @@ class TicketOwnershipIT {
         web().patch().uri("/api/tickets/{id}/status", aOnly.id())
                 .header("authorization", "Bearer " + tokenB)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .bodyValue(new TicketController.ChangeStatusRequest(Ticket.Status.CANCELLED))
+                .bodyValue(new ChangeStatusRequest(Ticket.Status.CANCELLED))
                 .exchange()
                 .expectStatus().isNotFound();
 

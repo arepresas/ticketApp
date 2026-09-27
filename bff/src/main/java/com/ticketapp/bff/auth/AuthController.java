@@ -2,6 +2,9 @@ package com.ticketapp.bff.auth;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.ticketapp.bff.security.JwtToAuthenticatedUserConverter;
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.SessionRepository;
+import com.ticketapp.domain.identity.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 
 import jakarta.validation.Valid;
@@ -96,8 +99,8 @@ public class AuthController {
 
     /**
      * Logout: revoke the session row. The next request carrying
-     * this token fails {@link com.ticketapp.bff.security.SessionExistsValidator}
-     * with 401.
+     * this token fails the session lookup in
+     * {@link com.ticketapp.bff.security.JwtToAuthenticatedUserConverter} with 401.
      */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {

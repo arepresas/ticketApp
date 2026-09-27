@@ -1,7 +1,7 @@
 package com.ticketapp.bff.security;
 
-import com.ticketapp.bff.auth.AuthenticatedUser;
-import com.ticketapp.bff.auth.UserRepository;
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.SessionRepository;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -30,24 +30,24 @@ import java.util.UUID;
  * {@code AuthenticatedUser} as the principal, which keeps controllers
  * one-liner-clean: {@code currentUser().id()}.
  *
- * <p>Three checks happen here, all of which would also be enforced by
- * the {@link SessionExistsValidator} but doing them at conversion time
- * gives better error messages and avoids a needless DB round-trip
- * when the token claims are clearly malformed:
+ * <p>Single round-trip per request: the session liveness check
+ * (row exists, not revoked, not expired) and the user lookup run as
+ * one join query ({@link SessionRepository#findActiveUserByJti}),
+ * so a revoked or deleted session is rejected here even before its
+ * JWT expiry — no separate validator filter needed. The {@code sub}
+ * claim is re-checked against the joined user id so a token can
+ * never ride another user's session row.
+ *
+ * <p>Three rejections happen here:
  * <ol>
  *   <li>{@code sub} must parse as a UUID.</li>
  *   <li>{@code jti} must parse as a UUID.</li>
- *   <li>The user id ({@code sub}) must resolve to a live row in
- *       {@code app_users}. Stale tokens (user deleted, account
- *       deactivated) are rejected with 401 instead of letting the
+ *   <li>The {@code jti} must resolve to a live session whose owner
+ *       matches {@code sub}. Stale tokens (session revoked,
+ *       expired, deleted — or user deleted, which empties the
+ *       join) are rejected with 401 instead of letting the
  *       controller 500 on a missing principal.</li>
  * </ol>
- *
- * <p>Revocation lives in {@link SessionExistsValidator} because it
- * depends on a session row the conversion layer doesn't have access
- * to in the standard chain (the validator runs first). The user
- * existence check lives here because {@link UserRepository} is the
- * domain-side source of truth.
  */
 @Component
 @Slf4j
@@ -56,10 +56,10 @@ public class JwtToAuthenticatedUserConverter
 
     static final String CLAIM_JTI = "jti";
 
-    private final UserRepository users;
+    private final SessionRepository sessions;
 
-    public JwtToAuthenticatedUserConverter(UserRepository users) {
-        this.users = users;
+    public JwtToAuthenticatedUserConverter(SessionRepository sessions) {
+        this.sessions = sessions;
     }
 
     @Override
@@ -67,10 +67,13 @@ public class JwtToAuthenticatedUserConverter
         UUID userId = parseUuidClaim(jwt, "sub", "user");
         UUID jti = parseUuidClaim(jwt, CLAIM_JTI, "session");
 
-        AuthenticatedUser user = users.findById(userId).orElseThrow(() -> {
-            log.warn("JWT refers to unknown user {} (jti {})", userId, jti);
-            return new InvalidBearerTokenException("user no longer exists");
-        });
+        AuthenticatedUser user = sessions.findActiveUserByJti(jti)
+                .filter(u -> u.id().equals(userId))
+                .orElseThrow(() -> {
+                    log.warn("JWT rejected: no live session {} for user {}", jti, userId);
+                    return new InvalidBearerTokenException(
+                            "session has been revoked, expired, or does not exist");
+                });
 
         Collection<GrantedAuthority> authorities = List.of(
                 new SimpleGrantedAuthority("ROLE_USER"));

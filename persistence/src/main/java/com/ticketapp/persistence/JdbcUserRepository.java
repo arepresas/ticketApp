@@ -1,5 +1,7 @@
-package com.ticketapp.bff.auth;
+package com.ticketapp.persistence;
 
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,7 +25,8 @@ public class JdbcUserRepository implements UserRepository {
     private static final String COLS =
             "id, google_sub, email, name, picture_url, created_at, last_login_at";
 
-    private static final RowMapper<AuthenticatedUser> MAPPER = (rs, rowNum) -> new AuthenticatedUser(
+    /** Package-visible for reuse by {@link JdbcSessionRepository}'s join query. */
+    static final RowMapper<AuthenticatedUser> MAPPER = (rs, rowNum) -> new AuthenticatedUser(
             (UUID) rs.getObject("id"),
             rs.getString("google_sub"),
             rs.getString("email"),

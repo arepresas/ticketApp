@@ -1,5 +1,7 @@
-package com.ticketapp.bff.auth;
+package com.ticketapp.persistence;
 
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -55,6 +57,23 @@ public class JdbcSessionRepository implements SessionRepository {
         return jdbc.query(
                 "SELECT jti, user_id, issued_at, expires_at, revoked_at FROM auth_sessions WHERE jti = ?",
                 MAPPER,
+                jti
+        ).stream().findFirst();
+    }
+
+    @Override
+    public Optional<AuthenticatedUser> findActiveUserByJti(UUID jti) {
+        return jdbc.query(
+                """
+                SELECT u.id, u.google_sub, u.email, u.name, u.picture_url,
+                       u.created_at, u.last_login_at
+                  FROM auth_sessions s
+                  JOIN app_users u ON u.id = s.user_id
+                 WHERE s.jti = ?
+                   AND s.revoked_at IS NULL
+                   AND s.expires_at > now()
+                """,
+                JdbcUserRepository.MAPPER,
                 jti
         ).stream().findFirst();
     }

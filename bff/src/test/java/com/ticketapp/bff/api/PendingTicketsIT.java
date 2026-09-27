@@ -1,8 +1,10 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.api.dto.ChangeStatusRequest;
+import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
-import com.ticketapp.bff.auth.UserRepository;
+import com.ticketapp.domain.identity.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,7 +89,7 @@ class PendingTicketsIT {
      * test that expects an empty list would see the rows seeded by
      * an earlier test in the same run. We also wipe the users table
      * so each test's {@code loginAndGetToken} creates a fresh
-     * {@link com.ticketapp.bff.auth.AuthenticatedUser} with a stable,
+     * {@link com.ticketapp.domain.identity.AuthenticatedUser} with a stable,
      * predictable id (UUID derived from the google-sub).
      */
     @BeforeEach
@@ -181,11 +183,11 @@ class PendingTicketsIT {
         tickets.save(done.withStatus(Ticket.Status.DONE));
         tickets.save(cancelled.withStatus(Ticket.Status.CANCELLED));
 
-        List<TicketController.TicketResponse> body = web().get().uri("/api/tickets/pending")
+        List<TicketResponse> body = web().get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -194,11 +196,11 @@ class PendingTicketsIT {
         // scheduler is currently feeding to the provider shows up in
         // the work queue — the operator sees a stuck "AI is working"
         // row right next to the genuine pending and failed tickets.
-        assertThat(body).extracting(TicketController.TicketResponse::id)
+        assertThat(body).extracting(TicketResponse::id)
                 .containsExactlyInAnyOrder(
                         openOld.id(), inAnalysis.id(), inProgress.id(), errored.id())
                 .doesNotContain(done.id(), cancelled.id());
-        assertThat(body).extracting(TicketController.TicketResponse::status)
+        assertThat(body).extracting(TicketResponse::status)
                 .containsOnly(
                         Ticket.Status.OPEN,
                         Ticket.Status.IN_ANALYSIS,
@@ -231,11 +233,11 @@ class PendingTicketsIT {
                 "application/pdf", "broken.pdf", new byte[]{1})
                 .markError("MiniMax returned 500: bad gateway"));
 
-        List<TicketController.TicketResponse> body = web().get().uri("/api/tickets/pending")
+        List<TicketResponse> body = web().get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(TicketController.TicketResponse.class)
+                .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -258,11 +260,11 @@ class PendingTicketsIT {
                 "application/pdf", "broken.pdf", new byte[]{1})
                 .markError("MiniMax returned 502: bad gateway"));
 
-        TicketController.TicketResponse body = web().get().uri("/api/tickets/" + failed.id())
+        TicketResponse body = web().get().uri("/api/tickets/" + failed.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(TicketController.TicketResponse.class)
+                .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -283,14 +285,14 @@ class PendingTicketsIT {
                 "application/pdf", "retry.pdf", new byte[]{1})
                 .markError("MiniMax returned 500"));
 
-        TicketController.TicketResponse patched = web().patch()
+        TicketResponse patched = web().patch()
                 .uri("/api/tickets/" + failed.id() + "/status")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new TicketController.ChangeStatusRequest(Ticket.Status.OPEN))
+                .bodyValue(new ChangeStatusRequest(Ticket.Status.OPEN))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(TicketController.TicketResponse.class)
+                .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 

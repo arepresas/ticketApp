@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.api.dto.ShopResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,7 +105,7 @@ class ShopControllerIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(ShopController.ShopResponse.class)
+                .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.id()).isEqualTo(id);
                     assertThat(resp.name()).isEqualTo("Mercadona");
@@ -151,7 +152,7 @@ class ShopControllerIT {
                         "website", "https://carrefour.es"))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(ShopController.ShopResponse.class)
+                .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.addressLine()).isEqualTo("Avenida Diagonal 3");
                     assertThat(resp.postalCode()).isEqualTo("08001");
@@ -178,7 +179,7 @@ class ShopControllerIT {
                 .bodyValue(Map.of("phone", "+34 901 00 00 00"))
                 .exchange()
                 .expectStatus().isOk()
-                .expectBody(ShopController.ShopResponse.class)
+                .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.phone()).isEqualTo("+34 901 00 00 00");
                     assertThat(resp.addressLine()).isEqualTo("Old Street 1");

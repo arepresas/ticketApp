@@ -1,4 +1,4 @@
-package com.ticketapp.bff.auth;
+package com.ticketapp.domain.identity;
 
 import java.util.Optional;
 import java.util.UUID;

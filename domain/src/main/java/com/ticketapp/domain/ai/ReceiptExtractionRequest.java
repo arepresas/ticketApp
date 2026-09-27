@@ -52,7 +52,7 @@ public record ReceiptExtractionRequest(
      * the shape without parsing MIME strings themselves.
      */
     public boolean isPdf() {
-        return contentType.toLowerCase().startsWith("application/pdf");
+        return contentType.toLowerCase(java.util.Locale.ROOT).startsWith("application/pdf");
     }
 
     // Records auto-generate equals/hashCode/toString that treat

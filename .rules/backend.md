@@ -37,8 +37,8 @@ com.ticketapp.<module>.<concern>.<role>
 | Package | Lives |
 |---------|-------|
 | `com.ticketapp.bff.api` | `@RestController` classes |
-| `com.ticketapp.bff.auth` | `SessionFilter`, `SessionTokenService`, `GoogleTokenVerifier`, `AuthenticatedUser` |
-| `com.ticketapp.bff.auth` | Repository interfaces (`SessionRepository`, `UserRepository`) |
+| `com.ticketapp.bff.auth` | `GoogleTokenVerifier`, `AuthController` (Google `id_token` edge) |
+| `com.ticketapp.domain.identity` | Identity value objects + ports (`AuthenticatedUser`, `SessionRepository`, `UserRepository`) |
 | `com.ticketapp.persistence` | JDBC implementations (`JdbcTicketRepository`, `JdbcTicketExtractionRepository`, ...) |
 | `com.ticketapp.domain.<bounded-context>` | Pure model |
 | `com.ticketapp.domain.ai` | Provider-agnostic ports (`ReceiptExtractor`) — ADR 0007 |

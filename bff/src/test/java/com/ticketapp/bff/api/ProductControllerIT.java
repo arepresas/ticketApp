@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.api.dto.ProductSearchResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,17 +93,17 @@ class ProductControllerIT {
         UUID bananaId = seedProduct("Banana", null);
         seedProduct("Milk", null);
 
-        List<ProductController.ProductSearchResponse> body = web()
+        List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri.path("/api/products/search").queryParam("name", "B").build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(ProductController.ProductSearchResponse.class)
+                .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
         assertThat(body).isNotNull();
-        assertThat(body).extracting(ProductController.ProductSearchResponse::id)
+        assertThat(body).extracting(ProductSearchResponse::id)
                 .containsExactlyInAnyOrder(breadId, bananaId);
     }
 
@@ -111,12 +112,12 @@ class ProductControllerIT {
         String token = loginAndGetToken();
         seedProduct("Bread", "kg");
 
-        List<ProductController.ProductSearchResponse> body = web()
+        List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri.path("/api/products/search").queryParam("name", "bread").build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(ProductController.ProductSearchResponse.class)
+                .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -133,7 +134,7 @@ class ProductControllerIT {
             seedProduct(n, null);
         }
 
-        List<ProductController.ProductSearchResponse> body = web()
+        List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri
                         .path("/api/products/search")
                         .queryParam("name", "A")
@@ -142,7 +143,7 @@ class ProductControllerIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(ProductController.ProductSearchResponse.class)
+                .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -159,7 +160,7 @@ class ProductControllerIT {
             seedProduct("Apple " + i, null);
         }
 
-        List<ProductController.ProductSearchResponse> body = web()
+        List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri
                         .path("/api/products/search")
                         .queryParam("name", "Apple")
@@ -168,7 +169,7 @@ class ProductControllerIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(ProductController.ProductSearchResponse.class)
+                .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
@@ -181,7 +182,7 @@ class ProductControllerIT {
         String token = loginAndGetToken();
         seedProduct("Bread", null);
 
-        List<ProductController.ProductSearchResponse> body = web()
+        List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri
                         .path("/api/products/search")
                         .queryParam("name", "   ")
@@ -189,7 +190,7 @@ class ProductControllerIT {
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isOk()
-                .expectBodyList(ProductController.ProductSearchResponse.class)
+                .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
