@@ -107,6 +107,26 @@ class TicketApplicationServiceTest {
     }
 
     @Test
+    void reMarkingAnAlreadyDoneTicketRetriesTheCatalogueApply() {
+        // The recovery path for a DONE ticket whose catalogue apply
+        // failed. The branch is keyed on the requested target status,
+        // not on an actual transition, so a second DONE re-runs the
+        // normaliser (idempotently) instead of being a no-op.
+        UUID id = UUID.randomUUID();
+        Ticket done = openTicket(id).withStatus(Status.DONE);
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
+        when(extractions.findByTicketId(id)).thenReturn(Optional.of(
+                new TicketExtraction(
+                        id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
+                        new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null)));
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.changeStatus(id, user, Status.DONE);
+
+        verify(normaliser).normaliseOnDone(any(Ticket.class));
+    }
+
+    @Test
     void changeStatusOnMissingTicketIs404() {
         UUID id = UUID.randomUUID();
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty());
