@@ -16,10 +16,10 @@ public class OptimisticLockException extends TicketAppException {
     private final UUID ticketId;
 
     /** Stable code callers and logs switch on. */
-    public static final String CODE = "TICKET_MODIFIED_CONCURRENTLY";
+    public static final String ERROR_CODE = "TICKET_MODIFIED_CONCURRENTLY";
 
     public OptimisticLockException(UUID ticketId, String message) {
-        super(CODE, message);
+        super(ERROR_CODE, message);
         this.ticketId = ticketId;
     }
 

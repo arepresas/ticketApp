@@ -22,8 +22,9 @@ import com.ticketapp.domain.exceptions.TicketAppException;
  */
 public class ReceiptExtractionException extends TicketAppException {
 
-    /** Stable code for logs and API responses. */
-    public static final String CODE = "RECEIPT_EXTRACTION_FAILED";
+    /** Stable code for logs and API responses. Named ERROR_CODE rather than
+     *  CODE so it cannot be confused with the inherited {@code code()} accessor. */
+    public static final String ERROR_CODE = "RECEIPT_EXTRACTION_FAILED";
 
     private final int statusCode;
     private final boolean retryable;
@@ -39,14 +40,14 @@ public class ReceiptExtractionException extends TicketAppException {
      *                  {@code statusCode}.
      */
     public ReceiptExtractionException(int statusCode, boolean retryable, String message) {
-        super(CODE, message);
+        super(ERROR_CODE, message);
         this.statusCode = statusCode;
         this.retryable = retryable;
     }
 
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, Throwable cause) {
-        super(CODE, message, cause);
+        super(ERROR_CODE, message, cause);
         this.statusCode = statusCode;
         this.retryable = retryable;
     }

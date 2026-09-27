@@ -313,13 +313,13 @@ public class TicketExtractionService {
             return false;
         } catch (DataAccessException | IllegalArgumentException | IllegalStateException e) {
             // The provider honours its port contract now, so what is
-            // left is ours and worth naming: DataAccessException is a
-            // constraint violation or a dead connection, the two
-            // unchecked pair is a domain invariant rejecting what the
-            // provider sent. All three mean "this ticket could not be
-            // written", which is exactly what ON_ERROR records. An
-            // unnamed catch(Exception) used to hide this and was
-            // forbidden by CONVENTIONS §7 anyway.
+            // left is ours and worth naming: a constraint violation or
+            // a dead connection, or a domain invariant rejecting what
+            // the provider sent. All three mean "this ticket could not
+            // be written", which is exactly what ON_ERROR records.
+            // Naming the three types also keeps this honest: an
+            // unnamed broad handler would hide them again, and
+            // CONVENTIONS §7 forbids one.
             markError(marked, e.getMessage());
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, e.getMessage());
