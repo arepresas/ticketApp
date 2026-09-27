@@ -47,5 +47,16 @@ public record AiProperties(
 ) {
     public AiProperties {
         Objects.requireNonNull(staleAnalysisTimeout, "staleAnalysisTimeout is required");
+        // @Scheduled consumes the raw property, so nothing else would
+        // ever read this field — and a malformed cron would otherwise
+        // blow up the scheduler at init with an opaque message.
+        // Parse it here so the failure is a boot failure with a
+        // readable cause.
+        try {
+            org.springframework.scheduling.support.CronExpression.parse(cron);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "ticketapp.ai.cron is not a valid cron expression: " + cron, e);
+        }
     }
 }
