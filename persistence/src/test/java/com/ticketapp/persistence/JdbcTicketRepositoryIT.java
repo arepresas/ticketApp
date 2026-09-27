@@ -85,9 +85,27 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void findOpenForExtractionExcludesNonOpenStatuses() {
+        // The scheduler's candidate query is OPEN-only, and three
+        // separate guarantees rest on that:
+        //   * a terminal ticket (DONE / CANCELLED / DELETED) is never
+        //     re-extracted;
+        //   * a ticket reopened for editing as IN_PROGRESS stays free
+        //     of AI calls until the user re-validates it by hand;
+        //   * a claim left in IN_ANALYSIS by a dead worker is not
+        //     double-processed while it waits for the re-queue sweep.
+        // Widening the filter would silently reintroduce a paid API
+        // call in all three cases, hence the explicit list.
         Ticket open = repository.save(Ticket.open(OWNER, "open", ""));
         Ticket done = repository.save(Ticket.open(OWNER, "done", "")
                 .withStatus(Ticket.Status.DONE));
+        Ticket cancelled = repository.save(Ticket.open(OWNER, "cancelled", "")
+                .withStatus(Ticket.Status.CANCELLED));
+        Ticket deleted = repository.save(Ticket.open(OWNER, "deleted", "")
+                .withStatus(Ticket.Status.DELETED));
+        Ticket reopened = repository.save(Ticket.open(OWNER, "reopened", "")
+                .withStatus(Ticket.Status.IN_PROGRESS));
+        Ticket claimed = repository.save(Ticket.open(OWNER, "claimed", "")
+                .withStatus(Ticket.Status.IN_ANALYSIS));
         Ticket onError = repository.save(Ticket.open(OWNER, "err", "")
                 .markError("boom"));
 
@@ -95,7 +113,8 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
         assertThat(openOnly).extracting(Ticket::id)
                 .contains(open.id())
-                .doesNotContain(done.id(), onError.id());
+                .doesNotContain(done.id(), cancelled.id(), deleted.id(),
+                        reopened.id(), claimed.id(), onError.id());
     }
 
     @Test

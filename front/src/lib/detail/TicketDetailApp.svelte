@@ -48,6 +48,7 @@
 		Trash2,
 		Check as CheckIcon,
 		PackagePlus,
+		Pencil,
 		Save
 	} from '@lucide/svelte';
 
@@ -107,11 +108,16 @@
 	let acting = $state(false);
 
 	/**
-	 * DONE tickets are read-only everywhere: the user can't keep
-	 * editing after they've validated the receipt. The Save
-	 * button's full branch hides once this flips false; every
-	 * editable field picks up `readonly`; the mark-as-done / mark-as-cancelled
-	 * footer actions hide (the ticket is already terminal).
+	 * DONE and CANCELLED tickets are read-only everywhere: the Save
+	 * button's full branch hides once this flips false and every
+	 * editable field picks up `readonly`. They are not permanently
+	 * frozen, though — the "Modify ticket" action reopens them as
+	 * IN_PROGRESS, which flips this back to true (see
+	 * {@link reopenForEdit}).
+	 *
+	 * <p>DONE additionally renders its line items from the catalogue
+	 * rather than the extraction, so reopening also switches the
+	 * source back.
 	 */
 	const editable = $derived(
 		ticket?.status !== 'DONE' && ticket?.status !== 'CANCELLED'
@@ -603,6 +609,50 @@
 				errorMessage = `Could not mark as ${status} (${err.status}): ${err.message}`;
 			} else {
 				errorMessage = `Could not mark as ${status}: ${err instanceof Error ? err.message : 'unknown error'}`;
+			}
+		} finally {
+			acting = false;
+		}
+	}
+
+	/**
+	 * Reopen a terminal ticket for editing by moving it to
+	 * IN_PROGRESS.
+	 *
+	 * <p>Why IN_PROGRESS and not OPEN: the scheduler's candidate
+	 * query only selects {@code status = 'OPEN'}, so a reopened
+	 * ticket is editable without the AI being called again. OPEN
+	 * would re-run the whole extraction (and bill it) on the next
+	 * tick. IN_PROGRESS is also where a ticket that already went
+	 * through extraction sits, so the ticket lands back in a
+	 * familiar place.
+	 *
+	 * <p>Re-validating afterwards is still free of AI calls: the
+	 * extraction row already exists, so marking it DONE again skips
+	 * the pipeline and re-runs only the catalogue normalisation with
+	 * the user's edits.
+	 *
+	 * <p>Unlike {@link setStatus} this keeps the detail screen
+	 * open — the whole point is to edit what is on it.
+	 */
+	async function reopenForEdit(): Promise<void> {
+		if (!ticketId || acting) return;
+		const token = readSessionToken();
+		if (!token) return;
+		acting = true;
+		errorMessage = null;
+		try {
+			await updateTicketStatus(token, ticketId, 'IN_PROGRESS');
+			// Reload rather than patching local state: leaving DONE
+			// also has to drop the cached catalogue and go back to
+			// the extraction as the line source.
+			await load(ticketId);
+			window.dispatchEvent(new CustomEvent('ticket:updated'));
+		} catch (err: unknown) {
+			if (err instanceof TicketApiError) {
+				errorMessage = `Could not reopen for editing (${err.status}): ${err.message}`;
+			} else {
+				errorMessage = `Could not reopen for editing: ${err instanceof Error ? err.message : 'unknown error'}`;
 			}
 		} finally {
 			acting = false;
@@ -1143,10 +1193,11 @@
 					Save button: hidden entirely once the ticket is
 					validated. DONE tickets render their data from the
 					catalogue tables, not from the editable extraction,
-					and the user's "no se puede modificar" rule means
-					there's nothing to save. The Validated badge in
-					the meta row above carries the same UX signal — the
-					user sees they're in read-only mode.
+					so there is nothing to save until the ticket is
+					reopened with "Modify ticket". The Validated badge
+					in the meta row above carries the same UX signal —
+					the user sees they're in read-only mode, and the
+					footer offers the way back.
 				-->
 				{#if editable}
 				<button
@@ -1992,6 +2043,8 @@
 					Status actions hide once the ticket reaches a terminal
 					state — DONE (already validated) or CANCELLED
 					(deliberately dismissed by the user, not coming back).
+					The Modify action at the bottom is the way back from
+					both.
 
 					For ON_ERROR tickets the "Mark as done" action is
 					replaced by a Reset button that flips the status back
@@ -2038,13 +2091,27 @@
 				</footer>
 				{/if}
 				<!--
-					Cancelled tickets are out of the pipeline — the only
-					thing left to do with them is delete. Soft delete on
-					the BFF (row flips to DELETED, history stays); the
+					Terminal tickets: the only way back is "Modify
+					ticket", which reopens them as IN_PROGRESS (editable,
+					and invisible to the scheduler's OPEN-only candidate
+					query, so no AI call). Cancelled tickets keep
+					"Delete ticket" on top of that: soft delete on the
+					BFF flips the row to DELETED, history stays, and the
 					dashboard drops it from every list afterwards.
 				-->
-				{#if ticket?.status === 'CANCELLED'}
+				{#if ticket?.status === 'DONE' || ticket?.status === 'CANCELLED'}
 				<footer class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+					<button
+						type="button"
+						onclick={() => void reopenForEdit()}
+						disabled={acting}
+						data-testid="modify-ticket"
+						class="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						<Pencil class="size-4" />
+						Modify ticket
+					</button>
+					{#if ticket?.status === 'CANCELLED'}
 					<button
 						type="button"
 						onclick={() => void deleteTicketAction()}
@@ -2055,6 +2122,7 @@
 						<Trash2 class="size-4" />
 						Delete ticket
 					</button>
+					{/if}
 				</footer>
 				{/if}
 			{/if}
