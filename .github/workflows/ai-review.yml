@@ -2,7 +2,9 @@ name: AI Review
 
 # Automated code review on every PR, in parallel with CI.
 # All credentials and routing live in repo
-# Settings → Secrets/Variables, never in this file.
+# Settings → Secrets/Variables, never in this file. Secrets resolve
+# when each job starts: after editing one, trigger a fresh run rather
+# than resuming an old attempt so the new values apply.
 
 permissions:
   contents: read
