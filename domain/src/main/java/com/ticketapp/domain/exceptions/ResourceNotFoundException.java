@@ -18,13 +18,14 @@ import java.util.UUID;
  */
 public class ResourceNotFoundException extends TicketAppException {
 
-    /** Stable code for logs and API responses. */
-    public static final String CODE = "RESOURCE_NOT_FOUND";
+    /** Stable code for logs and API responses. Named ERROR_CODE rather than
+     *  CODE so it cannot be confused with the inherited {@code code()} accessor. */
+    public static final String ERROR_CODE = "RESOURCE_NOT_FOUND";
 
     private final UUID resourceId;
 
     public ResourceNotFoundException(String resource, UUID resourceId) {
-        super(CODE, resource + " " + resourceId + " does not exist");
+        super(ERROR_CODE, resource + " " + resourceId + " does not exist");
         this.resourceId = resourceId;
     }
 

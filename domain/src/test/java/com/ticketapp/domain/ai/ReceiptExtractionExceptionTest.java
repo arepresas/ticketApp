@@ -36,7 +36,7 @@ class ReceiptExtractionExceptionTest {
         ReceiptExtractionException e = new ReceiptExtractionException(
                 400, false, "bad request");
 
-        assertEquals(ReceiptExtractionException.CODE, e.code());
+        assertEquals(ReceiptExtractionException.ERROR_CODE, e.code());
         assertFalse(e.retryable());
     }
 

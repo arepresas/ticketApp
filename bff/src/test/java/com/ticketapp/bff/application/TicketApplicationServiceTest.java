@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,7 +73,7 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
+                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
@@ -92,7 +93,7 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
+                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
@@ -117,7 +118,7 @@ class TicketApplicationServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
                 new TicketExtraction(
-                        id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
+                        id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
                         new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null)));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

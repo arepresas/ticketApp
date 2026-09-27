@@ -83,9 +83,11 @@ class TicketExtractionNormaliserTest {
      * call. The V13 refactor moved shop_id onto the ticket, so the
      * normaliser now takes the full Ticket (it stamps the resolved
      * shop id back onto it) — the test fixture matches.
+     *
+     * <p>The owner is fixed rather than random so the owner-scoped
+     * port stub and the fixture ticket agree: the normaliser passes
+     * {@code ticket.ownerId()} to the extraction repository.
      */
-    /** Fixed so the owner-scoped port stub and the fixture ticket
-     *  agree — the normaliser passes {@code ticket.ownerId()}. */
     private static final UUID OWNER =
             UUID.fromString("11111111-1111-1111-1111-111111111111");
 
