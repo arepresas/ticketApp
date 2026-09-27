@@ -32,9 +32,11 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
         this.namedJdbc = new NamedParameterJdbcTemplate(jdbc);
     }
 
+    // Qualified with the alias used by FIND_BY_TICKET_SQL, which
+    // joins tickets to apply the owner filter.
     private static final String LINE_COLS =
-            "id, ticket_id, product_id, price_id, " +
-            "quantity, line_total, created_at, updated_at";
+            "l.id, l.ticket_id, l.product_id, l.price_id, " +
+            "l.quantity, l.line_total, l.created_at, l.updated_at";
 
     private static final String UPSERT_SQL = """
             INSERT INTO line_tickets
@@ -49,8 +51,8 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             """;
 
     private static final String FIND_SQL =
-            "SELECT " + LINE_COLS + " FROM line_tickets " +
-            "WHERE ticket_id = :ticket AND product_id = :product";
+            "SELECT " + LINE_COLS + " FROM line_tickets l " +
+            "WHERE l.ticket_id = :ticket AND l.product_id = :product";
 
     @Override
     public Optional<LineTicket> findByTicketAndProduct(UUID ticketId, UUID productId) {
@@ -67,15 +69,21 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
      * line items while editing. Uses the index on {@code ticket_id}
      * for the index scan and a sort on the already-indexed column.
      */
+    // Owner-scoped: the join to tickets is the tenant filter, so a
+    // line can only be read by the ticket's owner.
     private static final String FIND_BY_TICKET_SQL =
-            "SELECT " + LINE_COLS + " FROM line_tickets" +
-            " WHERE ticket_id = :ticket ORDER BY created_at ASC, id ASC";
+            "SELECT " + LINE_COLS + " FROM line_tickets l" +
+            " JOIN tickets t ON t.id = l.ticket_id" +
+            " WHERE l.ticket_id = :ticket AND t.owner_id = :owner" +
+            " ORDER BY l.created_at ASC, l.id ASC";
 
     @Override
-    public List<LineTicket> findByTicketId(UUID ticketId) {
+    public List<LineTicket> findByTicketId(UUID ticketId, UUID ownerId) {
         return namedJdbc.query(
                 FIND_BY_TICKET_SQL,
-                new MapSqlParameterSource("ticket", ticketId),
+                new MapSqlParameterSource()
+                        .addValue("ticket", ticketId)
+                        .addValue("owner", ownerId),
                 (rs, _) -> mapLine(rs));
     }
 

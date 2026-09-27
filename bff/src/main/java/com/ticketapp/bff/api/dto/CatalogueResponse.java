@@ -32,4 +32,25 @@ public record CatalogueResponse(
             BigDecimal quantity,
             BigDecimal pricePerUnit,
             BigDecimal lineTotal) { }
+
+    /**
+     * Project the domain view onto the wire. The only mapping rule
+     * that is not a copy is the pass-through of a null product name
+     * or price amount, which means the master row is gone — the
+     * catalogue row itself is still shown.
+     */
+    public static CatalogueResponse of(
+            com.ticketapp.domain.TicketCatalogueRepository.TicketCatalogue catalogue) {
+        return new CatalogueResponse(
+                catalogue.shop().id(),
+                catalogue.shop().name(),
+                catalogue.lines().stream()
+                        .map(l -> new CatalogueLine(
+                                l.productName(),
+                                l.unit(),
+                                l.quantity(),
+                                l.pricePerUnit(),
+                                l.lineTotal()))
+                        .toList());
+    }
 }

@@ -82,7 +82,8 @@ public class TicketExtractionNormaliser {
     @Transactional
     public void normaliseOnDone(Ticket ticket) {
         UUID ticketId = ticket.id();
-        TicketExtraction extraction = extractions.findByTicketId(ticketId).orElse(null);
+        TicketExtraction extraction = extractions
+                .findByTicketId(ticketId, ticket.ownerId()).orElse(null);
         if (extraction == null) {
             log.debug("Skip normalisation: no extraction row for ticket {}", ticketId);
             return;

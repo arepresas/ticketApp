@@ -84,10 +84,15 @@ class TicketExtractionNormaliserTest {
      * normaliser now takes the full Ticket (it stamps the resolved
      * shop id back onto it) — the test fixture matches.
      */
+    /** Fixed so the owner-scoped port stub and the fixture ticket
+     *  agree — the normaliser passes {@code ticket.ownerId()}. */
+    private static final UUID OWNER =
+            UUID.fromString("11111111-1111-1111-1111-111111111111");
+
     private static Ticket sampleTicket(UUID id) {
         return new Ticket(
                 id,
-                UUID.randomUUID(),
+                OWNER,
                 "Mercadona receipt",
                 "",
                 Status.OPEN,
@@ -138,7 +143,7 @@ class TicketExtractionNormaliserTest {
         // created with every contact field null — the user fills them
         // via PATCH later.
         UUID ticketId = UUID.randomUUID();
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
                         "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
@@ -182,7 +187,7 @@ class TicketExtractionNormaliserTest {
                   }
                 }
                 """;
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Mercadona", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
@@ -216,7 +221,7 @@ class TicketExtractionNormaliserTest {
                   }
                 }
                 """;
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
@@ -237,7 +242,7 @@ class TicketExtractionNormaliserTest {
         String rawReply = """
                 {"shop": {"city": "Madrid", "country": "ES"}}
                 """;
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Dia", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("dia")).thenReturn(Optional.empty());
@@ -266,7 +271,7 @@ class TicketExtractionNormaliserTest {
         String rawReply = """
                 {"purchase_date": "2026-07-04", "total_amount": 3.50}
                 """;
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
@@ -287,7 +292,7 @@ class TicketExtractionNormaliserTest {
         // normalisation — the lines are the important part.
         // The shop row is still created, just without contact info.
         UUID ticketId = UUID.randomUUID();
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Consum",
                         "{not valid json", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
@@ -312,7 +317,7 @@ class TicketExtractionNormaliserTest {
                 "Calle Mayor 1", "28013", "Madrid", "ES",
                 "+34 911 22 33 44", "A12345678", "https://mercadona.es",
                 Instant.parse("2026-01-01T00:00:00Z"));
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
                         "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.of(existing));
@@ -344,7 +349,7 @@ class TicketExtractionNormaliserTest {
         Shop created = new Shop(UUID.randomUUID(), "Consum", "consum",
                 null, null, null, null, null, null, null,
                 Instant.parse("2026-07-04T10:00:00Z"));
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Consum",
                         "{\"merchant\":\"Consum\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());

@@ -74,7 +74,7 @@ class TicketApplicationServiceTest {
         TicketExtraction doneExtraction = new TicketExtraction(
                 id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
-        when(extractions.findByTicketId(id))
+        when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(doneExtraction));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -94,7 +94,7 @@ class TicketApplicationServiceTest {
         TicketExtraction doneExtraction = new TicketExtraction(
                 id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
-        when(extractions.findByTicketId(id))
+        when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(doneExtraction));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -115,7 +115,7 @@ class TicketApplicationServiceTest {
         UUID id = UUID.randomUUID();
         Ticket done = openTicket(id).withStatus(Status.DONE);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
-        when(extractions.findByTicketId(id)).thenReturn(Optional.of(
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
                 new TicketExtraction(
                         id, "Mercadona", LocalDate.of(2026, 7, 4), "food", List.of(),
                         new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null)));
@@ -151,7 +151,7 @@ class TicketApplicationServiceTest {
         when(tickets.findById(id, OWNER))
                 .thenReturn(Optional.of(open))
                 .thenReturn(Optional.of(failed));
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
 
         Ticket result = service.changeStatus(id, user, Status.DONE);
 
