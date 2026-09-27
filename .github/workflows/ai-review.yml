@@ -1,0 +1,75 @@
+name: AI Review
+
+# Automated LLM code review on every pull request, in parallel with
+# CI. All credentials and routing live in repo Settings → Secrets and
+# Variables, never in this file.
+#
+# Secrets resolve when each job starts: after editing one, trigger a
+# fresh run rather than resuming an old attempt so the new value applies.
+# That matters here — a model the gateway does not serve only shows up
+# in the run log, and a resumed run would not pick up the fix.
+#
+# Fork pull requests are deliberately not covered. Under `pull_request`
+# GitHub issues a read-only token, so the action cannot post a review
+# (403). This project takes no fork PRs, and the alternative
+# (`pull_request_target` + TARGET_LABEL) would run with base-repo
+# privileges over untrusted diff text, so it is not worth the exposure.
+# If that ever changes, re-read the action README before adding it.
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    # ready_for_review: a PR promoted out of draft deserves a review
+    # too, and `opened` never fired for it while it was a draft.
+    types: [opened, reopened, synchronize, ready_for_review]
+
+# One review per push, never two racing ones for the same commit.
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned by SHA (v1.0.2) like every other action in this repo:
+      # a floating tag or branch would let an upstream change break the
+      # workflow without a PR here. Bump deliberately.
+      - uses: arepresas/ChatGPT-CodeReview@4c607fe96a920e0e1d524c4e586d3d2399977be8
+        env:
+          # Gateway credentials, stored under the names the reviewer
+          # was configured with. The action expects the OPENAI_*
+          # names because it targets any OpenAI-compatible gateway.
+          OPENAI_API_KEY: ${{ secrets.AI_API_KEY }}
+          OPENAI_API_ENDPOINT: ${{ vars.AI_API_ENDPOINT }}
+          MODEL: ${{ vars.AI_MODEL }}
+          # Stable per-PR session id: the gateway routes (and caches)
+          # per conversation, so one PR is one session across pushes.
+          OPENCODE_SESSION: ticketapp-pr-${{ github.event.number }}
+          LANGUAGE: English
+          # Lockfiles, build output and docs are not worth tokens.
+          IGNORE_PATTERNS: pnpm-lock.yaml,*.md,dist/**,target/**,coverage/**
+          # No MAX_PATCH_LENGTH on purpose: the diffs in this repo are
+          # large and stacked, and a silently skipped file is a review
+          # that lies about having looked. Watch the bill instead.
+          PROMPT: >-
+            Review this pull request diff as a senior engineer fluent in
+            Java 25 + Spring Boot 4, JDBC/PostgreSQL/Liquibase and
+            Svelte 5 + TypeScript. Reply in English. Focus on: real bugs
+            and logic errors, race conditions and transaction boundaries,
+            security issues (auth, sessions, secrets, injection, overly
+            broad matchers), performance cliffs (N+1, blob loading,
+            unbounded queries), and missing test coverage for new
+            behaviour. Project rules that must hold: strict module
+            layering (domain depends on nothing; persistence and AI
+            provider modules depend only on domain; bff wires them),
+            orchestrators depend on ports never on provider classes,
+            no util/helpers/dto/constants packages, no new top-level
+            Maven modules without an ADR, database changes only through
+            additive Liquibase migrations, no secrets or credentials in
+            code or logs, errors mapped to ProblemDetail (RFC 7807).
+            Skip style nits and praise; only findings an operator would
+            act on, each with the file, the why, and a concrete fix.
