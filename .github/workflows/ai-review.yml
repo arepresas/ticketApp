@@ -18,7 +18,10 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: anc95/ChatGPT-CodeReview@v1.0.23
+      # Fork with extra-header support (upstream lacks it):
+      # arepresas/ChatGPT-CodeReview adds OPENAI_EXTRA_HEADERS +
+      # OPENCODE_SESSION. Pinned by SHA; bump deliberately.
+      - uses: arepresas/ChatGPT-CodeReview@62933edbe0b7ae461d3c9c4dd58271c0d800e71e
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Reviewer's own key (opencode go). Actions secret.
@@ -29,6 +32,9 @@ jobs:
           OPENAI_API_ENDPOINT: ${{ secrets.AI_API_ENDPOINT }}
           # Model id as exposed by the gateway (Nemotron 3 Ultra).
           MODEL: ${{ secrets.AI_MODEL }}
+          # Stable per-PR session id: OpenCode Go routes (and caches)
+          # per conversation, so one PR = one session across pushes.
+          OPENCODE_SESSION: ticketapp-pr-${{ github.event.number }}
           LANGUAGE: English
           # Fail loudly on big diffs instead of silently skipping?
           # No MAX_PATCH_LENGTH set on purpose: stacked PRs here are
