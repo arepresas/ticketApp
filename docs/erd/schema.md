@@ -127,7 +127,7 @@ Constraints, defaults, and nullability that the diagram can't safely express inl
 
 ### `tickets`
 
-- `status` — `VARCHAR(32) NOT NULL`, CHECK in `('OPEN','IN_PROGRESS','ON_ERROR','DONE','CANCELLED')` (widened in V8 to admit `ON_ERROR`).
+- `status` — `VARCHAR(32) NOT NULL`, CHECK in `('OPEN','IN_ANALYSIS','IN_PROGRESS','ON_ERROR','DONE','CANCELLED','DELETED')` (widened in V8, V14, V20). `DELETED` is the soft-delete sink: reads filter it out, so deleted rows behave as missing.
 - `content_type`, `file_name`, `file_data` — nullable (added in V3; pre-V3 rows have NULLs).
 - `last_extraction_attempt_at` — nullable; populated by the scheduler on every tick (success or failure).
 - `error_message` — nullable; populated when extraction fails and the ticket transitions to `ON_ERROR`. Cleared via `PATCH /api/tickets/{id}/status` to `OPEN` or `CANCELLED`.

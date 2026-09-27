@@ -50,13 +50,16 @@ class TicketTest {
 
     @Test
     void statusEnumHasExpectedValues() {
-        // 6 lifecycle states: OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR,
-        // DONE, CANCELLED. IN_ANALYSIS was added to differentiate
+        // 7 lifecycle states: OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR,
+        // DONE, CANCELLED, DELETED. IN_ANALYSIS was added to differentiate
         // "AI is currently being called" from "AI is done, awaiting
         // user validation" — the badge is a separate colour in the
         // dashboard so the operator can tell the two apart without
-        // reading the underlying extraction row.
-        assertEquals(6, List.of(Ticket.Status.values()).size());
+        // reading the underlying extraction row. DELETED is the
+        // soft-delete sink: invisible to every read path.
+        assertEquals(7, List.of(Ticket.Status.values()).size());
+        assertEquals(Ticket.Status.DELETED,
+                Ticket.Status.valueOf("DELETED"));
     }
 
     @Test

@@ -90,7 +90,8 @@
 		IN_PROGRESS: 'In progress',
 		ON_ERROR: 'Error',
 		DONE: 'Done',
-		CANCELLED: 'Cancelled'
+		CANCELLED: 'Cancelled',
+		DELETED: 'Deleted'
 	};
 
 	// Status → pill colours. Open keeps blue (neutral / waiting
@@ -109,6 +110,8 @@
 			'bg-red-500/10 text-red-700 ring-1 ring-inset ring-red-500/20 dark:text-red-300',
 		DONE: 'bg-emerald-500/10 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300',
 		CANCELLED:
+			'bg-zinc-500/10 text-zinc-700 ring-1 ring-inset ring-zinc-500/20 dark:text-zinc-300',
+		DELETED:
 			'bg-zinc-500/10 text-zinc-700 ring-1 ring-inset ring-zinc-500/20 dark:text-zinc-300'
 	};
 

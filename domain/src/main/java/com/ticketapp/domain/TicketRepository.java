@@ -25,9 +25,10 @@ public interface TicketRepository {
 
     /**
      * Owner-scoped lookup. Returns {@link Optional#empty()} when the
-     * ticket does not exist <em>or</em> when it exists but is owned
-     * by a different user — the two cases are indistinguishable from
-     * the BFF's perspective to avoid leaking existence.
+     * ticket does not exist, <em>or</em> when it exists but is owned
+     * by a different user, <em>or</em> when it is soft-deleted — the
+     * three cases are indistinguishable from the BFF's perspective
+     * to avoid leaking existence.
      */
     Optional<Ticket> findById(UUID id, UUID ownerId);
 
@@ -49,9 +50,13 @@ public interface TicketRepository {
     Ticket save(Ticket ticket);
 
     /**
-     * Owner-scoped delete. Returns {@code true} when a row was
-     * removed, {@code false} when the ticket does not exist or is
-     * owned by someone else. Controller translates {@code false} to
+     * Owner-scoped soft delete. Flips the row to
+     * {@link Ticket.Status#DELETED} instead of removing it, so the
+     * audit trail (extractions, catalogue lines) stays intact.
+     * Deleted rows are invisible to every other port method.
+     * Returns {@code true} when a row was flipped, {@code false}
+     * when the ticket does not exist, is owned by someone else, or
+     * is already deleted. Controller translates {@code false} to
      * 404.
      */
     boolean deleteById(UUID id, UUID ownerId);

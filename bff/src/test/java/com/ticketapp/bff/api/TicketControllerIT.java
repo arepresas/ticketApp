@@ -132,6 +132,56 @@ class TicketControllerIT {
     }
 
     @Test
+    void deleteFlipsToDeletedAndHidesFromReadsAndLists() {
+        // Soft delete: the row flips to DELETED (history stays),
+        // and every read path treats it as missing — GET 404s, the
+        // list no longer contains it, and a second DELETE 404s too.
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+
+        web().delete().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isNoContent();
+
+        web().get().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isNotFound();
+
+        java.util.List<TicketResponse> listed = web().get().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(listed).isNotNull();
+        assertThat(listed).extracting(TicketResponse::id).doesNotContain(created.id());
+
+        web().delete().uri("/api/tickets/{id}", created.id())
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isNotFound();
+
+        // The row itself survives for audit.
+        assertThat(jdbc.queryForObject(
+                "SELECT status FROM tickets WHERE id = ?", String.class, created.id()))
+                .isEqualTo("DELETED");
+    }
+
+    @Test
     void rejectsUnauthenticatedUpload() {
         var body = pdfMultipart("receipt.pdf", "%PDF-1.4\n".getBytes(),
                 MediaType.APPLICATION_PDF_VALUE, null);
