@@ -23,6 +23,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
@@ -98,7 +99,7 @@ class TicketExtractionServiceTest {
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
                 tickets, extractions, jdbcTickets, receiptExtractor,
-                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2),
+                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2, Duration.ofMinutes(10)),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 

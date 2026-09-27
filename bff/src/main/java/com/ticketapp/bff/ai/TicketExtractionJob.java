@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -64,6 +65,16 @@ public class TicketExtractionJob {
 
         log.info("Extraction tick started: batchSize={}", properties.batchSize());
 
+        // Recover claims abandoned by a dead worker BEFORE picking
+        // candidates, so a ticket re-queued here is eligible for
+        // processing in this very tick instead of waiting a full
+        // cycle for nothing.
+        int requeued = requeueAbandonedClaims();
+        if (requeued > 0) {
+            log.warn("Re-queued {} ticket(s) abandoned in IN_ANALYSIS for more than {}",
+                    requeued, properties.staleAnalysisTimeout());
+        }
+
         long started = System.currentTimeMillis();
         List<Ticket> candidates = tickets.findOpenForExtraction(properties.batchSize()).stream()
                 // Defence in depth: the SQL filter already restricts
@@ -98,5 +109,19 @@ public class TicketExtractionJob {
         }
         log.info("Extraction tick finished: processed={} candidates={} elapsedMs={}",
                 processed, candidates.size(), System.currentTimeMillis() - started);
+    }
+
+    /**
+     * Re-queue tickets whose worker died mid-flight. Returns how many
+     * were moved back to {@code OPEN}.
+     *
+     * <p>Capped by {@code batchSize} so a large backlog of stale rows
+     * (a database outage, a fleet-wide deploy) can't turn one tick
+     * into thousands of writes; the remainder drains on the next
+     * tick.
+     */
+    private int requeueAbandonedClaims() {
+        Instant cutoff = Instant.now().minus(properties.staleAnalysisTimeout());
+        return tickets.requeueAbandonedAnalysis(cutoff, properties.batchSize()).size();
     }
 }

@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -288,6 +291,72 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         repository.recordAttempt(t.id());
         Ticket reloaded = repository.findById(t.id(), OWNER).orElseThrow();
         assertThat(reloaded.status()).isEqualTo(Ticket.Status.OPEN);
+    }
+
+    @Test
+    void requeueAbandonedAnalysisMovesStaleClaimsBackToOpen() {
+        Ticket stuck = repository.save(
+                Ticket.open(OWNER, "stuck", "x").withStatus(Ticket.Status.IN_ANALYSIS));
+        repository.recordAttempt(stuck.id());
+        backdateLastAttempt(stuck.id(), Instant.now().minus(Duration.ofMinutes(30)));
+
+        List<Ticket> requeued = repository.requeueAbandonedAnalysis(
+                Instant.now().minus(Duration.ofMinutes(10)), 10);
+
+        assertThat(requeued).extracting(Ticket::id).containsExactly(stuck.id());
+        assertThat(requeued.getFirst().status()).isEqualTo(Ticket.Status.OPEN);
+        assertThat(repository.findById(stuck.id(), OWNER).orElseThrow().status())
+                .isEqualTo(Ticket.Status.OPEN);
+    }
+
+    @Test
+    void requeueAbandonedAnalysisIgnoresFreshClaims() {
+        Ticket fresh = repository.save(
+                Ticket.open(OWNER, "fresh", "x").withStatus(Ticket.Status.IN_ANALYSIS));
+        repository.recordAttempt(fresh.id());
+
+        assertThat(repository.requeueAbandonedAnalysis(
+                Instant.now().minus(Duration.ofMinutes(10)), 10)).isEmpty();
+        assertThat(repository.findById(fresh.id(), OWNER).orElseThrow().status())
+                .isEqualTo(Ticket.Status.IN_ANALYSIS);
+    }
+
+    @Test
+    void requeueAbandonedAnalysisIgnoresRowsThatAlreadyHaveAnExtraction() {
+        Ticket stuck = repository.save(
+                Ticket.open(OWNER, "stuck", "x").withStatus(Ticket.Status.IN_ANALYSIS));
+        repository.recordAttempt(stuck.id());
+        backdateLastAttempt(stuck.id(), Instant.now().minus(Duration.ofMinutes(30)));
+        jdbc.update("INSERT INTO ticket_extractions (ticket_id, merchant, purchase_date,"
+                + " products, total_amount, currency, model, extracted_at)"
+                + " VALUES (?, 'M', current_date, '[]'::jsonb, 1.00, 'EUR', 'test', now())",
+                stuck.id());
+
+        assertThat(repository.requeueAbandonedAnalysis(
+                Instant.now().minus(Duration.ofMinutes(10)), 10)).isEmpty();
+    }
+
+    @Test
+    void requeueAbandonedAnalysisRespectsTheLimit() {
+        for (int i = 0; i < 3; i++) {
+            Ticket t = repository.save(
+                    Ticket.open(OWNER, "stuck-" + i, "x").withStatus(Ticket.Status.IN_ANALYSIS));
+            repository.recordAttempt(t.id());
+            backdateLastAttempt(t.id(), Instant.now().minus(Duration.ofMinutes(30)));
+        }
+
+        assertThat(repository.requeueAbandonedAnalysis(
+                Instant.now().minus(Duration.ofMinutes(10)), 2)).hasSize(2);
+    }
+
+    /**
+     * Ages the bookkeeping column the scheduler's re-queue decision
+     * reads. {@code recordAttempt} only ever writes "now", so the
+     * only way to test the timeout is to move the clock on the row.
+     */
+    private void backdateLastAttempt(UUID ticketId, Instant when) {
+        jdbc.update("UPDATE tickets SET last_extraction_attempt_at = ? WHERE id = ?",
+                Timestamp.from(when), ticketId);
     }
 
     @Test
