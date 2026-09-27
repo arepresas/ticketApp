@@ -49,6 +49,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     void cleanSlate() {
         jdbc.update("DELETE FROM ticket_extractions");
         jdbc.update("DELETE FROM tickets");
+        seedOwner(jdbc, OWNER, "owner-it");
     }
 
     @Test

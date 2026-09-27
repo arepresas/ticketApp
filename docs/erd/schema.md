@@ -202,7 +202,8 @@ Constraints, defaults, and nullability that the diagram can't safely express inl
 
 ## Known gaps / follow-ups
 
-1. **`tickets.owner_id` has no FK to `app_users.id`.** UUID is `NOT NULL` but unenforced — orphans possible. Add `FOREIGN KEY (owner_id) REFERENCES app_users(id) ON DELETE CASCADE` in a new migration when ownership cleanup matters.
+1. ~~**`tickets.owner_id` has no FK to `app_users.id`.**~~ Done in V19
+   (`fk_tickets_owner_id`, ON DELETE CASCADE).
 2. **`ticket_extractions.raw_response` (legacy JSONB) is still present and nullable.** V5 added `raw_response_text TEXT` as the writer, but V6 (the planned drop) never landed. Code may still read from the legacy column — verify before dropping.
 3. **`ticket_extractions.products` JSONB duplicates info already normalized in `products` / `prices` / `line_tickets`.** Historical rows are not backfilled; new DONE tickets go through both paths.
 4. **No composite index on `(owner_id, status)`.** Dashboard "my pending tickets" filters on both columns and currently uses two separate indexes. A composite would cut the plan to one index scan.
