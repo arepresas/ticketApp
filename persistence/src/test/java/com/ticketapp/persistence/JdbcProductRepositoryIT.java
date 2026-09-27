@@ -143,4 +143,44 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(got.get(0).name()).isEqualTo("Bread");
         assertThat(got.get(1).name()).isEqualTo("Bread");
     }
+
+    @Test
+    void saveReturnsTheStoredRowSoTheForeignKeyStaysValid() {
+        // The port contract: save returns the row as actually
+        // stored. On a match-key conflict the database keeps the
+        // ORIGINAL id, so returning the argument's freshly minted
+        // UUID would hand the caller a dangling id to write into
+        // line_tickets.product_id.
+        Product first = repository.save(
+                new Product(UUID.randomUUID(), "Bread", "bread", "kg", Instant.now()));
+
+        Product second = repository.save(
+                new Product(UUID.randomUUID(), "bread", "bread", "kg", Instant.now()));
+
+        assertThat(second.id()).isEqualTo(first.id());
+    }
+
+    @Test
+    void saveDistinguishesTheSameNameWithADifferentUnit() {
+        Product noUnit = repository.save(
+                new Product(UUID.randomUUID(), "Bread", "bread", null, Instant.now()));
+        Product withUnit = repository.save(
+                new Product(UUID.randomUUID(), "Bread", "bread", "kg", Instant.now()));
+
+        assertThat(withUnit.id()).isNotEqualTo(noUnit.id());
+    }
+
+    @Test
+    void saveReturnsTheStoredRowForANullUnit() {
+        // The conflict target uses COALESCE(unit, ''), so the
+        // re-read must apply the same normalisation or it would miss
+        // the row it just wrote and fall back to the argument.
+        Product first = repository.save(
+                new Product(UUID.randomUUID(), "Banana", "banana", null, Instant.now()));
+
+        Product second = repository.save(
+                new Product(UUID.randomUUID(), "banana", "banana", null, Instant.now()));
+
+        assertThat(second.id()).isEqualTo(first.id());
+    }
 }

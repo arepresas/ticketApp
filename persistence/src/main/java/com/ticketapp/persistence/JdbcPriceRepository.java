@@ -87,7 +87,12 @@ public class JdbcPriceRepository implements PriceRepository {
             ps.setTimestamp(6, java.sql.Timestamp.from(price.updatedAt()));
             return ps;
         });
-        return price;
+        // Re-read by the match key: on conflict the database keeps the
+        // original id, so the argument's freshly minted UUID is not
+        // necessarily the stored one. Returning the stored row keeps
+        // line_tickets.price_id a valid foreign key.
+        return findByProductAndTicket(price.productId(), price.ticketId(), price.amount())
+                .orElse(price);
     }
 
     private static Price mapPrice(java.sql.ResultSet rs) throws java.sql.SQLException {

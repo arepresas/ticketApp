@@ -112,7 +112,11 @@ public class JdbcShopRepository implements ShopRepository {
             ps.setObject(11, java.sql.Timestamp.from(shop.createdAt()));
             return ps;
         });
-        return shop;
+        // Re-read by the match key: on conflict the database keeps the
+        // original id, so the argument's freshly minted UUID is not
+        // necessarily the stored one. Returning the stored row keeps
+        // tickets.shop_id a valid foreign key.
+        return findByNormalisedName(shop.normalisedName()).orElse(shop);
     }
 
     private static Shop mapShop(java.sql.ResultSet rs) throws java.sql.SQLException {

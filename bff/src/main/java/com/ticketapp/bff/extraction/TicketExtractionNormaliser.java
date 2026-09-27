@@ -23,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Snapshots the structured payload of a validated ticket into the
@@ -104,7 +106,7 @@ public class TicketExtractionNormaliser {
         // shop_id back too (the controller's @Transactional
         // boundary is the unit of consistency).
         ShopContact contact = readShopContact(extraction.extractionPayload());
-        Shop shop = resolveShop(extraction.merchant(), contact, Instant.now());
+        Shop shop = resolveShop(extraction.merchant(), contact, Instant.now()).value();
         tickets.save(ticket.withShopId(shop.id()));
 
         int persistedProducts = 0;
@@ -123,33 +125,33 @@ public class TicketExtractionNormaliser {
         // order instead of receipt order.
         for (var line : extraction.products()) {
             Instant lineNow = Instant.now();
-            Product product = resolveProduct(
+            Resolved<Product> product = resolveProduct(
                     line.name(), line.unit(), lineNow);
-            if (product.createdAt().equals(lineNow)) persistedProducts++;
+            if (product.created()) persistedProducts++;
 
-            Price price = resolvePrice(
-                    product.id(), ticketId, line.pricePerUnit(), lineNow);
-            if (price.createdAt().equals(lineNow)) persistedPrices++;
+            Resolved<Price> price = resolvePrice(
+                    product.value().id(), ticketId, line.pricePerUnit(), lineNow);
+            if (price.created()) persistedPrices++;
 
             LineTicket lineTicket = lineTickets.save(new LineTicket(
                     UUID.randomUUID(),
                     ticketId,
-                    product.id(),
-                    price.id(),
+                    product.value().id(),
+                    price.value().id(),
                     line.quantity(),
                     line.lineTotal(),
                     lineNow,
                     lineNow));
             persistedLines++;
             log.debug("Linked line_ticket {} (ticket={}, product={}, price={})",
-                    lineTicket.id(), ticketId, product.id(), price.id());
+                    lineTicket.id(), ticketId, product.value().id(), price.value().id());
         }
 
         log.info("Normalised ticket {} (shop={}): +{} product(s), +{} price(s), +{} line(s)",
                 ticketId, shop.id(), persistedProducts, persistedPrices, persistedLines);
     }
 
-    private Shop resolveShop(String merchantName, ShopContact contact, Instant now) {
+    private Resolved<Shop> resolveShop(String merchantName, ShopContact contact, Instant now) {
         if (merchantName == null || merchantName.isBlank()) {
             // Defensive: extraction validation upstream would have
             // 400'd on this. If somehow we got here, skip the shop
@@ -158,8 +160,7 @@ public class TicketExtractionNormaliser {
                     "Cannot normalise ticket without a merchant name");
         }
         String normalised = Shop.normalisedNameOf(merchantName);
-        return shops.findByNormalisedName(normalised)
-                .orElseGet(() -> shops.save(new Shop(
+        return resolve(shops.findByNormalisedName(normalised), () -> shops.save(new Shop(
                         UUID.randomUUID(),
                         merchantName,
                         normalised,
@@ -172,6 +173,21 @@ public class TicketExtractionNormaliser {
                         contact.website(),
                         now)));
     }
+
+    /**
+     * Get-or-create in one place: the port's {@code save} returns the
+     * row as actually stored (the upsert keeps the original id on
+     * conflict), so the caller never has to re-read it, and we know
+     * here — not by comparing timestamps afterwards — whether this
+     * call created the row or reused it.
+     */
+    private <T> Resolved<T> resolve(Optional<T> existing, Supplier<T> create) {
+        return existing.<Resolved<T>>map(value -> new Resolved<>(value, false))
+                .orElseGet(() -> new Resolved<>(create.get(), true));
+    }
+
+    /** A resolved catalogue row plus whether this call created it. */
+    private record Resolved<T>(T value, boolean created) { }
 
     /**
      * Lift shop contact info from the {@code extraction_payload}
@@ -238,20 +254,19 @@ public class TicketExtractionNormaliser {
         static final ShopContact EMPTY = new ShopContact(null, null, null, null, null, null, null);
     }
 
-    private Product resolveProduct(String name, String unit, Instant now) {
+    private Resolved<Product> resolveProduct(String name, String unit, Instant now) {
         String normalised = Product.normalisedNameOf(name);
-        return products.findByNormalisedName(normalised, unit)
-                .orElseGet(() -> products.save(new Product(
-                        UUID.randomUUID(),
-                        name,
-                        normalised,
-                        unit,
-                        now)));
+        return resolve(products.findByNormalisedName(normalised, unit), () -> products.save(new Product(
+                UUID.randomUUID(),
+                name,
+                normalised,
+                unit,
+                now)));
     }
 
-    private Price resolvePrice(UUID productId, UUID ticketId, BigDecimal amount, Instant now) {
-        return prices.findByProductAndTicket(productId, ticketId, amount)
-                .orElseGet(() -> prices.save(new Price(
+    private Resolved<Price> resolvePrice(UUID productId, UUID ticketId, BigDecimal amount, Instant now) {
+        return resolve(prices.findByProductAndTicket(productId, ticketId, amount),
+                () -> prices.save(new Price(
                         UUID.randomUUID(),
                         productId,
                         ticketId,
