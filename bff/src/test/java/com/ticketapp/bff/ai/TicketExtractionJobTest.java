@@ -7,6 +7,7 @@ import com.ticketapp.domain.TicketExtractionQueue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.mockito.InOrder;
 
 import java.time.Duration;
@@ -176,15 +177,17 @@ class TicketExtractionJobTest {
     }
 
     @Test
-    void catchesExceptionFromOneTicketAndContinuesBatch() {
-        // A single ticket's failure (e.g. NPE in the orchestrator)
-        // must not abort the rest of the batch — the cron tick
-        // resumes on the next invocation.
+    void databaseFailureFromOneTicketAbortsTheBatch() {
+        // A database failure is the one thing the job cannot absorb
+        // per ticket: the tick bails and resumes on the next
+        // invocation. Provider failures never reach here — the
+        // service handles those itself.
         Ticket good = openTicket();
         Ticket bad = openTicket();
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(good, bad));
         when(service.processTicket(good)).thenReturn(true);
-        when(service.processTicket(bad)).thenThrow(new RuntimeException("DB down"));
+        when(service.processTicket(bad))
+                .thenThrow(new DataAccessResourceFailureException("DB down"));
 
         job.tick();
 

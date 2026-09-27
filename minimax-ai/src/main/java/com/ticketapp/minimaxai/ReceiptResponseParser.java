@@ -64,8 +64,9 @@ public class ReceiptResponseParser {
     public ReceiptExtractionResult parse(String raw) throws ReceiptExtractionException {
         String stripped = stripThinkBlocks(stripCodeFences(raw == null ? "" : raw));
         if (stripped.isBlank()) {
-            throw new ReceiptExtractionException(0,
-                    "MiniMax reply contained only thinking, no JSON payload"
+            throw new ReceiptExtractionException(0, false,
+                
+                "MiniMax reply contained only thinking, no JSON payload"
                             + " (token budget likely exhausted mid-reasoning): "
                             + truncate(raw, 4096));
         }
@@ -76,8 +77,9 @@ public class ReceiptResponseParser {
             if (recovered != null) {
                 return recovered;
             }
-            throw new ReceiptExtractionException(0,
-                    "MiniMax returned a non-JSON reply: " + truncate(raw, 4096),
+            throw new ReceiptExtractionException(0, false,
+                
+                "MiniMax returned a non-JSON reply: " + truncate(raw, 4096),
                     primaryFailure);
         }
     }
@@ -102,7 +104,9 @@ public class ReceiptResponseParser {
         try {
             root = objectMapper.readTree(json);
         } catch (Exception e) {
-            throw new ReceiptExtractionException(0, "Invalid JSON payload", e);
+            throw new ReceiptExtractionException(0, false,
+                
+                "Invalid JSON payload", e);
         }
         try {
             String merchant = requireText(root, "merchant");
@@ -124,7 +128,9 @@ public class ReceiptResponseParser {
             return new ReceiptExtractionResult(
                     merchant, purchaseDate, category, products, totalAmount, currency);
         } catch (IllegalStateException | IllegalArgumentException | DateTimeException e) {
-            throw new ReceiptExtractionException(0, "Invalid extraction payload: " + e.getMessage(), e);
+            throw new ReceiptExtractionException(0, false,
+                
+                "Invalid extraction payload: " + e.getMessage(), e);
         }
     }
 

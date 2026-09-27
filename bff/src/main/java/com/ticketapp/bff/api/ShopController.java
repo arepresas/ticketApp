@@ -68,7 +68,7 @@ public class ShopController {
         CurrentUser.get();
         return shops.findById(id)
                 .map(shop -> ResponseEntity.ok(ShopResponse.of(shop)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     /**
@@ -115,7 +115,7 @@ public class ShopController {
                             user.id(), saved.id(), countApplied(body));
                     return ResponseEntity.ok(ShopResponse.of(saved));
                 })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     private static int countApplied(UpdateShopRequest body) {

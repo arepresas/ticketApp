@@ -6,6 +6,7 @@ import com.ticketapp.domain.TicketExtractionQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -97,11 +98,11 @@ public class TicketExtractionJob {
                 if (service.processTicket(t)) {
                     processed++;
                 }
-            } catch (Exception e) {
-                // processOne handles its own revert; reaching here
-                // means something catastrophic (e.g. DB down). Log
-                // and bail on the rest of the batch — the next tick
-                // will resume.
+            } catch (DataAccessException | IllegalStateException e) {
+                // processTicket handles its own provider failures and
+                // reverts the ticket itself. Reaching here means the
+                // database is the problem: log it and bail on the
+                // rest of the batch, the next tick resumes.
                 log.error("Tick aborted after processing {} tickets: {}",
                         processed, e.getMessage(), e);
                 break;

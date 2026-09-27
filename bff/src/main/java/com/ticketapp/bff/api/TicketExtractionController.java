@@ -60,14 +60,14 @@ public class TicketExtractionController {
         // access without leaking existence (returns 404 either way).
         java.util.Optional<Ticket> ticket = repository.findById(id, user.id());
         if (ticket.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return extractions.findByTicketId(id, user.id())
                 .map(e -> ResponseEntity.ok(ExtractionResponse.of(e)))
                 // 404 with no body — same shape as "ticket not
                 // found" so the front end doesn't have to distinguish
                 // "wrong id" from "not yet extracted" on the wire.
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     /**
@@ -139,7 +139,7 @@ public class TicketExtractionController {
         AuthenticatedUser user = CurrentUser.get();
         Optional<Ticket> ticketOpt = repository.findById(id, user.id());
         if (ticketOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         // Refuse silently when no extraction exists yet — let the
         // AI finish first, then edit. The detail screen is
@@ -148,7 +148,7 @@ public class TicketExtractionController {
         Optional<TicketExtraction> existing =
                 extractions.findByTicketId(id, user.id());
         if (existing.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         TicketExtraction current = existing.get();
         List<TicketExtraction.ProductLine> domainProducts = productDtos.stream()
@@ -176,7 +176,7 @@ public class TicketExtractionController {
             // (a concurrent delete). Surface as 404 — the row is
             // gone from the operator's POV either way.
             log.warn("replaceExtraction raced with delete for ticket {}: {}", id, e.getMessage());
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return ResponseEntity.ok(ExtractionResponse.of(updated));
     }
