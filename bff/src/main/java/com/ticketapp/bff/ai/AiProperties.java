@@ -5,7 +5,11 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
+
+import java.time.Duration;
+import java.util.Objects;
 
 /**
  * Provider-agnostic configuration for the AI extraction pipeline
@@ -31,5 +35,17 @@ public record AiProperties(
         boolean enabled,
         @NotBlank String cron,
         @Positive int batchSize,
-        @PositiveOrZero int retryAttempts
-) { }
+        @PositiveOrZero int retryAttempts,
+        /**
+         * How long a ticket may sit in {@code IN_ANALYSIS} before the
+         * scheduler assumes the worker holding it died and re-queues
+         * it. Defaults to 10 minutes, which is far above the provider
+         * call timeout (30 s in prod) so a slow-but-alive worker is
+         * never robbed of its claim.
+         */
+        @DefaultValue("10m") Duration staleAnalysisTimeout
+) {
+    public AiProperties {
+        Objects.requireNonNull(staleAnalysisTimeout, "staleAnalysisTimeout is required");
+    }
+}

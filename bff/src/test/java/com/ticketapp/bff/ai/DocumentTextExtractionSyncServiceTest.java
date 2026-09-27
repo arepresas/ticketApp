@@ -8,6 +8,7 @@ import com.ticketapp.domain.ai.DocumentTextExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -58,7 +59,7 @@ class DocumentTextExtractionSyncServiceTest {
 
     private DocumentTextExtractionSyncService serviceWith(boolean aiEnabled) {
         return new DocumentTextExtractionSyncService(
-                extractor, tickets, new AiProperties(aiEnabled, "0 * * * * *", 5, 2));
+                extractor, tickets, new AiProperties(aiEnabled, "0 * * * * *", 5, 2, Duration.ofMinutes(10)));
     }
 
     @Test
