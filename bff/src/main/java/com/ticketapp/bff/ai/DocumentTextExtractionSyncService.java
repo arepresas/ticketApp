@@ -67,15 +67,26 @@ public class DocumentTextExtractionSyncService {
 
     private final DocumentTextExtractor documentTextExtractor;
     private final TicketRepository ticketRepository;
+    private final AiProperties properties;
 
     /**
      * Run OCR on the freshly-saved ticket and stamp the verbatim
      * transcription onto {@code ticket.ocrText()}. Returns the
-     * original ticket (with {@code ocrText == null}) when the OCR
-     * step is a no-op (no bytes) or when the provider failed — see
-     * the class javadoc for the rationale.
+     * original ticket (with {@code ocrText == null}) when OCR is
+     * disabled, when the step is a no-op (no bytes) or when the
+     * provider failed — see the class javadoc for the rationale.
      */
     public Ticket runOnUpload(Ticket ticket) {
+        if (!properties.enabled()) {
+            // The same kill switch the scheduled extraction honours
+            // (see TicketExtractionJob#tick). Without this check the
+            // upload path was the one entry point to a paid provider
+            // that `ticketapp.ai.enabled=false` could not silence —
+            // which is how `mvn verify` ended up issuing real OCR
+            // requests against api.minimax.io with the test key.
+            log.debug("ticketapp.ai.enabled=false — skipping OCR step");
+            return ticket;
+        }
         if (ticket == null || ticket.fileData() == null || ticket.fileData().length == 0) {
             // Metadata-only ticket: nothing to OCR. The dashboard's
             // preview already renders the empty file slot; this

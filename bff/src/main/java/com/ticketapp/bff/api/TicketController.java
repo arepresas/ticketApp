@@ -127,7 +127,7 @@ public class TicketController {
         // cases — never leak existence to another tenant.
         return repository.findById(id, user.id())
                 .map(t -> ResponseEntity.ok(TicketResponse.of(t)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -189,7 +189,7 @@ public class TicketController {
                     }
                     return ResponseEntity.ok(TicketResponse.of(repository.save(next)));
                 })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     @DeleteMapping("/{id}")
@@ -219,12 +219,12 @@ public class TicketController {
         AuthenticatedUser user = CurrentUser.get();
         java.util.Optional<Ticket> ticketOpt = repository.findById(id, user.id());
         if (ticketOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         Ticket ticket = ticketOpt.get();
         byte[] bytes = ticket.fileData();
         if (bytes == null || bytes.length == 0) {
-            return ResponseEntity.notFound().build();
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         // Prefer the ticket's stored content type; fall back to
         // application/octet-stream so browsers always treat the

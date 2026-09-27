@@ -16,6 +16,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -41,18 +43,30 @@ public class AuthController {
     private final UserRepository users;
     private final SessionRepository sessions;
     private final JwtEncoder jwtEncoder;
+    /**
+     * True only under the {@code local} profile. Verifier rejection
+     * details are logged everywhere but returned to the client only
+     * here: they carry exception class names and SDK messages, which
+     * is a debugging aid, not something a caller may see in a
+     * deployed environment (.rules/security.md).
+     */
+    private final boolean localProfile;
 
     public AuthController(
             @Value("${bff.jwt.ttl-hours:24}") long ttlHours,
             GoogleTokenVerifier google,
             UserRepository users,
             SessionRepository sessions,
-            JwtEncoder jwtEncoder) {
+            JwtEncoder jwtEncoder,
+            @Value("${spring.profiles.active:default}") String activeProfile) {
         this.sessionTtl = Duration.ofHours(ttlHours);
         this.google = google;
         this.users = users;
         this.sessions = sessions;
         this.jwtEncoder = jwtEncoder;
+        this.localProfile = "local".equals(activeProfile)
+                || java.util.Arrays.stream(activeProfile.split(","))
+                        .anyMatch("local"::equals);
     }
 
     /**
@@ -69,7 +83,17 @@ public class AuthController {
             String r = reason.get() == null ? "verify_failed" : reason.get();
             String d = details.get() == null ? "" : details.get();
             log.warn("Google id_token rejected: reason={} details={}", r, d);
-            return ResponseEntity.status(401).body(new ErrorBody("invalid_google_token", r, d));
+            ProblemDetail body = ProblemDetail.forStatusAndDetail(
+                    HttpStatus.UNAUTHORIZED, "invalid_google_token");
+            // The reason code is ours and safe to expose; the
+            // details come from Google's SDK and our own exception
+            // messages, so they stay server-side outside local.
+            body.setProperty("code", "invalid_google_token");
+            body.setProperty("reason", r);
+            if (localProfile) {
+                body.setProperty("details", d);
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
         }
         GoogleIdToken.Payload p = verified.get();
         AuthenticatedUser user = users.upsertFromGoogle(
@@ -146,12 +170,6 @@ public class AuthController {
     public record SessionResponse(String token, UserDto user) { }
 
     public record UserDto(UUID id, String email, String name, String pictureUrl) { }
-
-    /**
-     * Error body. {@code message} is a stable code the front-end can switch on;
-     * {@code reason} and {@code details} are diagnostic fields useful in dev.
-     */
-    public record ErrorBody(String message, String reason, String details) { }
 
     /** Internal: what {@code POST /api/auth/google} hands back to the SPA. */
     public record Issued(String token, UUID jti, Instant expiresAt) { }

@@ -33,7 +33,7 @@ removal of one (`infrastructure`).
 
 ## Decisions
 
-### D1. Domain port: `ReceiptExtractor`
+### D1. Domain port: `ReceiptExtractor` (signature amended 2026-09-27, see below)
 
 **Decision.** Add `com.ticketapp.domain.ai.ReceiptExtractor` as the abstract
 port the orchestrator depends on. The interface declares exactly one method:
@@ -44,6 +44,15 @@ public interface ReceiptExtractor {
         throws ReceiptExtractionException;
 }
 ```
+
+> **Amended 2026-09-27.** The port returns `ReceiptExtraction`, not
+> `ReceiptExtractionResult`: the wrapper carries the provider's raw reply
+> and model id alongside the parsed result, so the orchestrator can persist
+> all three in one round trip without the BFF ever naming a provider. The
+> request record also carries `content` + `contentType` (with `isPdf()`
+> derived) instead of the "exactly one of `mimeType` / `imageBytes` /
+> `pdfText`" shape described here — PDF-vs-image is a provider concern, not
+> a domain one. Implement the signature in the code, not in this block.
 
 Supporting types in `domain`:
 
@@ -120,6 +129,17 @@ churn is mechanical and ends here.
 **Decision.** The active provider is whichever AI module is declared as a
 dependency in `bff/pom.xml`. Today that's `minimax-ai`. Tomorrow it could be
 `openai-ai` or `anthropic-ai`; the choice is a single `<dependency>` line.
+
+> **Amended 2026-09-27 — "a single line" was aspirational.** The Java seam
+> is real: deleting `minimax-ai/` leaves the BFF's source unchanged. But the
+> *operational* swap touches nine files, because the provider's namespace
+> (`ticketapp.ai.minimax.*`) and its `MINIMAX_*` environment variables live
+> in `application.yml`, `application-local.yml` and `application-test.yml`
+> in the BFF, in `.env.example`, and in `sonar-project.properties` — on top
+> of the two `pom.xml` and two `Dockerfile` entries. `.rules/backend.md`
+> already says provider properties belong to the provider module; the YAML
+> files do not follow that yet. Until they move, treat the swap as a
+> nine-file change.
 
 Each AI module ships a Spring Boot autoconfiguration:
 

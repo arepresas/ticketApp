@@ -17,12 +17,14 @@ import com.ticketapp.persistence.JdbcTicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.mockito.InOrder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
@@ -98,7 +100,7 @@ class TicketExtractionServiceTest {
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
                 tickets, extractions, jdbcTickets, receiptExtractor,
-                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2),
+                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2, Duration.ofMinutes(10)),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
@@ -123,7 +125,7 @@ class TicketExtractionServiceTest {
         // amber when the second save lands.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any())).thenReturn(
@@ -177,7 +179,7 @@ class TicketExtractionServiceTest {
         // analysis" while the AI worked.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any())).thenReturn(
@@ -201,11 +203,12 @@ class TicketExtractionServiceTest {
         // concurrent delete can't resurrect a stale copy.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "MiniMax returned 500"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                        "the AI provider returned 500"));
 
         boolean processed = service.processTicket(open);
 
@@ -223,7 +226,7 @@ class TicketExtractionServiceTest {
                 t.status() == Status.ON_ERROR
                         && t.errorMessage() != null
                         && t.errorMessage().contains("500")
-                        && t.errorMessage().contains("MiniMax returned 500")));
+                        && t.errorMessage().contains("the AI provider returned 500")));
         verify(extractions, never()).save(any());
     }
 
@@ -236,12 +239,13 @@ class TicketExtractionServiceTest {
         // the dashboard know they are not seeing the full text.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         String huge = "x".repeat(TicketExtractionService.ERROR_MESSAGE_MAX_CHARS + 500);
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(502, huge));
+                .thenThrow(new ReceiptExtractionException(502, false,
+                huge));
 
         service.processTicket(open);
 
@@ -259,7 +263,7 @@ class TicketExtractionServiceTest {
     void alreadyExtractedTicketsAreSkipped() throws Exception {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id, new byte[]{1});
-        when(extractions.findByTicketId(id)).thenReturn(Optional.of(
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
                 new TicketExtraction(id, "X", LocalDate.now(), null,
                         List.of(), BigDecimal.ZERO, "EUR", MODEL,
                         Instant.now(), "{}")));
@@ -278,7 +282,7 @@ class TicketExtractionServiceTest {
         Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
                 "image/png", "r.png", bytes, null, 0, null, null, 0);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(png));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any())).thenReturn(
@@ -306,7 +310,7 @@ class TicketExtractionServiceTest {
         // up on the next tick and loop on the same broken write.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id, new byte[]{1});
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any())).thenReturn(
@@ -315,7 +319,8 @@ class TicketExtractionServiceTest {
                                 "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
                                 List.of(), BigDecimal.ONE, "EUR"),
                         "{}", MODEL));
-        when(extractions.save(any())).thenThrow(new RuntimeException("DB boom"));
+        when(extractions.save(any())).thenThrow(
+                new DataIntegrityViolationException("DB boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -332,11 +337,12 @@ class TicketExtractionServiceTest {
         // missing ticket and resumes on the next one.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty()); // race: gone
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                        "boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -357,7 +363,7 @@ class TicketExtractionServiceTest {
         // (IN_ANALYSIS) save.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any())).thenReturn(
@@ -393,7 +399,7 @@ class TicketExtractionServiceTest {
         // production.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         // Mutable holder so the save() answer can publish the bumped
         // ticket that the subsequent markError findById() must return.
         java.util.concurrent.atomic.AtomicReference<Ticket> stored = new java.util.concurrent.atomic.AtomicReference<>(open);
@@ -404,7 +410,8 @@ class TicketExtractionServiceTest {
         });
         when(tickets.findById(id, OWNER)).thenAnswer(inv -> Optional.of(stored.get()));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, false,
+                "boom"));
 
         service.processTicket(open);
 
@@ -423,10 +430,11 @@ class TicketExtractionServiceTest {
     void transientFailureIsRetriedThenSucceeds() throws Exception {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(503, "overloaded"))
+                .thenThrow(new ReceiptExtractionException(503, true,
+                        "overloaded"))
                 .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
                                 "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
@@ -444,11 +452,12 @@ class TicketExtractionServiceTest {
     void clientErrorFailsFastWithoutRetry() throws Exception {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(400, "bad request"));
+                .thenThrow(new ReceiptExtractionException(400, false,
+                "bad request"));
 
         boolean processed = service.processTicket(open);
 
@@ -461,11 +470,12 @@ class TicketExtractionServiceTest {
     void persistentTransientFailureGivesUpAfterConfiguredAttempts() throws Exception {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, "boom"));
+                .thenThrow(new ReceiptExtractionException(500, true,
+                        "boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -481,7 +491,7 @@ class TicketExtractionServiceTest {
         // error — the winner owns the row.
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenThrow(new OptimisticLockException(id, "boom"));
 
         boolean processed = service.processTicket(open);
@@ -499,7 +509,7 @@ class TicketExtractionServiceTest {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
         Ticket done = sampleTicket(id).withStatus(Status.DONE);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any()))
                 .thenAnswer(inv -> inv.getArgument(0))
                 .thenThrow(new OptimisticLockException(id, "boom"));
@@ -526,7 +536,7 @@ class TicketExtractionServiceTest {
         UUID id = UUID.randomUUID();
         Ticket open = sampleTicket(id);
         Ticket staleAnalysis = sampleTicket(id).withStatus(Status.IN_ANALYSIS);
-        when(extractions.findByTicketId(id)).thenReturn(Optional.empty());
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any()))
                 .thenAnswer(inv -> inv.getArgument(0))
                 .thenThrow(new OptimisticLockException(id, "boom"))

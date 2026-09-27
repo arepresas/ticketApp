@@ -6,9 +6,11 @@ import com.ticketapp.domain.TicketExtractionQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -64,6 +66,16 @@ public class TicketExtractionJob {
 
         log.info("Extraction tick started: batchSize={}", properties.batchSize());
 
+        // Recover claims abandoned by a dead worker BEFORE picking
+        // candidates, so a ticket re-queued here is eligible for
+        // processing in this very tick instead of waiting a full
+        // cycle for nothing.
+        int requeued = requeueAbandonedClaims();
+        if (requeued > 0) {
+            log.warn("Re-queued {} ticket(s) abandoned in IN_ANALYSIS for more than {}",
+                    requeued, properties.staleAnalysisTimeout());
+        }
+
         long started = System.currentTimeMillis();
         List<Ticket> candidates = tickets.findOpenForExtraction(properties.batchSize()).stream()
                 // Defence in depth: the SQL filter already restricts
@@ -86,11 +98,11 @@ public class TicketExtractionJob {
                 if (service.processTicket(t)) {
                     processed++;
                 }
-            } catch (Exception e) {
-                // processOne handles its own revert; reaching here
-                // means something catastrophic (e.g. DB down). Log
-                // and bail on the rest of the batch — the next tick
-                // will resume.
+            } catch (DataAccessException | IllegalStateException e) {
+                // processTicket handles its own provider failures and
+                // reverts the ticket itself. Reaching here means the
+                // database is the problem: log it and bail on the
+                // rest of the batch, the next tick resumes.
                 log.error("Tick aborted after processing {} tickets: {}",
                         processed, e.getMessage(), e);
                 break;
@@ -98,5 +110,19 @@ public class TicketExtractionJob {
         }
         log.info("Extraction tick finished: processed={} candidates={} elapsedMs={}",
                 processed, candidates.size(), System.currentTimeMillis() - started);
+    }
+
+    /**
+     * Re-queue tickets whose worker died mid-flight. Returns how many
+     * were moved back to {@code OPEN}.
+     *
+     * <p>Capped by {@code batchSize} so a large backlog of stale rows
+     * (a database outage, a fleet-wide deploy) can't turn one tick
+     * into thousands of writes; the remainder drains on the next
+     * tick.
+     */
+    private int requeueAbandonedClaims() {
+        Instant cutoff = Instant.now().minus(properties.staleAnalysisTimeout());
+        return tickets.requeueAbandonedAnalysis(cutoff, properties.batchSize()).size();
     }
 }

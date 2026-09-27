@@ -5,7 +5,11 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
+
+import java.time.Duration;
+import java.util.Objects;
 
 /**
  * Provider-agnostic configuration for the AI extraction pipeline
@@ -31,5 +35,28 @@ public record AiProperties(
         boolean enabled,
         @NotBlank String cron,
         @Positive int batchSize,
-        @PositiveOrZero int retryAttempts
-) { }
+        @PositiveOrZero int retryAttempts,
+        /**
+         * How long a ticket may sit in {@code IN_ANALYSIS} before the
+         * scheduler assumes the worker holding it died and re-queues
+         * it. Defaults to 10 minutes, which is far above the provider
+         * call timeout (30 s in prod) so a slow-but-alive worker is
+         * never robbed of its claim.
+         */
+        @DefaultValue("10m") Duration staleAnalysisTimeout
+) {
+    public AiProperties {
+        Objects.requireNonNull(staleAnalysisTimeout, "staleAnalysisTimeout is required");
+        // @Scheduled consumes the raw property, so nothing else would
+        // ever read this field — and a malformed cron would otherwise
+        // blow up the scheduler at init with an opaque message.
+        // Parse it here so the failure is a boot failure with a
+        // readable cause.
+        try {
+            org.springframework.scheduling.support.CronExpression.parse(cron);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "ticketapp.ai.cron is not a valid cron expression: " + cron, e);
+        }
+    }
+}

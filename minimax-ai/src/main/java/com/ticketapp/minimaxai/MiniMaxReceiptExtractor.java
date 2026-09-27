@@ -56,7 +56,7 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
             try {
                 text = pdfExtractor.extract(request.content());
             } catch (java.io.IOException ioe) {
-                throw new ReceiptExtractionException(0,
+                throw new ReceiptExtractionException(0, false,
                         "PDF text extraction failed: " + ioe.getMessage(), ioe);
             }
             if (text.isBlank()) {
@@ -74,14 +74,14 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
                 try {
                     pngBytes = pdfExtractor.rasterizeFirstPageAsPng(request.content());
                 } catch (java.io.IOException ioe) {
-                    throw new ReceiptExtractionException(0,
+                    throw new ReceiptExtractionException(0, false,
                             "PDF rasterization failed: " + ioe.getMessage(), ioe);
                 }
                 if (pngBytes == null) {
                     // Either empty bytes (caught at the call site
                     // above) or zero-page document — both surface as
                     // the same "nothing to extract" hard failure.
-                    throw new ReceiptExtractionException(0,
+                    throw new ReceiptExtractionException(0, false,
                             "PDF has no pages to rasterize");
                 }
                 input = MiniMaxApiClient.ReceiptInput.image(
@@ -98,20 +98,44 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
         try {
             raw = client.extractReceipt(input);
         } catch (MiniMaxApiClient.MiniMaxApiException mae) {
+            // The provider knows whether its own failure is worth
+            // another attempt, so it says so here instead of leaving
+            // the caller to read the status code.
             throw new ReceiptExtractionException(mae.statusCode(),
+                    isRetriableStatus(mae.statusCode()),
                     "MiniMax extraction failed: " + mae.getMessage(), mae);
         } catch (java.io.IOException ioe) {
-            throw new ReceiptExtractionException(0,
+            throw new ReceiptExtractionException(0, true,
                     "MiniMax extraction failed: " + ioe.getMessage(), ioe);
         } catch (RuntimeException e) {
             // Provider-call bugs (mock failures in tests, SDK transport
             // errors) are retriable provider failures — wrap them so the
-            // orchestrator marks ON_ERROR. Bugs outside the provider call
-            // (parser internals, domain validation below) propagate unwrapped.
-            throw new ReceiptExtractionException(0,
+            // orchestrator marks ON_ERROR.
+            throw new ReceiptExtractionException(0, true,
                     "MiniMax extraction failed: " + e.getMessage(), e);
         }
-        ReceiptExtractionResult result = parser.parse(raw);
-        return new ReceiptExtraction(result, raw, properties.model());
+        try {
+            // Parsing and domain validation are inside the guard on
+            // purpose: the port promises that every failure leaves as
+            // ReceiptExtractionException, and a malformed reply is a
+            // provider failure, not a bug in the caller.
+            ReceiptExtractionResult result = parser.parse(raw);
+            return new ReceiptExtraction(result, raw, properties.model());
+        } catch (ReceiptExtractionException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new ReceiptExtractionException(0, false,
+                    "MiniMax returned an unusable extraction: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Timeouts, rate limits and server errors are worth another
+     * attempt; a client error is not (the same request would fail
+     * again). Unknown statuses are treated as permanent so a
+     * surprise does not turn into a retry storm.
+     */
+    private static boolean isRetriableStatus(int status) {
+        return status == 429 || (status >= 500 && status <= 599);
     }
 }

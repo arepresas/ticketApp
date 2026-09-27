@@ -123,6 +123,33 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 limit);
     }
 
+    @Override
+    public List<Ticket> requeueAbandonedAnalysis(Instant attemptedBefore, int limit) {
+        // System-scope mutation — NO owner predicate, same as the
+        // query above. The anti-join keeps the invariant that a
+        // ticket with an extraction row is never re-queued (it is
+        // already IN_PROGRESS, not abandoned). NULL attempts are
+        // excluded: a ticket that reached IN_ANALYSIS always has a
+        // timestamp, so a null there means the row predates the
+        // bookkeeping column.
+        List<Ticket> stuck = jdbc.query(
+                SELECT_PREFIX + SELECT_COLS
+                        + " FROM tickets t WHERE t.status = 'IN_ANALYSIS'"
+                        + " AND t.last_extraction_attempt_at IS NOT NULL"
+                        + " AND t.last_extraction_attempt_at < ?"
+                        + " AND NOT EXISTS (SELECT 1 FROM ticket_extractions e"
+                        + " WHERE e.ticket_id = t.id)"
+                        + " ORDER BY t.last_extraction_attempt_at ASC LIMIT ?",
+                mapper,
+                java.sql.Timestamp.from(attemptedBefore), limit);
+        // Re-queue through the version-guarded save so a worker that
+        // is still alive and about to write its extraction wins the
+        // race instead of being silently overwritten.
+        return stuck.stream()
+                .map(t -> save(t.withStatus(Ticket.Status.OPEN)))
+                .toList();
+    }
+
     /**
      * Guarded write: UPDATE applies only when the row version still
      * matches; a miss falls back to INSERT when the row is new, or

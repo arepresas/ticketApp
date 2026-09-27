@@ -128,10 +128,24 @@ public class TicketApplicationService {
      *       {@link TicketExtractionNormaliser}
      *       which snapshots each line into the products catalogue.
      *       The normalisation runs in the same call; a normaliser
-     *       failure logs a WARN but does not roll back the status
-     *       change (the next mark-as-done is a no-op idempotent
-     *       refresh).</li>
+     *       failure logs a WARN but does NOT roll the status flip
+     *       back (deliberate: a catalogue hiccup must not undo a
+     *       DONE the user asked for).</li>
      * </ul>
+     *
+     * <p><b>The accepted cost of best-effort: DONE without a
+     * catalogue.</b> The status flip commits in its own
+     * transaction; the catalogue apply runs in the normaliser's own
+     * transaction. If the normaliser fails, the row stays
+     * {@code DONE} with an empty or partial catalogue. That state is
+     * reachable on purpose, so it has a recovery path: re-issuing
+     * {@code PATCH /api/tickets/{id}/status} with {@code DONE} runs
+     * the normaliser again (the branch is keyed on the requested
+     * target status, not on a transition), and the apply is
+     * idempotent — every step re-resolves the catalogue master rows
+     * by match key. Note the dashboard hides status actions on
+     * terminal tickets, so today that retry is an API-level action.
+     * </p>
      *
      * <p><b>Mark-as-done triggers extraction when missing.</b> A
      * ticket that reached {@code ON_ERROR} without ever producing an
@@ -159,7 +173,7 @@ public class TicketApplicationService {
                 .map(t -> {
                     Ticket target = t;
                     if (status == Ticket.Status.DONE
-                            && extractions.findByTicketId(id).isEmpty()) {
+                            && extractions.findByTicketId(id, user.id()).isEmpty()) {
                         // If the ticket has no extraction row yet
                         // (typical for ON_ERROR retries, or any
                         // ticket that landed in DONE before the
@@ -180,7 +194,8 @@ public class TicketApplicationService {
                         // status the pipeline actually landed on.
                         boolean extracted = extractionService.processTicket(t);
                         target = tickets.findById(id, user.id()).orElse(t);
-                        if (!extracted && extractions.findByTicketId(id).isEmpty()) {
+                        if (!extracted
+                                && extractions.findByTicketId(id, user.id()).isEmpty()) {
                             // Pipeline failed: keep its terminal state
                             // (ON_ERROR with the failure reason).
                             // Forcing DONE here would silently flip a

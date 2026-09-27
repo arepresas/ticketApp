@@ -23,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Snapshots the structured payload of a validated ticket into the
@@ -37,8 +39,8 @@ import java.util.UUID;
  * <ol>
  *   <li>{@code shops} — one row per unique merchant (matched by
  *       normalised name). Address / phone / tax id / website are
- *       lifted from {@code extraction_payload.merchant.*} when the
- *       provider emits them.</li>
+ *       lifted from the provider reply's top-level {@code shop}
+ *       object when the model emits it.</li>
  *   <li>{@code products} — one row per unique {@code (name, unit)}
  *       tuple (matched by normalised name + unit).</li>
  *   <li>{@code prices} — one row per unique
@@ -80,7 +82,8 @@ public class TicketExtractionNormaliser {
     @Transactional
     public void normaliseOnDone(Ticket ticket) {
         UUID ticketId = ticket.id();
-        TicketExtraction extraction = extractions.findByTicketId(ticketId).orElse(null);
+        TicketExtraction extraction = extractions
+                .findByTicketId(ticketId, ticket.ownerId()).orElse(null);
         if (extraction == null) {
             log.debug("Skip normalisation: no extraction row for ticket {}", ticketId);
             return;
@@ -92,8 +95,8 @@ public class TicketExtractionNormaliser {
 
         // Step 1 — shop. Anchor once for the whole ticket so we
         // don't repeat the lookup per line. Address / phone / tax
-        // id / website are lifted from extraction_payload if the
-        // provider emitted them; null fields are passed through and
+        // id / website are lifted from the provider reply if the
+        // model emitted them; null fields are passed through and
         // the UPSERT's COALESCE preserves any value already on the
         // row from a previous ticket or a manual PATCH.
         //
@@ -101,10 +104,11 @@ public class TicketExtractionNormaliser {
         // (V13 refactor) — every line_tickets row derives its shop
         // by joining back through the ticket. The save is inside
         // this transaction, so a later line failure rolls the
-        // shop_id back too (the controller's @Transactional
-        // boundary is the unit of consistency).
-        ShopContact contact = readShopContact(extraction.extractionPayload());
-        Shop shop = resolveShop(extraction.merchant(), contact, Instant.now());
+        // shop_id back too. Note the status flip to DONE happens
+        // OUTSIDE this transaction on purpose (best-effort
+        // catalogue): see TicketApplicationService#changeStatus.
+        ShopContact contact = readShopContact(extraction.rawResponse());
+        Shop shop = resolveShop(extraction.merchant(), contact, Instant.now()).value();
         tickets.save(ticket.withShopId(shop.id()));
 
         int persistedProducts = 0;
@@ -123,33 +127,33 @@ public class TicketExtractionNormaliser {
         // order instead of receipt order.
         for (var line : extraction.products()) {
             Instant lineNow = Instant.now();
-            Product product = resolveProduct(
+            Resolved<Product> product = resolveProduct(
                     line.name(), line.unit(), lineNow);
-            if (product.createdAt().equals(lineNow)) persistedProducts++;
+            if (product.created()) persistedProducts++;
 
-            Price price = resolvePrice(
-                    product.id(), ticketId, line.pricePerUnit(), lineNow);
-            if (price.createdAt().equals(lineNow)) persistedPrices++;
+            Resolved<Price> price = resolvePrice(
+                    product.value().id(), ticketId, line.pricePerUnit(), lineNow);
+            if (price.created()) persistedPrices++;
 
             LineTicket lineTicket = lineTickets.save(new LineTicket(
                     UUID.randomUUID(),
                     ticketId,
-                    product.id(),
-                    price.id(),
+                    product.value().id(),
+                    price.value().id(),
                     line.quantity(),
                     line.lineTotal(),
                     lineNow,
                     lineNow));
             persistedLines++;
             log.debug("Linked line_ticket {} (ticket={}, product={}, price={})",
-                    lineTicket.id(), ticketId, product.id(), price.id());
+                    lineTicket.id(), ticketId, product.value().id(), price.value().id());
         }
 
         log.info("Normalised ticket {} (shop={}): +{} product(s), +{} price(s), +{} line(s)",
                 ticketId, shop.id(), persistedProducts, persistedPrices, persistedLines);
     }
 
-    private Shop resolveShop(String merchantName, ShopContact contact, Instant now) {
+    private Resolved<Shop> resolveShop(String merchantName, ShopContact contact, Instant now) {
         if (merchantName == null || merchantName.isBlank()) {
             // Defensive: extraction validation upstream would have
             // 400'd on this. If somehow we got here, skip the shop
@@ -158,8 +162,7 @@ public class TicketExtractionNormaliser {
                     "Cannot normalise ticket without a merchant name");
         }
         String normalised = Shop.normalisedNameOf(merchantName);
-        return shops.findByNormalisedName(normalised)
-                .orElseGet(() -> shops.save(new Shop(
+        return resolve(shops.findByNormalisedName(normalised), () -> shops.save(new Shop(
                         UUID.randomUUID(),
                         merchantName,
                         normalised,
@@ -174,27 +177,52 @@ public class TicketExtractionNormaliser {
     }
 
     /**
-     * Lift shop contact info from the {@code extraction_payload}
-     * JSONB blob. The {@code shop} object in the prompt schema is
-     * optional — older payloads (pre-prompt-update) won't have it
-     * and return {@code all-null}, leaving the user to fill contact
-     * info via {@code PATCH /api/shops/{id}}. Newer payloads carry
-     * whatever the model could read from the receipt header/footer.
+     * Get-or-create in one place: the port's {@code save} returns the
+     * row as actually stored (the upsert keeps the original id on
+     * conflict), so the caller never has to re-read it, and we know
+     * here — not by comparing timestamps afterwards — whether this
+     * call created the row or reused it.
+     */
+    private <T> Resolved<T> resolve(Optional<T> existing, Supplier<T> create) {
+        return existing.<Resolved<T>>map(value -> new Resolved<>(value, false))
+                .orElseGet(() -> new Resolved<>(create.get(), true));
+    }
+
+    /** A resolved catalogue row plus whether this call created it. */
+    private record Resolved<T>(T value, boolean created) { }
+
+    /**
+     * Lift shop contact info from the provider's raw reply.
+     *
+     * <p>Read from {@code rawResponse} — the verbatim provider
+     * output, which the orchestrator always persists and which keeps
+     * the whole reply intact, {@code shop} object included (the
+     * provider's parser only reads the typed fields, so the object
+     * survives in the raw text by design). It is deliberately NOT
+     * read from the {@code extraction_payload} JSONB column: the
+     * orchestrator never populates that column, so reading it made
+     * this method dead code and left the seven {@code shops}
+     * contact columns empty unless the user filled them by hand.
+     *
+     * <p>The {@code shop} object in the prompt schema is optional —
+     * older replies (pre-prompt-update) won't have it and return
+     * {@code all-null}, leaving the user to fill contact info via
+     * {@code PATCH /api/shops/{id}}.
      *
      * <p>{@code merchant} stays a top-level string (the store name as
      * printed) — the contact fields live under {@code shop} rather
-     * than nesting inside {@code merchant}, so the existing parser
-     * keeps treating {@code merchant} as the dedup key while the new
+     * than nesting inside {@code merchant}, so the parser keeps
+     * treating {@code merchant} as the dedup key while the new
      * fields live in their own object. Malformed JSON is logged and
      * treated as all-null rather than aborting the whole
      * normalisation; the lines are the important part.
      */
-    private ShopContact readShopContact(String extractionPayload) {
-        if (extractionPayload == null || extractionPayload.isBlank()) {
+    private ShopContact readShopContact(String rawResponse) {
+        if (rawResponse == null || rawResponse.isBlank()) {
             return ShopContact.EMPTY;
         }
         try {
-            JsonNode root = objectMapper.readTree(extractionPayload);
+            JsonNode root = objectMapper.readTree(rawResponse);
             JsonNode shop = root.get("shop");
             if (shop == null || !shop.isObject()) {
                 return ShopContact.EMPTY;
@@ -208,7 +236,7 @@ public class TicketExtractionNormaliser {
                     textOrNull(shop.get("tax_id")),
                     textOrNull(shop.get("website")));
         } catch (JsonProcessingException e) {
-            log.warn("Skipping shop contact extraction: malformed extraction_payload",
+            log.warn("Skipping shop contact extraction: malformed provider reply",
                     e);
             return ShopContact.EMPTY;
         }
@@ -238,20 +266,19 @@ public class TicketExtractionNormaliser {
         static final ShopContact EMPTY = new ShopContact(null, null, null, null, null, null, null);
     }
 
-    private Product resolveProduct(String name, String unit, Instant now) {
+    private Resolved<Product> resolveProduct(String name, String unit, Instant now) {
         String normalised = Product.normalisedNameOf(name);
-        return products.findByNormalisedName(normalised, unit)
-                .orElseGet(() -> products.save(new Product(
-                        UUID.randomUUID(),
-                        name,
-                        normalised,
-                        unit,
-                        now)));
+        return resolve(products.findByNormalisedName(normalised, unit), () -> products.save(new Product(
+                UUID.randomUUID(),
+                name,
+                normalised,
+                unit,
+                now)));
     }
 
-    private Price resolvePrice(UUID productId, UUID ticketId, BigDecimal amount, Instant now) {
-        return prices.findByProductAndTicket(productId, ticketId, amount)
-                .orElseGet(() -> prices.save(new Price(
+    private Resolved<Price> resolvePrice(UUID productId, UUID ticketId, BigDecimal amount, Instant now) {
+        return resolve(prices.findByProductAndTicket(productId, ticketId, amount),
+                () -> prices.save(new Price(
                         UUID.randomUUID(),
                         productId,
                         ticketId,

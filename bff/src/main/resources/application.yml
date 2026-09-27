@@ -25,12 +25,18 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: when-authorized
+      # Never in a deployed environment. The health chain is
+      # permitAll with no resource server, so no principal is ever
+      # "authorized" here — when-authorized was dead config.
+      # application-local.yml re-enables it for debugging.
+      show-details: never
 
 logging:
   level:
     root: INFO
-    com.ticketapp: DEBUG
+    # DEBUG for com.ticketapp lives in application-local.yml only:
+    # at this level the pipeline logs ticket ids and provider text,
+    # which has no business in a deployed log.
 
 google:
   # OAuth 2.0 Web client id (matches front VITE_GOOGLE_CLIENT_ID).

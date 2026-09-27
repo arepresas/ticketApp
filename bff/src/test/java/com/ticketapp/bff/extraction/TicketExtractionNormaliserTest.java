@@ -83,11 +83,18 @@ class TicketExtractionNormaliserTest {
      * call. The V13 refactor moved shop_id onto the ticket, so the
      * normaliser now takes the full Ticket (it stamps the resolved
      * shop id back onto it) — the test fixture matches.
+     *
+     * <p>The owner is fixed rather than random so the owner-scoped
+     * port stub and the fixture ticket agree: the normaliser passes
+     * {@code ticket.ownerId()} to the extraction repository.
      */
+    private static final UUID OWNER =
+            UUID.fromString("11111111-1111-1111-1111-111111111111");
+
     private static Ticket sampleTicket(UUID id) {
         return new Ticket(
                 id,
-                UUID.randomUUID(),
+                OWNER,
                 "Mercadona receipt",
                 "",
                 Status.OPEN,
@@ -103,8 +110,15 @@ class TicketExtractionNormaliserTest {
                 0);
     }
 
+    /**
+     * Builds an extraction the way the orchestrator does: the
+     * provider's verbatim reply in {@code rawResponse} and a null
+     * {@code extractionReply} (the orchestrator never populates
+     * that column). Anything the normaliser can read about the shop
+     * has to come from the reply.
+     */
     private TicketExtraction extraction(UUID ticketId, String merchant,
-                                        String payload, List<ProductLine> lines) {
+                                        String rawReply, List<ProductLine> lines) {
         return new TicketExtraction(
                 ticketId,
                 merchant,
@@ -115,8 +129,8 @@ class TicketExtractionNormaliserTest {
                 "EUR",
                 "MiniMax-M3",
                 Instant.parse("2026-07-04T10:00:00Z"),
-                "{\"merchant\":\"" + merchant + "\"}",
-                payload);
+                rawReply,
+                null);
     }
 
     private ProductLine sampleLine() {
@@ -125,14 +139,15 @@ class TicketExtractionNormaliserTest {
     }
 
     @Test
-    void firstTimeShopCreationUsesNullContactWhenPayloadAbsent() {
-        // extraction_payload is null (today's MiniMax prompt doesn't
-        // ask for shop fields). The shop row is created with every
-        // contact field null — the user fills them via PATCH later.
+    void firstTimeShopCreationUsesNullContactWhenReplyHasNoShopObject() {
+        // A reply without a "shop" object (older prompt schema, or a
+        // model that could not read the header). The shop row is
+        // created with every contact field null — the user fills them
+        // via PATCH later.
         UUID ticketId = UUID.randomUUID();
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", null,
-                        List.of(sampleLine()))));
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
+                        "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -151,15 +166,16 @@ class TicketExtractionNormaliserTest {
     }
 
     @Test
-    void shopContactLiftedFromExtractionPayload() {
+    void shopContactLiftedFromProviderReply() {
         // The LLM emits a top-level "shop" object with the
         // merchant's contact info, separate from the "merchant"
-        // string (which stays the dedup key). The normaliser
-        // threads those fields into the shops master row on first
-        // encounter; the UPSERT's COALESCE preserves any richer
-        // info a later manual PATCH wrote.
+        // string (which stays the dedup key). It survives into the
+        // stored row because the provider returns its reply verbatim
+        // and the normaliser reads it from there. The UPSERT's
+        // COALESCE preserves any richer info a later manual PATCH
+        // wrote.
         UUID ticketId = UUID.randomUUID();
-        String payload = """
+        String rawReply = """
                 {
                   "merchant": "Mercadona",
                   "shop": {
@@ -173,8 +189,8 @@ class TicketExtractionNormaliserTest {
                   }
                 }
                 """;
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", payload,
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
@@ -200,15 +216,15 @@ class TicketExtractionNormaliserTest {
         // protects against silent regressions if the prompt is
         // refactored without a coordinated test update.
         UUID ticketId = UUID.randomUUID();
-        String payload = """
+        String rawReply = """
                 {
                   "merchant": {
                     "address": "wrong place"
                   }
                 }
                 """;
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Lidl", payload,
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
@@ -220,16 +236,16 @@ class TicketExtractionNormaliserTest {
     }
 
     @Test
-    void partialPayloadLeavesMissingFieldsNull() {
+    void partialReplyLeavesMissingFieldsNull() {
         // Provider emits only some fields. The absent ones stay
         // null and the upsert's COALESCE preserves any value a
         // later manual PATCH wrote.
         UUID ticketId = UUID.randomUUID();
-        String payload = """
+        String rawReply = """
                 {"shop": {"city": "Madrid", "country": "ES"}}
                 """;
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Dia", payload,
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Dia", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("dia")).thenReturn(Optional.empty());
 
@@ -249,16 +265,16 @@ class TicketExtractionNormaliserTest {
 
     @Test
     void shopObjectMissingLeavesAllContactFieldsNull() {
-        // Payload has top-level fields but no "shop" object —
+        // Reply has top-level fields but no "shop" object —
         // the parser is defensive and returns all-null contact
         // info, leaving the rest of the normalisation (lines) to
         // proceed normally.
         UUID ticketId = UUID.randomUUID();
-        String payload = """
+        String rawReply = """
                 {"purchase_date": "2026-07-04", "total_amount": 3.50}
                 """;
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Lidl", payload,
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
                         List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
@@ -272,13 +288,13 @@ class TicketExtractionNormaliserTest {
     }
 
     @Test
-    void malformedPayloadDegradesGracefully() {
+    void malformedReplyDegradesGracefully() {
         // A broken extraction_payload (e.g. a future model
         // revision emits invalid JSON) must not abort the
         // normalisation — the lines are the important part.
         // The shop row is still created, just without contact info.
         UUID ticketId = UUID.randomUUID();
-        when(extractions.findByTicketId(ticketId))
+        when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Consum",
                         "{not valid json", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
@@ -303,9 +319,9 @@ class TicketExtractionNormaliserTest {
                 "Calle Mayor 1", "28013", "Madrid", "ES",
                 "+34 911 22 33 44", "A12345678", "https://mercadona.es",
                 Instant.parse("2026-01-01T00:00:00Z"));
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", null,
-                        List.of(sampleLine()))));
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
+                        "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.of(existing));
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -335,9 +351,9 @@ class TicketExtractionNormaliserTest {
         Shop created = new Shop(UUID.randomUUID(), "Consum", "consum",
                 null, null, null, null, null, null, null,
                 Instant.parse("2026-07-04T10:00:00Z"));
-        when(extractions.findByTicketId(ticketId))
-                .thenReturn(Optional.of(extraction(ticketId, "Consum", null,
-                        List.of(sampleLine()))));
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Consum",
+                        "{\"merchant\":\"Consum\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
         when(shops.save(any())).thenReturn(created);
 

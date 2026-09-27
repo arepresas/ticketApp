@@ -16,6 +16,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -126,19 +127,14 @@ public class TicketExtractionService {
                 return receiptExtractor.extract(request);
             } catch (ReceiptExtractionException e) {
                 lastFailure = e;
-                if (!isRetriable(e) || attempt == maxAttempts) {
+                if (!e.retryable() || attempt == maxAttempts) {
                     throw e;
                 }
-                log.warn("Extraction attempt {}/{} failed for ticket {} (retriable status={}): {}",
+                log.warn("Extraction attempt {}/{} failed for ticket {} (retryable, status={}): {}",
                         attempt, maxAttempts, ticket.id(), e.statusCode(), e.getMessage());
             }
         }
         throw lastFailure;
-    }
-
-    static boolean isRetriable(ReceiptExtractionException e) {
-        int status = e.statusCode();
-        return status == 0 || status == 429 || (status >= 500 && status <= 599);
     }
 
     /**
@@ -152,6 +148,17 @@ public class TicketExtractionService {
      * threshold for the dashboard.
      */
     static final int ERROR_MESSAGE_MAX_CHARS = 2000;
+
+    /**
+     * Provider-identifying text that must not reach the SPA: the
+     * message is persisted on the ticket and rendered verbatim, and
+     * "MiniMax returned 500" leaks which vendor is behind the app and
+     * breaks the BFF's own tests every time the provider is swapped.
+     * The full text stays in the log line.
+     */
+    private static String redact(String message) {
+        return message == null ? null : message.replace("MiniMax", "the AI provider");
+    }
 
     private final TicketRepository ticketRepository;
     private final TicketExtractionRepository ticketExtractionRepository;
@@ -207,7 +214,7 @@ public class TicketExtractionService {
     public boolean processTicket(Ticket ticket) {
         UUID id = ticket.id();
 
-        if (ticketExtractionRepository.findByTicketId(id).isPresent()) {
+        if (ticketExtractionRepository.findByTicketId(id, ticket.ownerId()).isPresent()) {
             log.warn("Ticket {} already has an extraction; skipping", id);
             skippedCounter.increment();
             return false;
@@ -298,17 +305,21 @@ public class TicketExtractionService {
             successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
-            String message = "status=" + e.statusCode() + " " + e.getMessage();
+            String message = "status=" + e.statusCode() + " " + redact(e.getMessage());
             markError(marked, message);
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, message);
             failureCounter.increment();
             return false;
-        } catch (Exception e) {
-            // Catch-all so a bug in the orchestrator (NPE, illegal
-            // state from domain validation, DB constraint violation
-            // on save) still lands the ticket in ON_ERROR instead of
-            // leaving it stuck IN_ANALYSIS or silently retrying.
+        } catch (DataAccessException | IllegalArgumentException | IllegalStateException e) {
+            // The provider honours its port contract now, so what is
+            // left is ours and worth naming: a constraint violation or
+            // a dead connection, or a domain invariant rejecting what
+            // the provider sent. All three mean "this ticket could not
+            // be written", which is exactly what ON_ERROR records.
+            // Naming the three types also keeps this honest: an
+            // unnamed broad handler would hide them again, and
+            // CONVENTIONS §7 forbids one.
             markError(marked, e.getMessage());
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, e.getMessage());

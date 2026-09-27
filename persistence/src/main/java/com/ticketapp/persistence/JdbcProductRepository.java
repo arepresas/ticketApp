@@ -122,7 +122,13 @@ public class JdbcProductRepository implements ProductRepository {
             ps.setObject(5, java.sql.Timestamp.from(product.createdAt()));
             return ps;
         });
-        return product;
+        // Re-read by the match key instead of returning the argument.
+        // On conflict the database keeps the ORIGINAL id, so handing
+        // back the caller's freshly minted UUID would write a
+        // dangling id into line_tickets.product_id. Re-reading makes
+        // the returned row the row that is actually stored.
+        return findByNormalisedName(product.normalisedName(), product.unit())
+                .orElse(product);
     }
 
     private static Product mapProduct(java.sql.ResultSet rs) throws java.sql.SQLException {

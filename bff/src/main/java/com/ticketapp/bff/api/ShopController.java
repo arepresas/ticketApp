@@ -63,13 +63,12 @@ public class ShopController {
         // gets a 401 from the resource-server filter rather than a
         // 404 from this method. Belt-and-braces; the filter should
         // already have rejected the request.
-        AuthenticatedUser user = CurrentUser.get();
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
-        }
+        // CurrentUser.get() throws 401 by itself, so there is no
+        // null case to guard here.
+        CurrentUser.get();
         return shops.findById(id)
                 .map(shop -> ResponseEntity.ok(ShopResponse.of(shop)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     /**
@@ -82,10 +81,9 @@ public class ShopController {
     @PatchMapping("/{id}")
     public ResponseEntity<ShopResponse> patch(@PathVariable UUID id,
                                               @RequestBody(required = false) UpdateShopRequest body) {
+        // CurrentUser.get() throws 401 by itself, so there is no
+        // null case to guard here.
         AuthenticatedUser user = CurrentUser.get();
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
-        }
         if (body == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "request body is required");
         }
@@ -117,7 +115,7 @@ public class ShopController {
                             user.id(), saved.id(), countApplied(body));
                     return ResponseEntity.ok(ShopResponse.of(saved));
                 })
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
 
     private static int countApplied(UpdateShopRequest body) {

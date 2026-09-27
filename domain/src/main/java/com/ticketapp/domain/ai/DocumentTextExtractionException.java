@@ -1,5 +1,7 @@
 package com.ticketapp.domain.ai;
 
+import com.ticketapp.domain.exceptions.TicketAppException;
+
 /**
  * Provider-neutral exception thrown by a
  * {@link DocumentTextExtractor} when the OCR step cannot complete.
@@ -20,17 +22,21 @@ package com.ticketapp.domain.ai;
  * <p>No Lombok by project rule: the domain module depends only on
  * {@code java.*}.
  */
-public class DocumentTextExtractionException extends RuntimeException {
+public class DocumentTextExtractionException extends TicketAppException {
+
+    /** Stable code for logs and API responses. Named ERROR_CODE rather than
+     *  CODE so it cannot be confused with the inherited {@code code()} accessor. */
+    public static final String ERROR_CODE = "DOCUMENT_TEXT_EXTRACTION_FAILED";
 
     private final int statusCode;
 
     public DocumentTextExtractionException(int statusCode, String message) {
-        super(message);
+        super(ERROR_CODE, message);
         this.statusCode = statusCode;
     }
 
     public DocumentTextExtractionException(int statusCode, String message, Throwable cause) {
-        super(message, cause);
+        super(ERROR_CODE, message, cause);
         this.statusCode = statusCode;
     }
 

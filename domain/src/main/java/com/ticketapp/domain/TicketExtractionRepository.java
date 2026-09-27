@@ -16,7 +16,7 @@ public interface TicketExtractionRepository {
      * has never been processed (or has been deleted — the FK is
      * {@code ON DELETE CASCADE}).
      */
-    Optional<TicketExtraction> findByTicketId(UUID ticketId);
+    Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId);
 
     /**
      * Persist a new extraction. The primary key is the ticket id;
@@ -42,8 +42,9 @@ public interface TicketExtractionRepository {
      * <p>Refuses when no row exists for the ticket — the detail
      * screen disables edit when the AI hasn't run yet, and
      * silently turning a missing extraction into one would mask
-     * that condition. Throws an unchecked exception on the
-     * not-found path; the BFF translates to 404.
+     * that condition. Throws
+     * {@link com.ticketapp.domain.exceptions.ResourceNotFoundException}
+     * on the not-found path; the BFF translates it to 404.
      */
     TicketExtraction replace(TicketExtraction extraction);
 }

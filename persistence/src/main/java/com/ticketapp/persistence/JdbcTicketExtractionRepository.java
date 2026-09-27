@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.exceptions.ResourceNotFoundException;
 import com.ticketapp.persistence.ExtractionRowMapper.JsonbSupport;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -70,11 +71,13 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     }
 
     @Override
-    public Optional<TicketExtraction> findByTicketId(UUID ticketId) {
+    public Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId) {
         List<TicketExtraction> rows = jdbc.query(
-                "SELECT " + SELECT_COLS + " FROM ticket_extractions WHERE ticket_id = ?",
+                "SELECT " + SELECT_COLS + " FROM ticket_extractions e"
+                        + " JOIN tickets t ON t.id = e.ticket_id"
+                        + " WHERE e.ticket_id = ? AND t.owner_id = ?",
                 (rs, n) -> mapper.mapRow(rs),
-                ticketId);
+                ticketId, ownerId);
         return rows.stream().findFirst();
     }
 
@@ -112,8 +115,8 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             return ps;
         });
         if (rows == 0) {
-            throw new IllegalStateException(
-                    "No extraction row to replace for ticket " + extraction.ticketId());
+            throw new ResourceNotFoundException("extraction for ticket",
+                    extraction.ticketId());
         }
         return extraction;
     }

@@ -60,10 +60,9 @@ public class ProductController {
     public List<ProductSearchResponse> search(
             @RequestParam("name") String name,
             @RequestParam(value = "limit", required = false) Integer limit) {
-        AuthenticatedUser user = CurrentUser.get();
-        if (user == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
-        }
+        // CurrentUser.get() throws 401 by itself, so there is no
+        // null case to guard here.
+        CurrentUser.get();
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.isEmpty()) {
             return List.of();

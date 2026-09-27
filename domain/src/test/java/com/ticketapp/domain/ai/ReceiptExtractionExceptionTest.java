@@ -3,6 +3,7 @@ package com.ticketapp.domain.ai;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,30 +13,41 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>The exception is the only failure signal the orchestrator sees
  * from any provider implementation. Both constructor variants
- * (with and without cause) must surface the upstream HTTP status
- * and carry the message text verbatim so the WARN log has
+ * (with and without cause) must surface the upstream HTTP status,
+ * the provider's retryability verdict and the message text so the
+ * WARN log has
  * actionable context.
  */
 class ReceiptExtractionExceptionTest {
 
     @Test
-    void carriesStatusCodeAndMessage() {
+    void carriesStatusCodeRetryabilityAndMessage() {
         ReceiptExtractionException e = new ReceiptExtractionException(
-                502, "MiniMax returned 502");
+                502, true, "provider returned 502");
 
         assertEquals(502, e.statusCode());
-        assertEquals("MiniMax returned 502", e.getMessage());
+        assertTrue(e.retryable());
+        assertEquals("provider returned 502", e.getMessage());
         assertNull(e.getCause());
+    }
+
+    @Test
+    void carriesAStableCodeForTheApi() {
+        ReceiptExtractionException e = new ReceiptExtractionException(
+                400, false, "bad request");
+
+        assertEquals(ReceiptExtractionException.ERROR_CODE, e.code());
+        assertFalse(e.retryable());
     }
 
     @Test
     void carriesCauseWhenProvided() {
         IllegalStateException cause = new IllegalStateException("upstream boom");
         ReceiptExtractionException e = new ReceiptExtractionException(
-                0, "MiniMax call failed", cause);
+                0, true, "provider call failed", cause);
 
         assertEquals(0, e.statusCode());
-        assertEquals("MiniMax call failed", e.getMessage());
+        assertEquals("provider call failed", e.getMessage());
         assertSame(cause, e.getCause());
     }
 
@@ -44,7 +56,8 @@ class ReceiptExtractionExceptionTest {
         // The contract documented on the field: 0 means the failure
         // did not involve an HTTP response (DNS, parse error, etc.).
         // Verify a fresh construction preserves that sentinel value.
-        ReceiptExtractionException e = new ReceiptExtractionException(0, "x");
+        ReceiptExtractionException e = new ReceiptExtractionException(0, false,
+                "x");
 
         assertEquals(0, e.statusCode());
     }
@@ -56,7 +69,8 @@ class ReceiptExtractionExceptionTest {
         // Throwable.message. Verify the statusCode (the only
         // domain-specific field) appears — that's the actionable
         // datum in a WARN log line.
-        ReceiptExtractionException e = new ReceiptExtractionException(500, "boom");
+        ReceiptExtractionException e = new ReceiptExtractionException(500, false,
+                "boom");
 
         String rendered = e.toString();
         assertTrue(rendered.contains("500"),

@@ -113,7 +113,8 @@ public class TestReceiptExtractorConfig {
     /** Counterpart that always throws — useful for failure-path ITs. */
     public static ReceiptExtractor alwaysFailing(String message) {
         return stubbed(req -> {
-            throw new ReceiptExtractionException(500, message);
+            throw new ReceiptExtractionException(500, false,
+                message);
         });
     }
 

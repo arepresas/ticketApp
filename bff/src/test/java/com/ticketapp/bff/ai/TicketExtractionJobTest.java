@@ -7,14 +7,20 @@ import com.ticketapp.domain.TicketExtractionQueue;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.mockito.InOrder;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,7 +59,8 @@ class TicketExtractionJobTest {
                 true,                                  // enabled
                 "0 */15 * * * *",
                 5,                                     // batchSize
-                2);                                    // retryAttempts
+                2,                                     // retryAttempts
+                Duration.ofMinutes(10));               // staleAnalysisTimeout
         job = new TicketExtractionJob(tickets, service, properties);
     }
 
@@ -170,15 +177,17 @@ class TicketExtractionJobTest {
     }
 
     @Test
-    void catchesExceptionFromOneTicketAndContinuesBatch() {
-        // A single ticket's failure (e.g. NPE in the orchestrator)
-        // must not abort the rest of the batch — the cron tick
-        // resumes on the next invocation.
+    void databaseFailureFromOneTicketAbortsTheBatch() {
+        // A database failure is the one thing the job cannot absorb
+        // per ticket: the tick bails and resumes on the next
+        // invocation. Provider failures never reach here — the
+        // service handles those itself.
         Ticket good = openTicket();
         Ticket bad = openTicket();
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(good, bad));
         when(service.processTicket(good)).thenReturn(true);
-        when(service.processTicket(bad)).thenThrow(new RuntimeException("DB down"));
+        when(service.processTicket(bad))
+                .thenThrow(new DataAccessResourceFailureException("DB down"));
 
         job.tick();
 
@@ -202,6 +211,48 @@ class TicketExtractionJobTest {
         assertThat(cap.getValue()).isEqualTo(properties.batchSize());
     }
 
+    @Test
+    void abandonedClaimsAreRequeuedBeforeCandidatesArePicked() {
+        Ticket stuck = openTicket();
+        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt()))
+                .thenReturn(List.of(stuck));
+        when(tickets.findOpenForExtraction(properties.batchSize()))
+                .thenReturn(List.of(stuck.withStatus(Status.OPEN)));
+
+        job.tick();
+
+        // The cutoff must sit one timeout in the past (10 min, with
+        // slack so the assertion can't race the clock), and the
+        // batch cap must bound how many rows one tick can re-queue.
+        verify(tickets).requeueAbandonedAnalysis(
+                argThat(cutoff -> cutoff.isBefore(Instant.now().minusSeconds(60))
+                        && cutoff.isAfter(Instant.now().minusSeconds(660))),
+                eq(5));
+    }
+
+    @Test
+    void disabledJobDoesNotRequeueAbandonedClaims() {
+        job = new TicketExtractionJob(tickets, service, withEnabled(false));
+
+        job.tick();
+
+        verify(tickets, never()).requeueAbandonedAnalysis(any(Instant.class), anyInt());
+    }
+
+    @Test
+    void requeueHappensBeforeCandidateSelection() {
+        Ticket stuck = openTicket();
+        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt()))
+                .thenReturn(List.of(stuck));
+        when(tickets.findOpenForExtraction(anyInt())).thenReturn(List.of());
+
+        job.tick();
+
+        InOrder order = inOrder(tickets);
+        order.verify(tickets).requeueAbandonedAnalysis(any(Instant.class), anyInt());
+        order.verify(tickets).findOpenForExtraction(anyInt());
+    }
+
     // ---- helpers ---------------------------------------------------------
 
     private static Ticket openTicket() {
@@ -218,6 +269,7 @@ class TicketExtractionJobTest {
                 enabled,
                 "0 0 0 * * *",
                 5,
-                2);
+                2,
+                Duration.ofMinutes(10));
     }
 }
