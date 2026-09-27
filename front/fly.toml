@@ -1,0 +1,36 @@
+# fly.toml — static frontend (nginx) on Fly.io.
+#
+# Serves the Vite bundle and reverse-proxies `/api/*` to the BFF over
+# Fly private networking, so the SPA needs no absolute backend URL
+# baked in at build time (only VITE_GOOGLE_CLIENT_ID is a build arg,
+# passed by CI — the value is public by OAuth design).
+#
+# One-time setup: fly apps create ticketapp-front
+# (the BFF app name below must match the backend's fly.toml `app`).
+# Deploys run from CI (.github/workflows/fly-deploy.yml).
+
+app = 'ticketapp-front'
+primary_region = 'ams'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = '10s'
+    interval = '30s'
+    method = 'GET'
+    path = '/healthz'
+    protocol = 'http'
+    timeout = '3s'
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory = '256mb'

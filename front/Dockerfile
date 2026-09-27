@@ -20,6 +20,10 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 # -----------------------------------------------------------------------------
 FROM deps AS build
 WORKDIR /workspace
+# Google OAuth client id is public by design (it ships inside the
+# frontend bundle anyway) but it must be present AT BUILD TIME —
+# Vite bakes env into the output. CI passes it as --build-arg.
+ARG VITE_GOOGLE_CLIENT_ID=""
 COPY . .
 RUN pnpm build
 
@@ -61,6 +65,16 @@ server {
     # Demo HTML that loads the bundle as a web component.
     location = / {
         try_files /index.html =404;
+    }
+
+    # API reverse proxy: the SPA calls relative /api/* paths, so
+    # forward them to the BFF over Fly private networking. No CORS
+    # preflights, no absolute backend URL baked at build time. The
+    # hostname must match the backend app name in the root fly.toml.
+    location /api/ {
+        proxy_pass http://ticketapp-bff.internal:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # Health endpoint for orchestrators
