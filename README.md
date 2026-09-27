@@ -95,6 +95,32 @@ The opencode MCP server reads `.env` via `dotenv-cli` at startup; the back-end
 reads `POSTGRES_*` via docker compose variable substitution. SonarQube vars are
 required everywhere — the scanner refuses to run if any is missing.
 
+## Deploy to Fly.io
+
+Two apps: `ticketapp-bff` (root `fly.toml`) and `ticketapp-front`
+(`front/fly.toml`, nginx serving the bundle + proxying `/api/*` to the
+BFF over private networking). Deploys run from CI
+(`.github/workflows/fly-deploy.yml`) on every `main` push. One-time
+setup, run locally with a logged-in `flyctl`:
+
+```bash
+fly apps create ticketapp-bff
+fly apps create ticketapp-front
+fly pg create --name ticketapp-db --region ams
+fly secrets set -a ticketapp-bff \
+  DB_URL='jdbc:postgresql://<host>:5432/<db>' \
+  DB_USER='<user>' DB_PASSWORD='<pass>' \
+  GOOGLE_CLIENT_ID='<...>.apps.googleusercontent.com' \
+  BFF_JWT_SECRET="$(openssl rand -base64 32)" \
+  MINIMAX_API_KEY='<minimax-key>'
+```
+
+CI also needs two repo secrets: `FLY_API_TOKEN` (`fly auth token`) and
+`VITE_GOOGLE_CLIENT_ID` (public OAuth client id, baked into the frontend
+bundle at build time). Non-secret tunables (`TICKETAPP_AI_*`,
+`MINIMAX_*` except the key) already have production defaults in the
+root `fly.toml` `[env]`.
+
 ## Package registry
 
 The `front/` module ships a local `.npmrc` pinning the registry to the public
