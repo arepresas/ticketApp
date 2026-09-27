@@ -113,6 +113,9 @@ public class JdbcUserRepository implements UserRepository {
 
         return findByGoogleSub(googleSub)
                 .orElseThrow(() -> new IllegalStateException(
-                        "upsertFromGoogle produced no row for sub=" + googleSub + " (inserted=" + inserted + ")"));
+                        "upsertFromGoogle produced no row for sub=" + googleSub
+                                + " (inserted=" + inserted + ") — the write reported "
+                                + "success but the row is not readable, which means the "
+                                + "connection or the schema is not what we think it is"));
     }
 }

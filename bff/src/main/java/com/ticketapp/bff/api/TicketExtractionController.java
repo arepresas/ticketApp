@@ -6,6 +6,7 @@ import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.exceptions.ResourceNotFoundException;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.bff.security.CurrentUser;
@@ -171,7 +172,7 @@ public class TicketExtractionController {
                 current.extractionPayload());
         try {
             extractions.replace(updated);
-        } catch (IllegalStateException e) {
+        } catch (ResourceNotFoundException e) {
             // Race: row vanished between findByTicketId and replace
             // (a concurrent delete). Surface as 404 — the row is
             // gone from the operator's POV either way.
