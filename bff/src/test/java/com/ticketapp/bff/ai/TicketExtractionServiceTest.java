@@ -98,7 +98,8 @@ class TicketExtractionServiceTest {
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
                 tickets, extractions, jdbcTickets, receiptExtractor,
-                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2));
+                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     private static Ticket sampleTicket(UUID id) {

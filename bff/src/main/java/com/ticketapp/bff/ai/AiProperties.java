@@ -1,6 +1,11 @@
 package com.ticketapp.bff.ai;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Provider-agnostic configuration for the AI extraction pipeline
@@ -14,20 +19,17 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * MiniMax today, {@code ticketapp.ai.minimax.*} in
  * {@link com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties}.
  *
- * <p>By design this record carries <b>no validation annotations</b>:
- * the BFF refuses to bake defaults into its YAML so the operator
- * layer (env vars, {@code .env}, application profiles) is the
- * single source of truth. Validation lives in the provider modules
- * where it can target concrete constraints (key shape, model id,
- * etc.). A misconfiguration here produces a runtime failure —
- * either at the first scheduler tick (caught + reverted per
- * ADR 0006 D4) or at the first downstream call — rather than a
- * boot-time validator.
+ * <p>No defaults are baked into YAML — the operator layer (env
+ * vars, {@code .env}, application profiles) is the single source
+ * of truth. But the shape IS validated at binding time so a typo
+ * (empty cron, batch size 0) fails the boot with a clear message
+ * instead of a cryptic scheduler failure at 3am.
  */
 @ConfigurationProperties(prefix = "ticketapp.ai")
+@Validated
 public record AiProperties(
         boolean enabled,
-        String cron,
-        int batchSize,
-        int retryAttempts
+        @NotBlank String cron,
+        @Positive int batchSize,
+        @PositiveOrZero int retryAttempts
 ) { }

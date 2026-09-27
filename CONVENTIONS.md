@@ -73,8 +73,8 @@ Examples (in repo today):
 | Package | Concern |
 |---------|---------|
 | `com.ticketapp.bff.api` | REST controllers (`@RestController`) |
-| `com.ticketapp.bff.auth` | Session/JWT/OAuth (`SessionFilter`, `SessionTokenService`, …) |
-| `com.ticketapp.bff.auth` | `AuthenticatedUser` value object (HTTP-auth boundary) |
+| `com.ticketapp.bff.auth` | Google login edge (`AuthController`, `GoogleTokenVerifier`) |
+| `com.ticketapp.domain.identity` | `AuthenticatedUser` value object + identity ports (`SessionRepository`, `UserRepository`) |
 | `com.ticketapp.persistence` | JDBC repositories (`JdbcTicketRepository`, `JdbcTicketExtractionRepository`, …) and mappers |
 | `com.ticketapp.domain.<bounded-context>` | Pure model (entities, value objects, domain services) |
 | `com.ticketapp.domain.ai` | Provider-agnostic ports (`ReceiptExtractor`) — ADR 0007 |

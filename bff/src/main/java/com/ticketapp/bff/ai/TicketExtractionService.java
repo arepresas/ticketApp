@@ -11,7 +11,9 @@ import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractor;
 import com.ticketapp.domain.exceptions.OptimisticLockException;
 import com.ticketapp.persistence.JdbcTicketRepository;
-import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.stereotype.Service;
@@ -70,7 +72,6 @@ import java.util.UUID;
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class TicketExtractionService {
 
     /**
@@ -158,6 +159,44 @@ public class TicketExtractionService {
     private final ReceiptExtractor receiptExtractor;
     private final TransactionTemplate tx;
     private final AiProperties properties;
+    private final MeterRegistry meters;
+
+    private final Counter successCounter;
+    private final Counter failureCounter;
+    private final Counter skippedCounter;
+
+    public TicketExtractionService(TicketRepository ticketRepository,
+                                   TicketExtractionRepository ticketExtractionRepository,
+                                   JdbcTicketRepository jdbcTicketRepository,
+                                   ReceiptExtractor receiptExtractor,
+                                   TransactionTemplate tx,
+                                   AiProperties properties,
+                                   MeterRegistry meters) {
+        this.ticketRepository = ticketRepository;
+        this.ticketExtractionRepository = ticketExtractionRepository;
+        this.jdbcTicketRepository = jdbcTicketRepository;
+        this.receiptExtractor = receiptExtractor;
+        this.tx = tx;
+        this.properties = properties;
+        this.meters = meters;
+        // Pre-built: the outcome tag values are stable, so register
+        // once instead of rebuilding the counter per ticket.
+        this.successCounter = outcomeCounter("success");
+        this.failureCounter = outcomeCounter("failure");
+        this.skippedCounter = outcomeCounter("skipped");
+    }
+
+    // Outcome semantics for the counter below: success = extraction
+    // row persisted; failure = this run marked ON_ERROR; skipped =
+    // every other false return (already extracted, lost race). The
+    // recovery path counts as skipped even when it marks ON_ERROR —
+    // the mark belongs to a race, not to a provider verdict.
+    private Counter outcomeCounter(String result) {
+        return Counter.builder("ticket.extraction.outcome")
+                .tag("result", result)
+                .description("Tickets processed by the AI extraction pipeline")
+                .register(meters);
+    }
 
     /**
      * Process one ticket end-to-end. Returns {@code true} when an
@@ -170,6 +209,7 @@ public class TicketExtractionService {
 
         if (ticketExtractionRepository.findByTicketId(id).isPresent()) {
             log.warn("Ticket {} already has an extraction; skipping", id);
+            skippedCounter.increment();
             return false;
         }
 
@@ -198,6 +238,7 @@ public class TicketExtractionService {
             // race between our read and this write. Their write
             // stands — do not clobber it with our state.
             log.info("Ticket {} changed concurrently; skipping extraction", id);
+            skippedCounter.increment();
             return false;
         }
 
@@ -207,7 +248,15 @@ public class TicketExtractionService {
             // the connection pool's way. Retried up to
             // `ticketapp.ai.retry-attempts` total attempts for transient
             // failures (network, 429, 5xx); client errors fail fast.
-            ReceiptExtraction extraction = extractWithRetry(ticket);
+            // Timed for capacity planning (the provider call dominates
+            // the tick); the counter below splits success/failure.
+            Timer.Sample sample = Timer.start(meters);
+            final ReceiptExtraction extraction;
+            try {
+                extraction = extractWithRetry(ticket);
+            } finally {
+                sample.stop(meters.timer("ticket.extraction.duration"));
+            }
             TicketExtraction persisted = new TicketExtraction(
                     ticket.id(),
                     extraction.result().merchant(),
@@ -239,18 +288,21 @@ public class TicketExtractionService {
                 // flight (user action). The segment never committed,
                 // so nothing was persisted — recover instead of
                 // leaving the segment-1 IN_ANALYSIS behind.
+                skippedCounter.increment();
                 recoverStaleAnalysis(id, marked);
                 return false;
             }
             log.info("Extracted ticket {} → merchant='{}' total={} {}",
                     id, persisted.merchant(),
                     persisted.totalAmount(), persisted.currency());
+            successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
             String message = "status=" + e.statusCode() + " " + e.getMessage();
             markError(marked, message);
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, message);
+            failureCounter.increment();
             return false;
         } catch (Exception e) {
             // Catch-all so a bug in the orchestrator (NPE, illegal
@@ -260,6 +312,7 @@ public class TicketExtractionService {
             markError(marked, e.getMessage());
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, e.getMessage());
+            failureCounter.increment();
             return false;
         }
     }
