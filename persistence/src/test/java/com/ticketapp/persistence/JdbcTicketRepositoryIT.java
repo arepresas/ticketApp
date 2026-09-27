@@ -36,6 +36,8 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // would surface stale OPEN rows from earlier runs).
         jdbc.update("DELETE FROM ticket_extractions");
         jdbc.update("DELETE FROM tickets");
+        seedOwner(jdbc, OWNER, "owner-it");
+        seedOwner(jdbc, OTHER_OWNER, "other-owner-it");
     }
 
     @Test
@@ -223,6 +225,26 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         repository.save(Ticket.open(OWNER, "any.pdf", "x"));
 
         assertThat(repository.findByStatusIn(Set.of(), OWNER)).isEmpty();
+    }
+
+    @Test
+    void insertWithUnknownOwnerViolatesFk() {
+        // Since V19 the database enforces what the SQL layer always
+        // assumed: no app_users row, no ticket.
+        assertThatThrownBy(() -> repository.save(
+                Ticket.open(UUID.randomUUID(), "orphan", "")))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deleteUserCascadesTickets() {
+        // GDPR-style erasure: removing the user removes their
+        // tickets (and, by cascade, extractions / prices / lines).
+        Ticket t = repository.save(Ticket.open(OWNER, "mine", ""));
+
+        jdbc.update("DELETE FROM app_users WHERE id = ?", OWNER);
+
+        assertThat(repository.findById(t.id(), OWNER)).isEmpty();
     }
 
     @Test
