@@ -35,6 +35,9 @@ import static org.mockito.Mockito.when;
  *   <li>The {@code ocrText} field is cleared (to null) on the
  *       empty-reply path so a re-fetched ticket row can distinguish
  *       "OCR ran, empty" from "OCR never ran" downstream.</li>
+ *   <li>{@code ticketapp.ai.enabled=false} silences the upload path
+ *       too — same kill switch the scheduler honours. Before this,
+ *       every IT that posted a file issued a real paid OCR request.</li>
  * </ul>
  */
 class DocumentTextExtractionSyncServiceTest {
@@ -50,7 +53,25 @@ class DocumentTextExtractionSyncServiceTest {
         extractor = mock(DocumentTextExtractor.class);
         tickets = mock(TicketRepository.class);
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        service = new DocumentTextExtractionSyncService(extractor, tickets);
+        service = serviceWith(true);
+    }
+
+    private DocumentTextExtractionSyncService serviceWith(boolean aiEnabled) {
+        return new DocumentTextExtractionSyncService(
+                extractor, tickets, new AiProperties(aiEnabled, "0 * * * * *", 5, 2));
+    }
+
+    @Test
+    void disabledAiSkipsTheProviderAndLeavesTheTicketUntouched() {
+        Ticket png = ticketWithFile(UUID.randomUUID(), "image/png");
+        service = serviceWith(false);
+
+        Ticket returned = service.runOnUpload(png);
+
+        assertThat(returned).isSameAs(png);
+        assertThat(returned.ocrText()).isNull();
+        verify(extractor, never()).extract(any(), anyString());
+        verify(tickets, never()).save(any());
     }
 
     private static Ticket ticketWithFile(UUID id, String mime) {

@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.ai.TestDocumentTextExtractorConfig;
 import com.ticketapp.bff.api.dto.CatalogueResponse;
 import com.ticketapp.bff.api.dto.ExtractionResponse;
 import com.ticketapp.bff.api.dto.TicketResponse;
@@ -97,6 +98,9 @@ class TicketControllerIT {
         // call counts and the success/failure split don't leak
         // between tests.
         TestReceiptExtractorConfig.reset();
+        // Same for the OCR port double: the upload path must not
+        // reach it while ticketapp.ai.enabled=false.
+        TestDocumentTextExtractorConfig.reset();
     }
 
     private WebTestClient web() {
@@ -242,6 +246,12 @@ class TicketControllerIT {
         assertThat(response).isNotNull();
         assertThat(response.contentType()).isEqualTo("image/png");
         assertThat(response.fileName()).isEqualTo("photo.png");
+        // AI is off in this profile, so the upload path must not
+        // reach the OCR port at all. Before the kill switch covered
+        // runOnUpload, this exact upload issued a real paid request
+        // to api.minimax.io (ADR 0006 D7).
+        assertThat(TestDocumentTextExtractorConfig.calls()).isEmpty();
+        assertThat(response.ocrText()).isNull();
     }
 
     @Test
