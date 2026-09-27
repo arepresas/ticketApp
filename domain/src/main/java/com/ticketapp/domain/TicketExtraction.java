@@ -60,19 +60,21 @@ public record TicketExtraction(
         }
         if (extractedAt == null) throw new NullPointerException("extractedAt");
         if (rawResponse == null) throw new NullPointerException("rawResponse");
-        // extractionPayload is the parsed canonical object emitted by
-        // the AI provider — kept here for downstream queries that
-        // want discounts, pricePerKg, and full merchant/transaction
-        // details without re-parsing the raw text. Nullable so
-        // historical rows (pre-V7) can still be reconstructed; new
-        // writes always populate it.
+        // extractionPayload was meant to be the provider's structured
+        // response as a separate JSONB column. The orchestrator never
+        // populated it, and nothing reads it: the verbatim reply in
+        // rawResponse already carries the whole provider object (the
+        // shop block included, because the provider's parser only
+        // reads the typed fields). Kept as a nullable field so
+        // historical rows still round-trip; do not read from it, and
+        // do not expect new writes to fill it.
     }
 
     /**
-     * Backwards-compatible constructor for callers that don't
-     * yet produce an {@code extractionPayload} (legacy test
-     * fixtures, hand-constructed rows). Maps the missing field
-     * to {@code null}.
+     * Convenience constructor for callers with no
+     * {@code extractionPayload} (hand-constructed rows, tests).
+     * Maps the missing field to {@code null}, which is what the
+     * orchestrator does for every write today.
      */
     public TicketExtraction(UUID ticketId,
                             String merchant,
