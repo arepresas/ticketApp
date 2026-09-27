@@ -19,9 +19,14 @@ jobs:
       - uses: anc95/ChatGPT-CodeReview@v1.0.23
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Reviewer's own key (opencode go). Actions secret.
           OPENAI_API_KEY: ${{ secrets.AI_API_KEY }}
-          OPENAI_API_ENDPOINT: ${{ vars.AI_API_ENDPOINT }}
-          MODEL: ${{ vars.AI_MODEL }}
+          # OpenAI-compatible base URL (opencode go gateway). Kept
+          # as a secret next to the key so one Settings screen holds
+          # the whole gateway config.
+          OPENAI_API_ENDPOINT: ${{ secrets.AI_API_ENDPOINT }}
+          # Model id as exposed by the gateway (Nemotron 3 Ultra).
+          MODEL: ${{ secrets.AI_MODEL }}
           LANGUAGE: English
           # Fail loudly on big diffs instead of silently skipping?
           # No MAX_PATCH_LENGTH set on purpose: stacked PRs here are
