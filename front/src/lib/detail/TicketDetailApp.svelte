@@ -163,6 +163,10 @@
 	let panX = $state<number>(0);
 	let panY = $state<number>(0);
 	let dragStart = $state<{ x: number; y: number; panX: number; panY: number } | null>(null);
+	// Scroll container of the zoom wrapper. Needed because panning
+	// also happens via the native scrollbar, which zoom/pan state
+	// alone cannot rewind.
+	let imageWrapperEl: HTMLDivElement | null = $state(null);
 
 	function zoomIn(): void {
 		const idx = ZOOM_STEPS.indexOf(zoom as typeof ZOOM_STEPS[number]);
@@ -179,9 +183,15 @@
 	}
 
 	function resetZoom(): void {
+		// Full reset to the as-loaded view: fit zoom, no pan offset,
+		// and the scroll container rewound (scrolling is the third
+		// pan channel alongside the transform and it survives a
+		// zoom/pan-only reset).
 		zoom = 1;
 		panX = 0;
 		panY = 0;
+		dragStart = null;
+		imageWrapperEl?.scrollTo({ left: 0, top: 0 });
 	}
 
 	/**
@@ -269,13 +279,11 @@
 	}
 
 	$effect(() => {
-		// Reset zoom whenever a new ticket's file loads so the user
-		// doesn't land on a previously-zoomed view of a different
-		// receipt.
+		// Reset the view whenever a new ticket's file loads so the user
+		// doesn't land on a previously-zoomed (or scrolled) view of a
+		// different receipt.
 		void fileUrl; // tracked dependency
-		zoom = 1;
-		panX = 0;
-		panY = 0;
+		resetZoom();
 	});
 
 	/** Currency formatter shared by the table footer and the badges. */
@@ -1745,15 +1753,15 @@
 								Content area. Explicit height from the
 								clamped {@code previewHeight} state so
 								the vertical drag is authoritative in
-								both directions. Image renders at its
-								natural size and is centered — no
-								`object-cover` stretching, no flex-grow
-								absorbing empty space; if the image is
-								smaller than the pane the background
-								colour shows around it, matching the
-								original behaviour. If the image is
-								bigger than the pane the pan + zoom
-								wrapper scrolls (unchanged).
+								both directions. Image renders fit-to-
+								box at zoom 1 (no `object-cover`
+								stretching, no flex-grow absorbing empty
+								space); if the image is smaller than the
+								pane the background colour shows around
+								it, matching the original behaviour. Zoom
+								steps scale up from the fitted size; if
+								the scaled image is bigger than the pane
+								the pan + zoom wrapper scrolls (unchanged).
 							-->
 							<div
 								class="relative flex items-center justify-center overflow-hidden bg-muted/30"
@@ -1780,6 +1788,7 @@
 									<div
 										class="h-full w-full overflow-auto"
 										data-testid="preview-image-wrapper"
+										bind:this={imageWrapperEl}
 									>
 										<!--
 	role="application" tells AT this region has its own keyboard
@@ -1810,13 +1819,13 @@
 											role="application"
 											aria-label={`${ticket.title} preview, zoom ${zoom}×`}
 										>
-											<img
-												src={fileUrl}
-												alt={ticket.title}
-												class="block max-w-none select-none"
-												draggable="false"
-												data-testid="preview-image"
-											/>
+										<img
+											src={fileUrl}
+											alt={ticket.title}
+											class="block max-h-full max-w-full select-none"
+											draggable="false"
+											data-testid="preview-image"
+										/>
 										</div>
 									</div>
 									<div
