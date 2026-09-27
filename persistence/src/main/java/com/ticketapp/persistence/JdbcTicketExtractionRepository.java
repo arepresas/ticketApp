@@ -70,11 +70,13 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     }
 
     @Override
-    public Optional<TicketExtraction> findByTicketId(UUID ticketId) {
+    public Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId) {
         List<TicketExtraction> rows = jdbc.query(
-                "SELECT " + SELECT_COLS + " FROM ticket_extractions WHERE ticket_id = ?",
+                "SELECT " + SELECT_COLS + " FROM ticket_extractions e"
+                        + " JOIN tickets t ON t.id = e.ticket_id"
+                        + " WHERE e.ticket_id = ? AND t.owner_id = ?",
                 (rs, n) -> mapper.mapRow(rs),
-                ticketId);
+                ticketId, ownerId);
         return rows.stream().findFirst();
     }
 

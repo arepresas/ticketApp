@@ -173,7 +173,7 @@ public class TicketApplicationService {
                 .map(t -> {
                     Ticket target = t;
                     if (status == Ticket.Status.DONE
-                            && extractions.findByTicketId(id).isEmpty()) {
+                            && extractions.findByTicketId(id, user.id()).isEmpty()) {
                         // If the ticket has no extraction row yet
                         // (typical for ON_ERROR retries, or any
                         // ticket that landed in DONE before the
@@ -194,7 +194,8 @@ public class TicketApplicationService {
                         // status the pipeline actually landed on.
                         boolean extracted = extractionService.processTicket(t);
                         target = tickets.findById(id, user.id()).orElse(t);
-                        if (!extracted && extractions.findByTicketId(id).isEmpty()) {
+                        if (!extracted
+                                && extractions.findByTicketId(id, user.id()).isEmpty()) {
                             // Pipeline failed: keep its terminal state
                             // (ON_ERROR with the failure reason).
                             // Forcing DONE here would silently flip a

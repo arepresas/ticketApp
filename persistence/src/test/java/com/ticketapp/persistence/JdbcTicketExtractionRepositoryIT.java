@@ -64,7 +64,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
 
         extractions.save(ext);
 
-        Optional<TicketExtraction> loaded = extractions.findByTicketId(t.id());
+        Optional<TicketExtraction> loaded = extractions.findByTicketId(t.id(), OWNER);
         assertThat(loaded).isPresent();
         TicketExtraction got = loaded.get();
         assertThat(got.merchant()).isEqualTo("Mercadona");
@@ -91,7 +91,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         extractions.save(ext);
         extractions.save(ext);
 
-        assertThat(extractions.findByTicketId(t.id())).isPresent();
+        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
         Integer rows = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?",
                 Integer.class, t.id());
@@ -102,11 +102,11 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     void deleteTicketCascadesExtraction() {
         Ticket t = tickets.save(Ticket.open(OWNER, "c.png", "z"));
         extractions.save(sample(t.id(), "X", LocalDate.of(2026, Month.JANUARY, 1), List.of()));
-        assertThat(extractions.findByTicketId(t.id())).isPresent();
+        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
 
         boolean removed = tickets.deleteById(t.id(), OWNER);
         assertThat(removed).isTrue();
-        assertThat(extractions.findByTicketId(t.id())).isEmpty();
+        assertThat(extractions.findByTicketId(t.id(), OWNER)).isEmpty();
     }
 
     private static TicketExtraction sample(UUID id, String merchant, LocalDate date,

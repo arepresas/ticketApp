@@ -62,7 +62,7 @@ public class TicketExtractionController {
         if (ticket.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        return extractions.findByTicketId(id)
+        return extractions.findByTicketId(id, user.id())
                 .map(e -> ResponseEntity.ok(ExtractionResponse.of(e)))
                 // 404 with no body — same shape as "ticket not
                 // found" so the front end doesn't have to distinguish
@@ -145,7 +145,8 @@ public class TicketExtractionController {
         // AI finish first, then edit. The detail screen is
         // already aligned: it disables the edit affordance while
         // extraction is null.
-        Optional<TicketExtraction> existing = extractions.findByTicketId(id);
+        Optional<TicketExtraction> existing =
+                extractions.findByTicketId(id, user.id());
         if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
         }

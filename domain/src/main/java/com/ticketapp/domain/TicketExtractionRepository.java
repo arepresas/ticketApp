@@ -16,7 +16,7 @@ public interface TicketExtractionRepository {
      * has never been processed (or has been deleted — the FK is
      * {@code ON DELETE CASCADE}).
      */
-    Optional<TicketExtraction> findByTicketId(UUID ticketId);
+    Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId);
 
     /**
      * Persist a new extraction. The primary key is the ticket id;

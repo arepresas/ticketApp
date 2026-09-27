@@ -207,7 +207,7 @@ public class TicketExtractionService {
     public boolean processTicket(Ticket ticket) {
         UUID id = ticket.id();
 
-        if (ticketExtractionRepository.findByTicketId(id).isPresent()) {
+        if (ticketExtractionRepository.findByTicketId(id, ticket.ownerId()).isPresent()) {
             log.warn("Ticket {} already has an extraction; skipping", id);
             skippedCounter.increment();
             return false;

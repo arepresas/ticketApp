@@ -23,7 +23,7 @@ public interface LineTicketRepository {
      * them. Empty when the ticket has no normalised lines (i.e.
      * has never been validated).
      */
-    List<LineTicket> findByTicketId(UUID ticketId);
+    List<LineTicket> findByTicketId(UUID ticketId, UUID ownerId);
 
     /**
      * Upsert one per-ticket line. Same {@code (ticket_id,
