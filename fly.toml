@@ -1,15 +1,7 @@
-# fly.toml — Backend-for-frontend (Spring Boot) on Fly.io.
+# fly.toml app configuration file generated for ticketapp-bff on 2026-09-28T11:34:58Z
 #
-# One-time setup (needs a logged-in `flyctl`, NOT part of CI):
-#   fly apps create ticketapp-bff
-#   fly pg create --name ticketapp-db --region ams
-#   fly secrets set -a ticketapp-bff \
-#       DB_URL='jdbc:postgresql://<host>:5432/<db>' \
-#       DB_USER='<user>' DB_PASSWORD='<pass>' \
-#       GOOGLE_CLIENT_ID='<...>.apps.googleusercontent.com' \
-#       BFF_JWT_SECRET="$(openssl rand -base64 32)" \
-#       MINIMAX_API_KEY='<minimax-key>'
-# Deploys afterwards run from CI (.github/workflows/fly-deploy.yml).
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
 app = 'ticketapp-bff'
 primary_region = 'ams'
@@ -18,17 +10,16 @@ primary_region = 'ams'
   dockerfile = 'Dockerfile'
 
 [env]
-  # Heap sized for a 1gb shared VM (leaves room for Metaspace + PDFBox buffers).
   JAVA_OPTS = '-Xmx768m'
-  TICKETAPP_AI_ENABLED = 'true'
-  TICKETAPP_AI_CRON = '0 */15 * * * *'
-  TICKETAPP_AI_BATCH_SIZE = '5'
-  TICKETAPP_AI_RETRY_ATTEMPTS = '2'
   MINIMAX_BASE_URL = 'https://api.minimax.io/v1'
-  MINIMAX_MODEL = 'MiniMax-M3'
-  MINIMAX_TIMEOUT_MS = '30000'
-  MINIMAX_TEMPERATURE = '0.0'
   MINIMAX_MAX_COMPLETION_TOKENS = '16384'
+  MINIMAX_MODEL = 'MiniMax-M3'
+  MINIMAX_TEMPERATURE = '0.0'
+  MINIMAX_TIMEOUT_MS = '30000'
+  TICKETAPP_AI_BATCH_SIZE = '5'
+  TICKETAPP_AI_CRON = '0 */15 * * * *'
+  TICKETAPP_AI_ENABLED = 'true'
+  TICKETAPP_AI_RETRY_ATTEMPTS = '2'
 
 [http_service]
   internal_port = 8080
@@ -37,16 +28,16 @@ primary_region = 'ams'
   auto_start_machines = true
   min_machines_running = 0
 
-  # Spring Boot takes ~15s to warm up; don't route or restart before that.
   [[http_service.checks]]
-    grace_period = '30s'
     interval = '15s'
+    timeout = '5s'
+    grace_period = '30s'
     method = 'GET'
     path = '/actuator/health'
     protocol = 'http'
-    timeout = '5s'
 
 [[vm]]
+  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
-  memory = '1gb'
+  memory_mb = 1024
