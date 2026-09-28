@@ -19,7 +19,10 @@ primary_region = 'ams'
 
 [env]
   # Heap sized for a 1gb shared VM (leaves room for Metaspace + PDFBox buffers).
-  JAVA_OPTS = '-Xmx768m'
+  # NOTE: JAVA_TOOL_OPTIONS (not JAVA_OPTS) — the distroless runtime has no
+  # shell, so the exec-form ENTRYPOINT never expands $JAVA_OPTS. The JVM picks
+  # JAVA_TOOL_OPTIONS up automatically.
+  JAVA_TOOL_OPTIONS = '-Xmx768m'
   TICKETAPP_AI_ENABLED = 'true'
   TICKETAPP_AI_CRON = '0 */15 * * * *'
   TICKETAPP_AI_BATCH_SIZE = '5'
@@ -37,9 +40,12 @@ primary_region = 'ams'
   auto_start_machines = true
   min_machines_running = 0
 
-  # Spring Boot takes ~15s to warm up; don't route or restart before that.
+  # Cold start measured ~350s on 1gb shared (Liquibase 20 sets + slow bean
+  # init). Grace is capped at 60s by the platform (higher values are lowered
+  # with a warning), so this only buys the max — slow boot itself must be
+  # fixed separately (2026-09-28 incident). Pair with --wait-timeout on deploy.
   [[http_service.checks]]
-    grace_period = '30s'
+    grace_period = '60s'
     interval = '15s'
     method = 'GET'
     path = '/actuator/health'

@@ -21,7 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1  # master @ 2026-09-27
-      - run: flyctl deploy --remote-only --config fly.toml --dockerfile Dockerfile
+      # Cold start ~350s on 1gb shared (2026-09-28): default wait (~5m) is
+      # marginal, grace_period caps at 60s platform-side. Give it 10m.
+      - run: flyctl deploy --remote-only --config fly.toml --dockerfile Dockerfile --wait-timeout 10m
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
