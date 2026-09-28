@@ -58,7 +58,7 @@
         <tomcat.version>11.0.25</tomcat.version>
         <jacoco.version>0.8.15</jacoco.version>
         <pdfbox.version>3.0.8</pdfbox.version>
-        <openai-java.version>4.63.1</openai-java.version>
+        <openai-java.version>4.69.2</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
