@@ -1,9 +1,16 @@
 -- raw_response is moving from JSONB to TEXT, additively.
 --
+-- EDITED 2026-09-27, before any production deployment: the incident
+-- below named the model that was configured at the time; the module
+-- is now provider-agnostic, so the wording is too. Editing an applied
+-- changeset changes its checksum, so any database that already ran
+-- V4-V19 must be dropped and recreated. No production to invalidate.
+--
 -- The original V4 schema typed `raw_response` as JSONB under the
 -- assumption that the model would always emit valid JSON. That
--- assumption broke in production on 2026-07-05 when MiniMax-M3 started
--- wrapping its reply in <output>...</output> markup; PG rejected the
+-- assumption broke in production on 2026-07-05 when the configured
+-- model started wrapping its reply in <output>...</output> markup;
+-- PG rejected the
 -- whole save with "invalid input syntax for type json", which aborted
 -- the scheduler's transaction and left the ticket stuck in IN_PROGRESS.
 --
