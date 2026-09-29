@@ -71,7 +71,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(got.purchaseDate()).isEqualTo(LocalDate.of(2026, Month.JULY, 4));
         assertThat(got.totalAmount()).isEqualByComparingTo("26.18");
         assertThat(got.currency()).isEqualTo("EUR");
-        assertThat(got.model()).isEqualTo("MiniMax-M3");
+        assertThat(got.model()).isEqualTo("gpt-4o-mini");
         assertThat(got.products()).hasSize(2);
         assertThat(got.products().get(0).name()).isEqualTo("Tomatoes");
         assertThat(got.products().get(0).quantity()).isEqualByComparingTo("1.200");
@@ -122,7 +122,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     private static TicketExtraction sample(UUID id, String merchant, LocalDate date,
                                            List<ProductLine> products) {
         return new TicketExtraction(id, merchant, date, "food", products,
-                new BigDecimal("26.18"), "EUR", "MiniMax-M3", Instant.now(),
+                new BigDecimal("26.18"), "EUR", "gpt-4o-mini", Instant.now(),
                 "{\"choices\":[]}");
     }
 }

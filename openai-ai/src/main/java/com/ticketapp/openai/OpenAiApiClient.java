@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.openai.client.OpenAIClient;
 import com.openai.core.JsonValue;
@@ -22,21 +22,20 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Client for the MiniMax chat-completions endpoint, built on the
+ * Client for any OpenAI-compatible chat-completions endpoint, built on
  * official OpenAI Java SDK.
  *
- * <p>MiniMax exposes its chat-completions surface as
- * OpenAI-compatible (ADR 0006, D6) — see
- * <a href="https://docs.minimax.io/api-reference/text-chat-openai">the
- * MiniMax API reference</a>. The SDK accepts a custom
- * {@code baseUrl} so we point it at MiniMax and the request/response
- * format is the standard OpenAI shape (system + user messages,
- * image_url content parts, model id).
+ * <p>Any endpoint that speaks the OpenAI chat-completions protocol
+ * works (ADR 0006 D6): the SDK takes a custom {@code baseUrl} and a
+ * plain model id, and the request/response shape is the standard
+ * OpenAI one (system + user messages, {@code image_url} content
+ * parts). Pointing at a different vendor is a configuration change,
+ * not a code change — which is the point of the port (ADR 0007).
  *
  * <p>Why the SDK over a hand-rolled HTTP client? The SDK gives us
  * typed request/response objects, automatic retry on transient
- * failures, and the prompt-caching / streaming knobs that the
- * MiniMax docs document — none of which we want to re-implement.
+ * failures, and the prompt-caching / streaming knobs — none of which
+ * we want to re-implement.
  *
  * <p>Privacy: the SDK does not log request or response bodies by
  * default and we don't enable its logging layer. Logging the receipt
@@ -45,13 +44,13 @@ import java.util.Optional;
  */
 @Slf4j
 @RequiredArgsConstructor
-public final class MiniMaxApiClient {
+public final class OpenAiApiClient {
 
     private final OpenAIClient client;
-    private final com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties properties;
+    private final com.ticketapp.openai.autoconfigure.OpenAiProperties properties;
 
     /**
-     * Ask MiniMax to transcribe the text printed in the supplied
+     * Ask the provider to transcribe the text printed in the supplied
      * image. Used by the OCR step that runs at upload time
      * (see {@link com.ticketapp.domain.ai.ImageTextExtractor}) so
      * the SPA can show the verbatim text alongside the image
@@ -64,7 +63,7 @@ public final class MiniMaxApiClient {
      * yields the same text on retry. We deliberately don't set
      * {@code response_format: json_object} — the model's prose
      * reply is the wire shape we want. Sampling temperature and token
-     * budget come from {@code MinimaxAiProperties} so the operator can
+     * budget come from {@code OpenAiProperties} so the operator can
      * tune cost without a redeploy.
      *
      * @return the model's verbatim transcription, stripped of
@@ -74,7 +73,7 @@ public final class MiniMaxApiClient {
      */
     public String transcribeImage(String model, byte[] imageBytes, String mimeType)
             throws java.io.IOException {
-        log.info("MiniMax OCR request: model={} bytes={} mime={}",
+        log.info("OCR request: model={} bytes={} mime={}",
                 model, imageBytes.length, mimeType);
 
         ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
@@ -95,7 +94,7 @@ public final class MiniMaxApiClient {
     /**
      * Drop {@code <think>...</think>} blocks from a model's raw
      * reply. Shared by {@link #transcribeImage(String, byte[], String)}
-     * (OCR) and {@link MiniMaxReceiptExtractor} (structured
+     * (OCR) and {@link OpenAiReceiptExtractor} (structured
      * extraction) — both read the same thinking-style models, so the
      * strip logic lives here. Unclosed blocks are dropped to
      * end-of-string so a model that ran out of tokens mid-reasoning
@@ -123,7 +122,7 @@ public final class MiniMaxApiClient {
     }
 
     /**
-     * Ask MiniMax to extract structured receipt data from the given
+     * Ask the provider to extract structured receipt data from the given
      * input. The {@code input} is either an image (the {@code bytes}
      * + {@code mimeType} pair) or plain text already extracted from
      * a PDF ({@code pdfText} set, image fields null).
@@ -133,7 +132,7 @@ public final class MiniMaxApiClient {
      *         so we keep the parsing layer thin and observable.
      */
     public String extractReceipt(ReceiptInput input) throws java.io.IOException {
-        log.info("MiniMax extraction request: model={}", input.model());
+        log.info("the extraction request: model={}", input.model());
 
         ChatCompletionCreateParams.Builder params = ChatCompletionCreateParams.builder()
                 .model(input.model())
@@ -148,7 +147,7 @@ public final class MiniMaxApiClient {
                 // thinking block alone.
                 .maxCompletionTokens(properties.maxCompletionTokens())
                 // Constrain the model to emit a JSON object. Without
-                // this, MiniMax-M3 occasionally wraps the reply in
+                // this, gpt-4o-mini occasionally wraps the reply in
                 // markup (<output>...</output>, <|refusal|>...) which
                 // breaks the downstream parser. See WARN log
                 // "Extraction failed ... Unexpected character '<'" in
@@ -179,7 +178,7 @@ public final class MiniMaxApiClient {
      *   <li>Translates SDK exceptions
      *       ({@link OpenAIServiceException}, generic
      *       {@link RuntimeException} for DNS / connect / timeout)
-     *       into a domain {@link MiniMaxApiException} with the
+     *       into a domain {@link OpenAiApiException} with the
      *       upstream HTTP status code where applicable.</li>
      *   <li>Reads the response body as bytes before attempting to
      *       parse, so a parse failure doesn't lose the raw reply
@@ -192,7 +191,7 @@ public final class MiniMaxApiClient {
      *
      * @return the parsed {@link ChatCompletion} for the caller to
      *         inspect (assistant text, content parts, etc.)
-     * @throws MiniMaxApiException on any HTTP / parse / network
+     * @throws OpenAiApiException on any HTTP / parse / network
      *                            failure the provider surfaces
      */
     private ChatCompletion sendChatRequest(ChatCompletionCreateParams params)
@@ -205,27 +204,27 @@ public final class MiniMaxApiClient {
             // 500, etc. All extend OpenAIServiceException. The
             // exception already carries the response body for non-2xx
             // — we surface it in the WARN log.
-            throw new MiniMaxApiException(e.statusCode(),
-                    "MiniMax returned " + e.statusCode() + ": " + bodyAsString(e));
+            throw new OpenAiApiException(e.statusCode(),
+                    "provider returned " + e.statusCode() + ": " + bodyAsString(e));
         } catch (RuntimeException e) {
             // Connection refused / DNS / timeout — no response at all.
-            throw new MiniMaxApiException(0,
-                    "MiniMax call failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            throw new OpenAiApiException(0,
+                    "provider call failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
         }
         try {
             int status = resp.statusCode();
             byte[] bodyBytes = readAllBytes(resp);
             String bodyText = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
             if (status / 100 != 2) {
-                throw new MiniMaxApiException(status,
-                        "MiniMax returned " + status + ": " + truncate(bodyText));
+                throw new OpenAiApiException(status,
+                        "provider returned " + status + ": " + truncate(bodyText));
             }
             try {
                 return com.openai.core.ObjectMappers.jsonMapper()
                         .readValue(bodyBytes, ChatCompletion.class);
             } catch (Exception parseError) {
-                throw new MiniMaxApiException(status,
-                        "MiniMax returned " + status + " but the body is not valid JSON: "
+                throw new OpenAiApiException(status,
+                        "provider returned " + status + " but the body is not valid JSON: "
                                 + truncate(bodyText) + " | parse error: " + parseError.getMessage());
             }
         } finally {
@@ -256,12 +255,12 @@ public final class MiniMaxApiClient {
 
     private static String extractAssistantText(ChatCompletion completion) {
         if (completion.choices() == null || completion.choices().isEmpty()) {
-            throw new MiniMaxApiException(502, "MiniMax returned no choices");
+            throw new OpenAiApiException(502, "provider returned no choices");
         }
         return completion.choices().get(0)
                 .message()
                 .content()
-                .orElseThrow(() -> new MiniMaxApiException(502, "MiniMax returned empty content"));
+                .orElseThrow(() -> new OpenAiApiException(502, "provider returned empty content"));
     }
 
     private static ChatCompletionContentPart imagePart(byte[] imageBytes, String mimeType) {
@@ -333,9 +332,9 @@ public final class MiniMaxApiClient {
     @ToString
     @EqualsAndHashCode(callSuper = false)
     @Accessors(fluent = true)
-    public static final class MiniMaxApiException extends RuntimeException {
+    public static final class OpenAiApiException extends RuntimeException {
         private final int statusCode;
-        public MiniMaxApiException(int statusCode, String message) {
+        public OpenAiApiException(int statusCode, String message) {
             super(message);
             this.statusCode = statusCode;
         }
@@ -349,7 +348,7 @@ public final class MiniMaxApiClient {
      * explanation instead of JSON.
      *
      * <p>The "no reasoning" clause at the top exists because
-     * MiniMax-M3 (and other DeepSeek-style models exposed through the
+     * gpt-4o-mini (and other DeepSeek-style models exposed through the
      * OpenAI-compatible surface) emit {@code <think>...</think>}
      * chain-of-thought blocks even when {@code response_format:
      * json_object} is set. The block sits before the JSON object and

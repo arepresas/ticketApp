@@ -174,13 +174,13 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // status and the new column, and the row mapper must read
         // them back without losing the message.
         Ticket created = repository.save(Ticket.open(OWNER, "lidl.pdf", ""));
-        repository.save(created.markError("MiniMax returned 500: upstream timeout"));
+        repository.save(created.markError("the provider returned 500: upstream timeout"));
 
         Ticket loaded = repository.findById(created.id(), OWNER).orElseThrow();
 
         assertThat(loaded.status()).isEqualTo(Ticket.Status.ON_ERROR);
         assertThat(loaded.errorMessage())
-                .isEqualTo("MiniMax returned 500: upstream timeout");
+                .isEqualTo("the provider returned 500: upstream timeout");
     }
 
     @Test
@@ -224,7 +224,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // "failed tickets" view can use it without a new query.
         Ticket failed = repository.save(Ticket.open(OWNER, "failed.pdf", "x",
                 "application/pdf", "failed.pdf", new byte[]{1})
-                .markError("MiniMax returned 500"));
+                .markError("the AI provider returned 500"));
         Ticket done = repository.save(Ticket.open(OWNER, "done.pdf", "x",
                 "application/pdf", "done.pdf", new byte[]{2})
                 .withStatus(Ticket.Status.DONE));
@@ -465,7 +465,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
                         + " products, total_amount, currency, model, extracted_at,"
                         + " raw_response_text, extraction_payload)"
                         + " VALUES (?, 'Mercadona', CURRENT_DATE, 'food', '[]'::jsonb,"
-                        + " 1.20, 'EUR', 'MiniMax-M3', now(), '{}', '{}'::jsonb)",
+                        + " 1.20, 'EUR', 'gpt-4o-mini', now(), '{}', '{}'::jsonb)",
                 done.id());
 
         assertThat(repository.findOpenForExtraction(10)).extracting(Ticket::id)

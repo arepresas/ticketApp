@@ -29,7 +29,7 @@
              whatever AI module's autoconfiguration is on the classpath. -->
         <dependency>
             <groupId>com.ticketapp</groupId>
-            <artifactId>minimax-ai</artifactId>
+            <artifactId>openai-ai</artifactId>
         </dependency>
 
         <dependency>

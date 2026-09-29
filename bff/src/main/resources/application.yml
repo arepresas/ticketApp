@@ -64,10 +64,10 @@ ticketapp:
     cron: ${TICKETAPP_AI_CRON}
     batch-size: ${TICKETAPP_AI_BATCH_SIZE}
     retry-attempts: ${TICKETAPP_AI_RETRY_ATTEMPTS}
-    minimax:
-      base-url: ${MINIMAX_BASE_URL}
-      model: ${MINIMAX_MODEL}
-      timeout-ms: ${MINIMAX_TIMEOUT_MS}
-      temperature: ${MINIMAX_TEMPERATURE}
-      max-completion-tokens: ${MINIMAX_MAX_COMPLETION_TOKENS}
-      api-key: ${MINIMAX_API_KEY}
+    openai:
+      base-url: ${OPENAI_BASE_URL}
+      model: ${OPENAI_MODEL}
+      timeout-ms: ${OPENAI_TIMEOUT_MS}
+      temperature: ${OPENAI_TEMPERATURE}
+      max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS}
+      api-key: ${OPENAI_API_KEY}

@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -15,7 +15,7 @@ import java.io.IOException;
  * Extracts plain text from a digital-born PDF and rasterizes scanned
  * PDFs to PNG.
  *
- * <p>Used by the AI extraction pipeline (ADR 0006, D3): MiniMax's
+ * <p>Used by the AI extraction pipeline (ADR 0006, D3): the provider's
  * chat-completions endpoint accepts images and videos but not PDFs,
  * so PDF receipts must be reduced to a transport the API actually
  * accepts before they can be sent.
@@ -38,10 +38,10 @@ public class PdfTextExtractor {
     /**
      * DPI for the rasterized PNG. 200 is the sweet spot for receipt
      * OCR: high enough to keep small print and barcodes legible,
-     * low enough to stay well under MiniMax's image-size limit
+     * low enough to stay well under the provider's image-size limit
      * (the provider returns HTTP 400 for over-large payloads
      * without telling us what the limit is — see the
-     * {@code minimax-ai} 2026-07-14 incident where 72 DPI scans
+     * {@code openai-ai} 2026-07-14 incident where 72 DPI scans
      * got rejected as too small).
      */
     static final int RASTERIZE_DPI = 200;

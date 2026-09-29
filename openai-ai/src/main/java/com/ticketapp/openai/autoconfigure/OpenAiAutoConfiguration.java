@@ -1,13 +1,13 @@
-package com.ticketapp.minimaxai.autoconfigure;
+package com.ticketapp.openai.autoconfigure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.ticketapp.minimaxai.MiniMaxApiClient;
-import com.ticketapp.minimaxai.MiniMaxDocumentTextExtractor;
-import com.ticketapp.minimaxai.MiniMaxReceiptExtractor;
-import com.ticketapp.minimaxai.PdfTextExtractor;
-import com.ticketapp.minimaxai.ReceiptResponseParser;
+import com.ticketapp.openai.OpenAiApiClient;
+import com.ticketapp.openai.OpenAiDocumentTextExtractor;
+import com.ticketapp.openai.OpenAiReceiptExtractor;
+import com.ticketapp.openai.PdfTextExtractor;
+import com.ticketapp.openai.ReceiptResponseParser;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -17,12 +17,12 @@ import org.springframework.context.annotation.Bean;
 import java.time.Duration;
 
 /**
- * Spring Boot autoconfiguration that registers the MiniMax-backed
+ * Spring Boot autoconfiguration that registers the provider-backed
  * {@link com.ticketapp.domain.ai.ReceiptExtractor} bean (ADR 0007).
  *
  * <p>Picked up automatically by Spring Boot 4 via the import in
  * {@code META-INF/spring/...AutoConfiguration.imports}. The BFF
- * module never references a MiniMax class directly — it just
+ * module never references a provider class directly — it just
  * autowires the {@code ReceiptExtractor} port and gets the bean
  * from whichever AI module is on the classpath.
  *
@@ -32,9 +32,9 @@ import java.time.Duration;
  * instead of silent ambiguity.
  */
 @AutoConfiguration
-@EnableConfigurationProperties(MinimaxAiProperties.class)
+@EnableConfigurationProperties(OpenAiProperties.class)
 @Slf4j
-public class MinimaxAiAutoConfiguration {
+public class OpenAiAutoConfiguration {
 
     /**
      * The OpenAI-compatible HTTP client. Built from the operator's
@@ -54,9 +54,9 @@ public class MinimaxAiAutoConfiguration {
      * with a credential that can never succeed.
      */
     @Bean
-    public OpenAIClient openAIClient(MinimaxAiProperties properties) {
+    public OpenAIClient openAIClient(OpenAiProperties properties) {
         requireKey(properties.apiKey());
-        log.info("MiniMax OpenAI client configured: baseUrl={} model={} timeoutMs={}",
+        log.info("the provider OpenAI client configured: baseUrl={} model={} timeoutMs={}",
                 properties.baseUrl(), properties.model(), properties.timeoutMs());
         return OpenAIOkHttpClient.builder()
                 .baseUrl(properties.baseUrl())
@@ -66,8 +66,8 @@ public class MinimaxAiAutoConfiguration {
     }
 
     @Bean
-    public MiniMaxApiClient miniMaxApiClient(OpenAIClient client, MinimaxAiProperties properties) {
-        return new MiniMaxApiClient(client, properties);
+    public OpenAiApiClient openAiApiClient(OpenAIClient client, OpenAiProperties properties) {
+        return new OpenAiApiClient(client, properties);
     }
 
     @Bean
@@ -81,26 +81,26 @@ public class MinimaxAiAutoConfiguration {
     }
 
     @Bean
-    public MiniMaxReceiptExtractor miniMaxReceiptExtractor(
-            MiniMaxApiClient client,
+    public OpenAiReceiptExtractor openAiReceiptExtractor(
+            OpenAiApiClient client,
             PdfTextExtractor pdfExtractor,
             ReceiptResponseParser parser,
-            MinimaxAiProperties properties) {
-        return new MiniMaxReceiptExtractor(client, pdfExtractor, parser, properties);
+            OpenAiProperties properties) {
+        return new OpenAiReceiptExtractor(client, pdfExtractor, parser, properties);
     }
 
     @Bean
-    public MiniMaxDocumentTextExtractor miniMaxDocumentTextExtractor(
-            MiniMaxApiClient client,
-            MinimaxAiProperties properties,
+    public OpenAiDocumentTextExtractor openAiDocumentTextExtractor(
+            OpenAiApiClient client,
+            OpenAiProperties properties,
             PdfTextExtractor pdfExtractor) {
-        return new MiniMaxDocumentTextExtractor(client, properties, pdfExtractor);
+        return new OpenAiDocumentTextExtractor(client, properties, pdfExtractor);
     }
 
     private static void requireKey(String key) {
         if (key == null || key.isBlank() || "dev-placeholder".equals(key)) {
             throw new IllegalArgumentException(
-                    "MINIMAX_API_KEY is missing or set to the dev placeholder");
+                    "OPENAI_API_KEY is missing or set to the dev placeholder");
         }
     }
 }

@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // Scans the BFF module, the domain module, and the persistence
 // module so the @Repository beans (TicketRepository,
 // TicketExtractionRepository, JdbcTicketExtractionRepository) are
-// registered. The AI module (minimax-ai today) is wired through
+// registered. The AI module (openai-ai today) is wired through
 // Spring Boot autoconfiguration — see ADR 0007.
 @ComponentScan(basePackages = {
         "com.ticketapp.bff",

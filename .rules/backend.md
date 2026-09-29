@@ -1,6 +1,6 @@
 # Backend rules (Java + Spring)
 
-> Load this pack when editing Java code under `domain/`, `persistence/`, `minimax-ai/`, or `bff/`.
+> Load this pack when editing Java code under `domain/`, `persistence/`, `openai-ai/`, or `bff/`.
 
 ## Layer boundaries (build-break if violated)
 
@@ -12,7 +12,7 @@
               ┌─────────────┘   └────────────┐
               │                              │
        ┌─────────────┐                ┌─────────────┐
-       │ persistence │                │  minimax-ai │   (ADR 0007)
+       │ persistence │                │  openai-ai │   (ADR 0007)
        └─────────────┘                └─────────────┘
               ▲                              ▲
               └─────────────┐   ┌────────────┘
@@ -23,8 +23,8 @@
 ```
 
 - `domain` imports **only** `java.*` and JDK-only annotations (`org.jetbrains.annotations`).
-- `persistence` and `minimax-ai` import `domain` only. **Never** `bff`. **Never** each other.
-- `bff` imports all three (`domain`, `persistence`, `minimax-ai`). Holds Spring wiring, controllers, DTOs.
+- `persistence` and `openai-ai` import `domain` only. **Never** `bff`. **Never** each other.
+- `bff` imports all three (`domain`, `persistence`, `openai-ai`). Holds Spring wiring, controllers, DTOs.
 
 If a reverse dependency is required, stop and write an ADR (`docs/adr/`).
 
@@ -42,7 +42,7 @@ com.ticketapp.<module>.<concern>.<role>
 | `com.ticketapp.persistence` | JDBC implementations (`JdbcTicketRepository`, `JdbcTicketExtractionRepository`, ...) |
 | `com.ticketapp.domain.<bounded-context>` | Pure model |
 | `com.ticketapp.domain.ai` | Provider-agnostic ports (`ReceiptExtractor`) — ADR 0007 |
-| `com.ticketapp.minimaxai` | Provider implementation of the `ReceiptExtractor` port |
+| `com.ticketapp.openai` | Provider implementation of the `ReceiptExtractor` port |
 
 **Banned package names**: `util`, `helpers`, `common`, `shared`, `misc`, `dto`, `constants`. Lift to `domain` (if pure) or accept duplication.
 

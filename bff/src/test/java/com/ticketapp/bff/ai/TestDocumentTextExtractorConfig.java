@@ -16,10 +16,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p><b>Why this exists separately from the receipt-extraction fake.</b>
  * {@code TestReceiptExtractorConfig} covers the scheduled extraction
  * port, but nothing covered the OCR port. The production bean (from
- * {@code MinimaxAiAutoConfiguration}) therefore stayed wired during
+ * {@code OpenAiAutoConfiguration}) therefore stayed wired during
  * {@code *IT} runs, and since the upload path used to ignore
  * {@code ticketapp.ai.enabled}, any IT that posted a file with bytes
- * issued a real paid request to {@code api.minimax.io} — a direct
+ * issued a real paid request to the provider endpoint — a direct
  * violation of ADR 0006 D7 ("no test ever hits the API").
  *
  * <p><b>Why auto-registered instead of {@code @Import}-ed.</b> The

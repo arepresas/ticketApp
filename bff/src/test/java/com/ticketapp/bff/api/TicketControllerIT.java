@@ -299,7 +299,7 @@ class TicketControllerIT {
         // AI is off in this profile, so the upload path must not
         // reach the OCR port at all. Before the kill switch covered
         // runOnUpload, this exact upload issued a real paid request
-        // to api.minimax.io (ADR 0006 D7).
+        // to the provider endpoint (ADR 0006 D7).
         assertThat(TestDocumentTextExtractorConfig.calls()).isEmpty();
         assertThat(response.ocrText()).isNull();
     }

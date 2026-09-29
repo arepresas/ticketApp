@@ -40,7 +40,7 @@ class TicketExtractionTest {
     void canonicalConstructorCarriesAllFields() {
         TicketExtraction e = new TicketExtraction(
                 ID, "Mercadona", DATE, "food", PRODUCTS,
-                new BigDecimal("12.50"), "EUR", "MiniMax-M3", NOW, "raw", "payload");
+                new BigDecimal("12.50"), "EUR", "gpt-4o-mini", NOW, "raw", "payload");
 
         assertEquals(ID, e.ticketId());
         assertEquals("Mercadona", e.merchant());
@@ -49,7 +49,7 @@ class TicketExtractionTest {
         assertEquals(PRODUCTS, e.products());
         assertEquals(0, e.totalAmount().compareTo(new BigDecimal("12.50")));
         assertEquals("EUR", e.currency());
-        assertEquals("MiniMax-M3", e.model());
+        assertEquals("gpt-4o-mini", e.model());
         assertEquals(NOW, e.extractedAt());
         assertEquals("raw", e.rawResponse());
         assertEquals("payload", e.extractionPayload());
@@ -63,7 +63,7 @@ class TicketExtractionTest {
         // empty string that would corrupt downstream queries.
         TicketExtraction e = new TicketExtraction(
                 ID, "Mercadona", DATE, null, PRODUCTS,
-                new BigDecimal("12.50"), "EUR", "MiniMax-M3", NOW, "raw");
+                new BigDecimal("12.50"), "EUR", "gpt-4o-mini", NOW, "raw");
 
         assertNull(e.extractionPayload());
     }

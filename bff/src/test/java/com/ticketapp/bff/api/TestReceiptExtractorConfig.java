@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Reusable {@code @TestConfiguration} that swaps the real
- * {@link ReceiptExtractor} (which calls MiniMax over HTTP) for an
+ * {@link ReceiptExtractor} (which calls a provider over HTTP) for an
  * in-process fake. The IT suite doesn't have network access to
- * {@code api.minimax.chat}, and even when it did, hitting a paid API
+ * provider endpoint, and even when it did, hitting a paid API
  * during a routine {@code mvn verify} would burn tokens.
  *
  * <p>The fake applies a caller-supplied {@link Function} to the
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * default-behaviour factory.
  *
  * <p>Marked {@code @Primary} so Spring picks this bean over the
- * production one wired by {@code MinimaxAiAutoConfiguration}.
+ * production one wired by {@code OpenAiAutoConfiguration}.
  */
 @TestConfiguration
 public class TestReceiptExtractorConfig {
