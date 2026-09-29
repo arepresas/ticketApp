@@ -5,8 +5,11 @@
 -- (any OpenAI-compatible endpoint). The reword is comment-only and
 -- changes no DDL. Liquibase checksums the file, so an environment
 -- that has already applied this changeset must reconcile its
--- DATABASECHANGELOG checksum; the release notes for this change carry
--- the procedure. No schema or data is affected either way.
+-- DATABASECHANGELOG checksum. Reconcile ONLY these two changesets
+-- and only to the checksum of the file in this commit: never run
+-- clearCheckSums and never blanket-UPDATE MD5SUM, because a broad
+-- reset hides genuine drift. The release notes for this change carry
+-- the exact command. No schema or data is affected either way.
 --
 -- Adds:
 --   * last_extraction_attempt_at to tickets — bookkeeping for the scheduler;
