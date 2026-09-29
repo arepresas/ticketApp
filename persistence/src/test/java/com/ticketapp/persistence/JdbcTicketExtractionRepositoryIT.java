@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -139,7 +140,8 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     @Test
     void migrationKeepsTheAuditColumnNonNull() {
         // The audit trail reads this column; a NULL would blow up
-        // ExtractionResponse instead of degrading.
+        // ExtractionResponse instead of degrading. Uses the legacy id
+        // so the row is actually rewritten.
         Ticket t = tickets.save(Ticket.open(OWNER, "any", ""));
         extractions.save(withModel(t.id(), "MiniMax-M3"));
 
@@ -148,25 +150,47 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(modelOf(t.id())).isNotBlank();
     }
 
+    /**
+     * Runs a migration file with Spring's script executor — the same
+     * comment and dollar-quoting handling Liquibase relies on — so
+     * this test cannot drift from what the changelog would execute.
+     */
     private void runMigration(String file) {
         try (java.io.InputStream in = getClass().getResourceAsStream(
                 "/db/changelog/changes/" + file)) {
             assertThat(in).as("migration on the classpath: %s", file).isNotNull();
-            String sql = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            // Strip comment lines BEFORE splitting on ';'. Doing it
-            // the other way round breaks on a semicolon inside a
-            // comment, which the header does contain.
-            String executable = sql.lines()
-                    .filter(line -> !line.strip().startsWith("--"))
-                    .reduce("", (a, b) -> a + b + "\n");
-            for (String statement : executable.split(";")) {
-                if (!statement.isBlank()) {
-                    jdbc.execute(statement);
-                }
-            }
+            var resource = new org.springframework.core.io.InputStreamResource(in);
+            jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) con -> {
+                org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                        con, resource);
+                return null;
+            });
         } catch (java.io.IOException e) {
             throw new IllegalStateException("cannot read " + file, e);
         }
+    }
+
+    @Test
+    void v21IsRegisteredAndExecutedLast() {
+        // The behaviour tests above execute the SQL directly, so
+        // this pins the wiring the direct execution cannot see: the
+        // changeset is registered in the master changelog, ran, and
+        // ran after everything else.
+        // Match on either column: for an `include` without an
+        // explicit changeset id, Liquibase stores the file name in
+        // FILENAME and a path-derived id in ID. Asserting on one
+        // spelling made this test about a formatting detail.
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT exectype, orderexecuted FROM databasechangelog"
+                        + " WHERE filename LIKE ? OR id LIKE ?",
+                "%V21__neutralise_legacy_model_names%",
+                "%V21__neutralise_legacy_model_names%");
+        assertThat(rows).as("V21 registered in the changelog").hasSize(1);
+        assertThat(rows.getFirst().get("exectype")).isEqualTo("EXECUTED");
+        Integer lastOrder = jdbc.queryForObject(
+                "SELECT max(orderexecuted) FROM databasechangelog", Integer.class);
+        assertThat(((Number) rows.getFirst().get("orderexecuted")).intValue())
+                .isEqualTo(lastOrder);
     }
 
     private String modelOf(java.util.UUID ticketId) {

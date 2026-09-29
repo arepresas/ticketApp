@@ -103,10 +103,12 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
             // the caller to read the status code.
             throw new ReceiptExtractionException(mae.statusCode(),
                     isRetriableStatus(mae.statusCode()),
-                    "the extraction failed: " + mae.getMessage(), mae);
+                    "the extraction failed: " + mae.getMessage(),
+                    safeMessageFor(mae.statusCode()), mae);
         } catch (java.io.IOException ioe) {
             throw new ReceiptExtractionException(0, true,
-                    "the extraction failed: " + ioe.getMessage(), ioe);
+                    "the extraction failed: " + ioe.getMessage(),
+                    "the AI provider could not be reached", ioe);
         } catch (RuntimeException e) {
             // Provider-call bugs (mock failures in tests, SDK transport
             // errors) are retriable provider failures — wrap them so the
@@ -135,6 +137,28 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
      * again). Unknown statuses are treated as permanent so a
      * surprise does not turn into a retry storm.
      */
+    /**
+     * Client-facing text for a provider status. A category, never the
+     * provider's own output: the orchestrator persists this on the
+     * ticket and the dashboard renders it, and an upstream body can
+     * contain endpoints, model ids or request data.
+     */
+    private static String safeMessageFor(int status) {
+        if (status <= 0) {
+            return "the AI provider could not be reached";
+        }
+        if (status == 401 || status == 403) {
+            return "the AI provider rejected the request (check the configured key)";
+        }
+        if (status == 429) {
+            return "the AI provider is rate limiting this deployment";
+        }
+        if (status >= 500) {
+            return "the AI provider is failing on its side (status " + status + ")";
+        }
+        return "the AI provider rejected the extraction (status " + status + ")";
+    }
+
     private static boolean isRetriableStatus(int status) {
         return status == 429 || (status >= 500 && status <= 599);
     }

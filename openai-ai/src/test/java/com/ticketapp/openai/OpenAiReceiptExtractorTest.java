@@ -452,6 +452,30 @@ class OpenAiReceiptExtractorTest {
     }
 
     @Test
+    void adapterCategorisesTheFailureInsteadOfForwardingProviderText() throws Exception {
+        // The orchestrator persists safeMessage() on the ticket and
+        // logs the diagnostic. So the adapter must classify, not
+        // copy: a vendor-named endpoint or a key in the upstream
+        // body must not be able to reach the row.
+        when(client.extractReceipt(any())).thenThrow(
+                new com.ticketapp.openai.OpenAiApiClient.OpenAiApiException(401,
+                        "401 for https://internal.acme/v1 key=sk-live-abcdef {\"note\":\"x\"}"));
+
+        ReceiptExtractionException thrown = org.junit.jupiter.api.Assertions.assertThrows(
+                ReceiptExtractionException.class,
+                () -> extractor.extract(
+                        new ReceiptExtractionRequest(new byte[]{1}, "image/png")));
+
+        assertThat(thrown.safeMessage())
+                .contains("check the configured key")
+                .doesNotContain("internal.acme")
+                .doesNotContain("sk-live-abcdef")
+                .doesNotContain("note");
+        // The diagnostic is still available for the log.
+        assertThat(thrown.getMessage()).contains("internal.acme");
+    }
+
+    @Test
     void shopObjectInResponseIsIgnoredByParserButPreservedInRaw() throws Exception {
         // The updated prompt asks the model to emit a top-level
         // "shop" object with address/contact fields. The provider

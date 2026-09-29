@@ -7,11 +7,15 @@
 -- trail renders that column verbatim ("extracted by <model> on
 -- <date>").
 --
--- Scope, deliberately narrow: ONLY values naming the vendor that was
--- renamed away. Other model ids (gpt-4o-mini, deepseek-reasoner, ...)
--- are genuine and useful audit data — this is a rename, not a data
--- purge, and blanking everything would throw away information nobody
--- asked to lose.
+-- Scope, deliberately narrow: ONLY the exact legacy model ids that
+-- this project wrote. A prefix match would be wrong here — the same
+-- vendor also publishes other ids (e.g. 'minimax-text-01') which are
+-- genuine audit data, and this update cannot be undone. Other model
+-- ids (gpt-4o-mini, deepseek-reasoner, ...) are left alone: this is a
+-- rename, not a data purge.
+--
+-- If your database holds another id from that vendor, add it to the
+-- list below explicitly rather than widening it to a LIKE.
 --
 -- The trade-off, stated plainly: after this migration a legacy row no
 -- longer says which model produced it. That cannot be recovered from
@@ -24,4 +28,4 @@
 
 UPDATE ticket_extractions
 SET model = 'unknown'
-WHERE model ILIKE 'minimax%';
+WHERE lower(model) IN ('minimax-m3');

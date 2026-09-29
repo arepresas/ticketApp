@@ -295,16 +295,15 @@ public class TicketExtractionService {
             successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
-            // The provider adapter authors the user-safe text (it
-            // knows the failure); the orchestrator only prefixes the
-            // status. No vendor scrubbing happens here on purpose —
-            // a denylist is case-sensitive, misses URLs and model
-            // ids, and couples the orchestrator to vendors it should
-            // not know about. The full text stays in the log line.
-            String message = "status=" + e.statusCode() + " " + e.getMessage();
-            markError(marked, message);
-            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
-                    id, message);
+            // Only safeMessage() is persisted: the short,
+            // provider-neutral category the adapter vouched for. The
+            // diagnostic may carry the provider's response body,
+            // endpoint or request data, so it goes to the log only,
+            // truncated because a raw reply can be huge.
+            String persisted = "status=" + e.statusCode() + " " + e.safeMessage();
+            markError(marked, persisted);
+            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {} (diagnostic: {})",
+                    id, persisted, truncate(e.getMessage()));
             failureCounter.increment();
             return false;
         } catch (DataAccessException | IllegalArgumentException | IllegalStateException e) {

@@ -27,11 +27,14 @@ ticketapp:
     retry-attempts: 2
     openai:
       base-url: "https://api.openai.com/v1"
-      # Deliberately a literal, not an env reference: it is not a
-      # credential (nothing authenticates against it, the ports are
-      # stubbed) and the IT suite must run in CI with no secret store.
-      # A review bot will flag this file; the answer is in this comment.
-      api-key: "not-a-real-key-test-suite-only"
+      # Env-first, with an obviously fake fallback so the IT suite
+      # runs in CI with no secret store. The value is never a
+      # credential: nothing authenticates against it and both AI ports
+      # are stubbed, so no provider call is made. The fallback cannot
+      # be dropped -- the autoconfiguration fails the boot on a blank
+      # key, and weakening that to satisfy a scanner would trade a real
+      # safety net for a cosmetic one.
+      api-key: "${OPENAI_API_KEY:not-a-real-key-test-suite-only}"
       model: "gpt-4o-mini"
       timeout-ms: 30000
       temperature: 0.0
