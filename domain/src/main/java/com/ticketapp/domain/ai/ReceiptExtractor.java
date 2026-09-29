@@ -5,9 +5,9 @@ package com.ticketapp.domain.ai;
  *
  * <p>The orchestrator (BFF) depends only on this interface — never on
  * a provider-specific class. Implementations live in dedicated Maven
- * modules ({@code openai-ai}, future {@code openai-ai}, etc.) and
- * are wired through Spring Boot autoconfiguration: whichever provider
- * module is on the classpath supplies the bean.
+ * modules (today {@code openai-ai}) and are wired through Spring Boot
+ * autoconfiguration: whichever provider module is on the classpath
+ * supplies the bean.
  *
  * <p>Implementations must:
  * <ul>

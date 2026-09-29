@@ -119,6 +119,69 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
     }
 
+    @Test
+    void migrationRewritesOnlyTheRenamedVendorsModelIds() {
+        // Executes the shipped migration rather than a copy of its
+        // SQL: the file is read from the classpath and run, so a
+        // widened predicate or a renamed file fails here.
+        Ticket legacy = tickets.save(Ticket.open(OWNER, "legacy", ""));
+        extractions.save(withModel(legacy.id(), "minimax-M3"));
+        Ticket modern = tickets.save(Ticket.open(OWNER, "modern", ""));
+        extractions.save(withModel(modern.id(), "gpt-4o-mini"));
+
+        runMigration("V21__neutralise_legacy_model_names.sql");
+
+        assertThat(modelOf(legacy.id())).isEqualTo("unknown");
+        // Other vendors' ids are real audit data, not leftovers.
+        assertThat(modelOf(modern.id())).isEqualTo("gpt-4o-mini");
+    }
+
+    @Test
+    void migrationKeepsTheAuditColumnNonNull() {
+        // The audit trail reads this column; a NULL would blow up
+        // ExtractionResponse instead of degrading.
+        Ticket t = tickets.save(Ticket.open(OWNER, "any", ""));
+        extractions.save(withModel(t.id(), "MiniMax-M3"));
+
+        runMigration("V21__neutralise_legacy_model_names.sql");
+
+        assertThat(modelOf(t.id())).isNotBlank();
+    }
+
+    private void runMigration(String file) {
+        try (java.io.InputStream in = getClass().getResourceAsStream(
+                "/db/changelog/changes/" + file)) {
+            assertThat(in).as("migration on the classpath: %s", file).isNotNull();
+            String sql = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            // Strip comment lines BEFORE splitting on ';'. Doing it
+            // the other way round breaks on a semicolon inside a
+            // comment, which the header does contain.
+            String executable = sql.lines()
+                    .filter(line -> !line.strip().startsWith("--"))
+                    .reduce("", (a, b) -> a + b + "\n");
+            for (String statement : executable.split(";")) {
+                if (!statement.isBlank()) {
+                    jdbc.execute(statement);
+                }
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("cannot read " + file, e);
+        }
+    }
+
+    private String modelOf(java.util.UUID ticketId) {
+        return jdbc.queryForObject(
+                "SELECT model FROM ticket_extractions WHERE ticket_id = ?",
+                String.class, ticketId);
+    }
+
+    private static TicketExtraction withModel(java.util.UUID ticketId, String model) {
+        return new TicketExtraction(ticketId, "M",
+                LocalDate.of(2026, Month.JANUARY, 1), "food", List.of(),
+                new BigDecimal("26.18"), "EUR", model, Instant.now(),
+                "{\"choices\":[]}");
+    }
+
     private static TicketExtraction sample(UUID id, String merchant, LocalDate date,
                                            List<ProductLine> products) {
         return new TicketExtraction(id, merchant, date, "food", products,

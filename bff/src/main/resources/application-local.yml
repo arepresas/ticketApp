@@ -43,18 +43,24 @@ ticketapp:
     batch-size: 5
     retry-attempts: 2
     openai:
+      # Base URL and model have NO default, on purpose: a provider
+      # change must never be silent, so this profile fails to start
+      # with a named-variable error when .env is absent. Local dev
+      # therefore needs `.env` (copy .env.example) — see README.
+      # The key is required too, so the AI stack cannot be half
+      # configured.
       base-url: ${OPENAI_BASE_URL}
       model:    ${OPENAI_MODEL}
       # Two-minute request budget. Multimodal extraction with images
       # takes 10-30 s on a multimodal model; 3 s was too tight and
       # caused OpenAIIoException("Request failed") on every ticket.
-      # Tune via OPENAI_TIMEOUT_MS in .env when needed.
-      timeout-ms: 120000
+      # Tunable via .env; the default keeps local dev working.
+      timeout-ms: ${OPENAI_TIMEOUT_MS:120000}
       # Deterministic JSON: 0.0 so retries return the same text.
       # Token budget: covers the worst observed case (Lidl, 7+
-      # products with loyalty discounts, 2026-07-13). Tune via env.
+      # products with loyalty discounts, 2026-07-13).
       temperature: 0.0
-      max-completion-tokens: 16384
+      max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS:16384}
 
 management:
   endpoint:

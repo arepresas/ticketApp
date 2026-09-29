@@ -150,28 +150,6 @@ public class TicketExtractionService {
      */
     static final int ERROR_MESSAGE_MAX_CHARS = 2000;
 
-    /**
-     * Provider-identifying text that must not reach the SPA: the
-     * message is persisted on the ticket and rendered verbatim, and
-     * a bare vendor name leaks who is behind the app while breaking
-     * the BFF's own tests every time the provider is swapped. The
-     * list covers the vendors this module has been pointed at, and
-     * the full text stays in the log line.
-     */
-    private static final List<String> VENDOR_NAMES =
-            List.of("MiniMax", "OpenAI", "openai");
-
-    private static String redact(String message) {
-        if (message == null) {
-            return null;
-        }
-        String out = message;
-        for (String vendor : VENDOR_NAMES) {
-            out = out.replace(vendor, "the AI provider");
-        }
-        return out;
-    }
-
     private final TicketRepository ticketRepository;
     private final TicketExtractionRepository ticketExtractionRepository;
     private final JdbcTicketRepository jdbcTicketRepository;
@@ -317,7 +295,13 @@ public class TicketExtractionService {
             successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
-            String message = "status=" + e.statusCode() + " " + redact(e.getMessage());
+            // The provider adapter authors the user-safe text (it
+            // knows the failure); the orchestrator only prefixes the
+            // status. No vendor scrubbing happens here on purpose —
+            // a denylist is case-sensitive, misses URLs and model
+            // ids, and couples the orchestrator to vendors it should
+            // not know about. The full text stays in the log line.
+            String message = "status=" + e.statusCode() + " " + e.getMessage();
             markError(marked, message);
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
                     id, message);

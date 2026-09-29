@@ -245,6 +245,30 @@ class OpenAiApiClientTest {
     }
 
     @Test
+    void typedFailureIsFramedWithoutTheEndpointOrVendor() throws Exception {
+        // The orchestrator persists this message on the ticket and the
+        // dashboard renders it verbatim, so the adapter is the only
+        // place that can keep it vendor-free. Downstream scrubbing
+        // would be case-sensitive and blind to model ids, which is
+        // why it does not exist.
+        //
+        // The upstream body is included on purpose (see
+        // throwsOn401WithBodyInMessage) because it is what makes the
+        // message actionable; what is pinned here is the wrapper's own
+        // framing, which is the part this module controls.
+        OpenAIServiceException e = mock(OpenAIServiceException.class);
+        when(e.statusCode()).thenReturn(500);
+        when(e.body()).thenReturn(JsonValue.from("upstream said no"));
+        when(completionsRaw.create(any(ChatCompletionCreateParams.class))).thenThrow(e);
+
+        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x")))
+                .isInstanceOf(OpenAiApiException.class)
+                .hasMessageContaining("500")
+                .hasMessageNotContaining("api.openai.com")
+                .hasMessageStartingWith("provider returned");
+    }
+
+    @Test
     void receiptInputToStringShowsPdfTextLengthNotContent() {
         // pdfText may carry the full extracted receipt text — that
         // could be hundreds of lines. toString must report the size

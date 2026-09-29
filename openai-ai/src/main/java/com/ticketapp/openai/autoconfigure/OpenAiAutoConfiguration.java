@@ -97,10 +97,20 @@ public class OpenAiAutoConfiguration {
         return new OpenAiDocumentTextExtractor(client, properties, pdfExtractor);
     }
 
+    /**
+     * Fails the boot with a message that names the missing variable
+     * and never echoes its value — an operator gets "which variable"
+     * instead of Spring's bare "Could not resolve placeholder", and
+     * the key never reaches a log or a stack trace.
+     */
     private static void requireKey(String key) {
         if (key == null || key.isBlank() || "dev-placeholder".equals(key)) {
             throw new IllegalArgumentException(
-                    "OPENAI_API_KEY is missing or set to the dev placeholder");
+                    "OPENAI_API_KEY is missing or set to the dev placeholder. "
+                            + "Set it in the environment or in .env; every other "
+                            + "provider variable (OPENAI_BASE_URL, OPENAI_MODEL, "
+                            + "OPENAI_TIMEOUT_MS, OPENAI_TEMPERATURE, "
+                            + "OPENAI_MAX_COMPLETION_TOKENS) must be set too.");
         }
     }
 }
