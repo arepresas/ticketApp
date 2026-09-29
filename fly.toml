@@ -8,7 +8,7 @@
 #       DB_USER='<user>' DB_PASSWORD='<pass>' \
 #       GOOGLE_CLIENT_ID='<...>.apps.googleusercontent.com' \
 #       BFF_JWT_SECRET="$(openssl rand -base64 32)" \
-#       MINIMAX_API_KEY='<minimax-key>'
+#       OPENAI_API_KEY='<provider-api-key>'
 # Deploys afterwards run from CI (.github/workflows/fly-deploy.yml).
 
 app = 'ticketapp-bff'
@@ -24,11 +24,14 @@ primary_region = 'ams'
   TICKETAPP_AI_CRON = '0 */15 * * * *'
   TICKETAPP_AI_BATCH_SIZE = '5'
   TICKETAPP_AI_RETRY_ATTEMPTS = '2'
-  MINIMAX_BASE_URL = 'https://api.minimax.io/v1'
-  MINIMAX_MODEL = 'MiniMax-M3'
-  MINIMAX_TIMEOUT_MS = '30000'
-  MINIMAX_TEMPERATURE = '0.0'
-  MINIMAX_MAX_COMPLETION_TOKENS = '16384'
+  # Any OpenAI-compatible endpoint. Kept here (not defaulted in
+  # the module) so this deployment names its provider explicitly;
+  # the key stays a secret.
+  OPENAI_BASE_URL = 'https://api.openai.com/v1'
+  OPENAI_MODEL = 'gpt-4o-mini'
+  OPENAI_TIMEOUT_MS = '30000'
+  OPENAI_TEMPERATURE = '0.0'
+  OPENAI_MAX_COMPLETION_TOKENS = '16384'
 
 [http_service]
   internal_port = 8080

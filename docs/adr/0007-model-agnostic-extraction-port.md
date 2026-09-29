@@ -9,7 +9,7 @@
 
 ADR 0006 introduced the AI extraction pipeline against [MiniMax](https://platform.minimax.io)'s
 chat-completions API. The orchestrator (`TicketExtractionService` in the BFF
-module) calls `com.ticketapp.infrastructure.ai.MiniMaxApiClient` directly. The
+module) calls `com.ticketapp.infrastructure.ai.OpenAiApiClient` directly. The
 client class name is also the implementation — there is no domain port between
 the orchestrator and the vendor.
 
@@ -28,7 +28,7 @@ We want two things:
    Liquibase.
 
 AGENTS.md §3.2 normally requires an ADR for new top-level Maven modules. This
-ADR documents the addition of two (`persistence`, `minimax-ai`) and the
+ADR documents the addition of two (`persistence`, `openai-ai`) and the
 removal of one (`infrastructure`).
 
 ## Decisions
@@ -80,7 +80,7 @@ lock the abstraction to its first user. The interface is called `ReceiptExtracto
 because "extracting structured data from a receipt" is the domain concept; the
 *how* (which LLM) is hidden behind the implementation.
 
-### D2. Module split: `infrastructure` → `persistence` + `minimax-ai`
+### D2. Module split: `infrastructure` → `persistence` + `openai-ai`
 
 **Decision.** Replace the single `infrastructure` module with two sibling
 modules at the repo root:
@@ -89,7 +89,7 @@ modules at the repo root:
 ticketApp/
 ├── domain/        # unchanged
 ├── persistence/   # was infrastructure/src/main/java/com/ticketapp/infrastructure/persistence/
-├── minimax-ai/    # was infrastructure/src/main/java/com/ticketapp/infrastructure/ai/
+├── openai-ai/    # was infrastructure/src/main/java/com/ticketapp/infrastructure/ai/
 └── bff/
 ```
 
@@ -99,7 +99,7 @@ Module coordinates:
 |---|---|
 | `com.ticketapp:infrastructure` | (deleted) |
 | — | `com.ticketapp:persistence` |
-| — | `com.ticketapp:minimax-ai` |
+| — | `com.ticketapp:openai-ai` |
 
 Package rename (option α from the proposal):
 
@@ -107,7 +107,7 @@ Package rename (option α from the proposal):
 |---|---|
 | `com.ticketapp.infrastructure.persistence.*` | `com.ticketapp.persistence.*` |
 | `com.ticketapp.infrastructure.support.*` | `com.ticketapp.support.*` |
-| `com.ticketapp.infrastructure.ai.*` | `com.ticketapp.minimaxai.*` |
+| `com.ticketapp.infrastructure.ai.*` | `com.ticketapp.openai.*` |
 
 **Why split.** The two halves share nothing but the `infrastructure.*` prefix.
 PDFBox and the OpenAI SDK are only needed by the AI half; Spring JDBC and
@@ -127,24 +127,30 @@ churn is mechanical and ends here.
 ### D3. Provider selection: Maven, not Spring profiles
 
 **Decision.** The active provider is whichever AI module is declared as a
-dependency in `bff/pom.xml`. Today that's `minimax-ai`. Tomorrow it could be
+dependency in `bff/pom.xml`. Today that's `openai-ai`. Tomorrow it could be
 `openai-ai` or `anthropic-ai`; the choice is a single `<dependency>` line.
 
-> **Amended 2026-09-27 — "a single line" was aspirational.** The Java seam
-> is real: deleting `minimax-ai/` leaves the BFF's source unchanged. But the
-> *operational* swap touches nine files, because the provider's namespace
-> (`ticketapp.ai.minimax.*`) and its `MINIMAX_*` environment variables live
-> in `application.yml`, `application-local.yml` and `application-test.yml`
-> in the BFF, in `.env.example`, and in `sonar-project.properties` — on top
-> of the two `pom.xml` and two `Dockerfile` entries. `.rules/backend.md`
-> already says provider properties belong to the provider module; the YAML
-> files do not follow that yet. Until they move, treat the swap as a
-> nine-file change.
+> **Amended twice on 2026-09-27.** First, the claim was aspirational:
+> deleting the provider module left the BFF's source unchanged, but the
+> *operational* swap touched nine files, because the provider's namespace
+> and its environment variables lived in the BFF's YAML, `.env.example`
+> and `sonar-project.properties` on top of the POM and Dockerfile entries.
+>
+> Second amendment: that gap is closed. The module is now `openai-ai`, a
+> generic **OpenAI-compatible** provider rather than one vendor's client,
+> with namespace `ticketapp.ai.openai.*` and `OPENAI_*` variables. A
+> vendor swap is a configuration change (base URL, key, model id) and the
+> "one line" claim is finally true of the code.
+>
+> One property is deliberately **not** defaulted: the base URL. It is
+> required and validated at binding time, so a missing value fails the
+> boot instead of quietly pointing at whichever vendor was hardcoded
+> last.
 
 Each AI module ships a Spring Boot autoconfiguration:
 
 ```
-minimax-ai/src/main/resources/META-INF/spring/
+openai-ai/src/main/resources/META-INF/spring/
   org.springframework.boot.autoconfigure.AutoConfiguration.imports
 ```
 
@@ -158,7 +164,7 @@ property knob (`ticketapp.ai.provider=minimax`), two bean definitions in the
 BFF (one per provider, gated on the property), and a startup validation that
 "exactly one is selected". That's ceremony for a decision that is essentially
 "which JAR is on the classpath" — Maven already tracks that. Drop
-`minimax-ai` from the BFF POM and the BFF fails to start with
+`openai-ai` from the BFF POM and the BFF fails to start with
 `NoSuchBeanDefinitionException: ReceiptExtractor`, which is the right failure
 mode. Swap `<dependency>` for `<dependency>` and the BFF ships a different
 provider.
@@ -178,10 +184,10 @@ atomic commits:
    types, no other change.
 2. `refactor: move persistence to new persistence module, drop infrastructure`
    — moves JDBC repos + Liquibase + support helpers, renames packages.
-3. `refactor: move AI client to new minimax-ai module` — moves the API client
+3. `refactor: move AI client to new openai-ai module` — moves the API client
    and PDFBox helper, renames packages, implements the port, registers the
    autoconfiguration.
-4. `chore(pom): update parent + bff + persistence + minimax-ai poms` — adds
+4. `chore(pom): update parent + bff + persistence + openai-ai poms` — adds
    the two new modules, drops `infrastructure`, retargets the BFF.
 5. `docs(adr): ADR-0007 model-agnostic extraction` — this file.
 
@@ -226,11 +232,11 @@ clean with old paths.
 - The `META-INF/spring/...AutoConfiguration.imports` mechanism is a Spring
   Boot 4 feature; this repo already uses Spring Boot 4 elsewhere (ADR 0006).
 - The Docker build (`Dockerfile`) currently does `COPY infrastructure` —
-  updated to `COPY persistence` + `COPY minimax-ai`.
+  updated to `COPY persistence` + `COPY openai-ai`.
 - SonarQube's `sonar.sources` + `sonar.java.binaries` lists in
   `sonar-project.properties` are updated to point at the new module dirs.
 - This ADR supersedes the parts of ADR 0006 that placed
-  `com.ticketapp.infrastructure.ai.MiniMaxApiClient` directly behind the
+  `com.ticketapp.infrastructure.ai.OpenAiApiClient` directly behind the
   orchestrator. ADR 0006's other decisions (D2 schema, D3 PDFBox, D4 status
   machine, D5 properties, D7 tests) remain unchanged. D6 is partially
   superseded: it described the HTTP client as `java.net.http.HttpClient`, but

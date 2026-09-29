@@ -1,11 +1,11 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
-import com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties;
+import com.ticketapp.openai.autoconfigure.OpenAiProperties;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link MiniMaxReceiptExtractor} — the provider
+ * Unit tests for {@link OpenAiReceiptExtractor} — the provider
  * side of the {@link com.ticketapp.domain.ai.ReceiptExtractor} port
  * (ADR 0007).
  *
@@ -44,22 +44,22 @@ import static org.mockito.Mockito.when;
  *       {@link ReceiptExtractionException}.</li>
  * </ul>
  */
-class MiniMaxReceiptExtractorTest {
+class OpenAiReceiptExtractorTest {
 
-    private static final String MODEL = "MiniMax-M3";
+    private static final String MODEL = "gpt-4o-mini";
 
-    private MiniMaxApiClient client;
+    private OpenAiApiClient client;
     private PdfTextExtractor pdfExtractor;
-    private MinimaxAiProperties properties;
-    private MiniMaxReceiptExtractor extractor;
+    private OpenAiProperties properties;
+    private OpenAiReceiptExtractor extractor;
 
     @BeforeEach
     void setUp() {
-        client = mock(MiniMaxApiClient.class);
+        client = mock(OpenAiApiClient.class);
         pdfExtractor = mock(PdfTextExtractor.class);
-        properties = new MinimaxAiProperties(
-                "https://api.minimax.chat", "k", MODEL, 30_000L, 0.0, 16384);
-        extractor = new MiniMaxReceiptExtractor(
+        properties = new OpenAiProperties(
+                "https://api.openai.com/v1", "k", MODEL, 30_000L, 0.0, 16384);
+        extractor = new OpenAiReceiptExtractor(
                 client, pdfExtractor, new ReceiptResponseParser(new ObjectMapper()), properties);
     }
 
@@ -102,7 +102,7 @@ class MiniMaxReceiptExtractorTest {
         // land the ticket in ON_ERROR with "PDF text extraction
         // returned empty". The first iteration of the fallback
         // forwarded the raw PDF bytes as image — that fails too
-        // because MiniMax rejects application/pdf in image_url
+        // because the provider rejects application/pdf in image_url
         // (HTTP 400, see the 2026-07-14 incident). The current
         // contract: rasterize the first page to PNG via
         // PDFRenderer and send the PNG through the same image
@@ -184,12 +184,12 @@ class MiniMaxReceiptExtractorTest {
         when(pdfExtractor.extract(pdf)).thenReturn("");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(rasterized);
         when(client.extractReceipt(any())).thenThrow(
-                new RuntimeException("MiniMax 503"));
+                new RuntimeException("the provider 503"));
 
         assertThatThrownBy(() -> extractor.extract(
                 new ReceiptExtractionRequest(pdf, "application/pdf")))
                 .isInstanceOf(ReceiptExtractionException.class)
-                .hasMessageContaining("MiniMax 503")
+                .hasMessageContaining("the provider 503")
                 .hasMessageNotContaining("PDF text extraction");
     }
 
@@ -341,7 +341,7 @@ class MiniMaxReceiptExtractorTest {
 
     @Test
     void recoversJsonFromRefusalTagWrap() throws Exception {
-        // Some MiniMax model revisions wrap refusals in
+        // Some the provider model revisions wrap refusals in
         // <|refusal|>...<|/refusal|>. When the model refuses but
         // still emits the structured object after the refusal block,
         // substring recovery lifts the JSON.
@@ -449,6 +449,30 @@ class MiniMaxReceiptExtractorTest {
         assertThatThrownBy(() -> extractor.extract(
                 new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class);
+    }
+
+    @Test
+    void adapterCategorisesTheFailureInsteadOfForwardingProviderText() throws Exception {
+        // The orchestrator persists safeMessage() on the ticket and
+        // logs the diagnostic. So the adapter must classify, not
+        // copy: a vendor-named endpoint or a key in the upstream
+        // body must not be able to reach the row.
+        when(client.extractReceipt(any())).thenThrow(
+                new com.ticketapp.openai.OpenAiApiClient.OpenAiApiException(401,
+                        "401 for https://internal.acme/v1 key=sk-live-abcdef {\"note\":\"x\"}"));
+
+        ReceiptExtractionException thrown = org.junit.jupiter.api.Assertions.assertThrows(
+                ReceiptExtractionException.class,
+                () -> extractor.extract(
+                        new ReceiptExtractionRequest(new byte[]{1}, "image/png")));
+
+        assertThat(thrown.safeMessage())
+                .contains("check the configured key")
+                .doesNotContain("internal.acme")
+                .doesNotContain("sk-live-abcdef")
+                .doesNotContain("note");
+        // The diagnostic is still available for the log.
+        assertThat(thrown.getMessage()).contains("internal.acme");
     }
 
     @Test

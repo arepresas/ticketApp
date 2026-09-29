@@ -148,7 +148,7 @@ class TicketApplicationServiceTest {
         // an empty catalogue.
         UUID id = UUID.randomUUID();
         Ticket open = openTicket(id);
-        Ticket failed = open.markError("MiniMax returned 500");
+        Ticket failed = open.markError("the AI provider returned 500");
         when(tickets.findById(id, OWNER))
                 .thenReturn(Optional.of(open))
                 .thenReturn(Optional.of(failed));
@@ -157,7 +157,7 @@ class TicketApplicationServiceTest {
         Ticket result = service.changeStatus(id, user, Status.DONE);
 
         assertThat(result.status()).isEqualTo(Status.ON_ERROR);
-        assertThat(result.errorMessage()).contains("MiniMax returned 500");
+        assertThat(result.errorMessage()).contains("the AI provider returned 500");
         verify(extractionService).processTicket(any(Ticket.class));
         verify(normaliser, never()).normaliseOnDone(any());
         verify(tickets, never()).save(argThat(t -> t.status() == Status.DONE));

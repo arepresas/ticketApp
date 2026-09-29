@@ -10,10 +10,10 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>minimax-ai</artifactId>
-    <name>ticketapp-minimax-ai</name>
+    <artifactId>openai-ai</artifactId>
+    <name>ticketapp-openai-ai</name>
     <description>Provider implementation of the ReceiptExtractor port
-        backed by MiniMax's chat-completions API (ADR 0007).
+        backed by the provider's chat-completions API (ADR 0007).
     </description>
 
     <dependencies>
@@ -22,7 +22,7 @@
             <artifactId>domain</artifactId>
         </dependency>
 
-        <!-- Apache PDFBox: required by PdfTextExtractor. MiniMax's
+        <!-- Apache PDFBox: required by PdfTextExtractor. The provider's
              chat-completions endpoint doesn't accept PDFs natively, so
              we extract text before sending (ADR 0006, D3). -->
         <dependency>
@@ -31,7 +31,7 @@
         </dependency>
 
         <!-- OpenAI Java SDK: the official client for OpenAI-compatible
-             APIs. MiniMax exposes its chat-completions endpoint as
+             APIs. The provider exposes its chat-completions endpoint as
              OpenAI-compatible (ADR 0006, D6) so we can drive it with
              the SDK and a custom baseUrl. -->
         <dependency>
@@ -46,7 +46,7 @@
                  imports. The web stack is intentionally NOT included; this
                  module is a library, not a runnable service. -->
         </dependency>
-        <!-- Bean validation for MinimaxAiProperties (@NotBlank,
+        <!-- Bean validation for OpenAiProperties (@NotBlank,
              @Positive). Jakarta validation is part of the standard
              Spring Boot dependency management so no version is needed. -->
         <dependency>

@@ -1,9 +1,22 @@
 -- raw_response is moving from JSONB to TEXT, additively.
 --
+-- Header reworded 2026-09-27, before any production deployment: the
+-- incident below named the model that was configured at the time, and
+-- the module is now provider-agnostic, so the wording is too. The
+-- reword is comment-only and changes no DDL. Liquibase checksums the
+-- file, so an environment that has already applied this changeset
+-- must reconcile its DATABASECHANGELOG checksum. Reconcile ONLY
+-- these two changesets and only to the checksum of the file in this
+-- commit: never run clearCheckSums and never blanket-UPDATE MD5SUM,
+-- because a broad reset hides genuine drift. The release notes for
+-- this change carry the exact command. No schema or data is affected
+-- either way.
+--
 -- The original V4 schema typed `raw_response` as JSONB under the
 -- assumption that the model would always emit valid JSON. That
--- assumption broke in production on 2026-07-05 when MiniMax-M3 started
--- wrapping its reply in <output>...</output> markup; PG rejected the
+-- assumption broke in production on 2026-07-05 when the configured
+-- model started wrapping its reply in <output>...</output> markup;
+-- PG rejected the
 -- whole save with "invalid input syntax for type json", which aborted
 -- the scheduler's transaction and left the ticket stuck in IN_PROGRESS.
 --

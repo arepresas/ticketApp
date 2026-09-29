@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -143,22 +144,11 @@ public class TicketExtractionService {
      * case — see the {@code <think>} stripping incident from
      * 2026-07-05) which would otherwise bloat the {@code tickets}
      * row. 2000 chars is enough to keep the actionable headline
-     * ("MiniMax returned 500: ...", "MiniMax reply contained only
+     * ("the AI provider returned 500: ...", "the reply contained only
      * thinking...") and stays well under the operator-scannable
      * threshold for the dashboard.
      */
     static final int ERROR_MESSAGE_MAX_CHARS = 2000;
-
-    /**
-     * Provider-identifying text that must not reach the SPA: the
-     * message is persisted on the ticket and rendered verbatim, and
-     * "MiniMax returned 500" leaks which vendor is behind the app and
-     * breaks the BFF's own tests every time the provider is swapped.
-     * The full text stays in the log line.
-     */
-    private static String redact(String message) {
-        return message == null ? null : message.replace("MiniMax", "the AI provider");
-    }
 
     private final TicketRepository ticketRepository;
     private final TicketExtractionRepository ticketExtractionRepository;
@@ -305,10 +295,15 @@ public class TicketExtractionService {
             successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
-            String message = "status=" + e.statusCode() + " " + redact(e.getMessage());
-            markError(marked, message);
-            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
-                    id, message);
+            // Only safeMessage() is persisted: the short,
+            // provider-neutral category the adapter vouched for. The
+            // diagnostic may carry the provider's response body,
+            // endpoint or request data, so it goes to the log only,
+            // truncated because a raw reply can be huge.
+            String persisted = "status=" + e.statusCode() + " " + e.safeMessage();
+            markError(marked, persisted);
+            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {} (diagnostic: {})",
+                    id, persisted, truncate(e.getMessage()));
             failureCounter.increment();
             return false;
         } catch (DataAccessException | IllegalArgumentException | IllegalStateException e) {

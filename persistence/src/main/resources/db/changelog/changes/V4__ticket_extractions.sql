@@ -1,11 +1,22 @@
 -- AI extraction pipeline (ADR 0006).
 --
+-- Header reworded 2026-09-27, before any production deployment: it
+-- named a specific vendor, and the pipeline is now provider-agnostic
+-- (any OpenAI-compatible endpoint). The reword is comment-only and
+-- changes no DDL. Liquibase checksums the file, so an environment
+-- that has already applied this changeset must reconcile its
+-- DATABASECHANGELOG checksum. Reconcile ONLY these two changesets
+-- and only to the checksum of the file in this commit: never run
+-- clearCheckSums and never blanket-UPDATE MD5SUM, because a broad
+-- reset hides genuine drift. The release notes for this change carry
+-- the exact command. No schema or data is affected either way.
+--
 -- Adds:
 --   * last_extraction_attempt_at to tickets — bookkeeping for the scheduler;
 --     kept even on failure so the cron can skip-on-success in the future without
 --     a schema change. Nullable: existing rows have never been attempted.
 --   * ticket_extractions — 1:1 join to tickets with the structured data
---     extracted by the MiniMax pipeline. PK is the ticket_id itself, so
+--     extracted by the AI pipeline. PK is the ticket_id itself, so
 --     re-extraction requires an explicit DELETE + INSERT (not a silent
 --     overwrite). FK uses ON DELETE CASCADE so a removed ticket removes
 --     its extraction automatically.

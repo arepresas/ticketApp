@@ -26,8 +26,18 @@ public class ReceiptExtractionException extends TicketAppException {
      *  CODE so it cannot be confused with the inherited {@code code()} accessor. */
     public static final String ERROR_CODE = "RECEIPT_EXTRACTION_FAILED";
 
+    /**
+     * Fallback for the client-facing message when the adapter does
+     * not supply one. Deliberately a fixed constant: deriving it from
+     * the diagnostic would reintroduce whatever the provider put in
+     * the diagnostic (response bodies, endpoint URLs, model ids).
+     */
+    public static final String GENERIC_SAFE_MESSAGE =
+            "the AI provider could not complete the extraction";
+
     private final int statusCode;
     private final boolean retryable;
+    private final String safeMessage;
 
     /**
      * @param statusCode provider-reported status, for logs only —
@@ -38,18 +48,55 @@ public class ReceiptExtractionException extends TicketAppException {
      *                  are worth another attempt, a 400 is not);
      *                  the caller must not re-derive it from
      *                  {@code statusCode}.
+     * @param message    diagnostic text for the LOG. May contain
+     *                   whatever the provider returned; never
+     *                   persisted or sent to a client.
      */
     public ReceiptExtractionException(int statusCode, boolean retryable, String message) {
+        this(statusCode, retryable, message, GENERIC_SAFE_MESSAGE);
+    }
+
+    /**
+     * @param safeMessage short, provider-neutral text an adapter
+     *                    vouches for: a category ("provider returned
+     *                    503"), never provider output. This is the
+     *                    only part the orchestrator persists.
+     */
+    public ReceiptExtractionException(int statusCode, boolean retryable,
+                                      String message, String safeMessage) {
         super(ERROR_CODE, message);
         this.statusCode = statusCode;
         this.retryable = retryable;
+        this.safeMessage = safeMessage == null || safeMessage.isBlank()
+                ? GENERIC_SAFE_MESSAGE
+                : safeMessage;
+    }
+
+    /**
+     * The only text from this exception that may reach a client or
+     * the {@code tickets} row. Adapters are responsible for keeping
+     * it free of vendor identity, endpoints, request data and
+     * provider payloads; the orchestrator does not filter it,
+     * because a denylist cannot be exhaustive.
+     */
+    public String safeMessage() {
+        return safeMessage;
     }
 
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, Throwable cause) {
+        this(statusCode, retryable, message, GENERIC_SAFE_MESSAGE, cause);
+    }
+
+    public ReceiptExtractionException(int statusCode, boolean retryable,
+                                      String message, String safeMessage,
+                                      Throwable cause) {
         super(ERROR_CODE, message, cause);
         this.statusCode = statusCode;
         this.retryable = retryable;
+        this.safeMessage = safeMessage == null || safeMessage.isBlank()
+                ? GENERIC_SAFE_MESSAGE
+                : safeMessage;
     }
 
     public int statusCode() {

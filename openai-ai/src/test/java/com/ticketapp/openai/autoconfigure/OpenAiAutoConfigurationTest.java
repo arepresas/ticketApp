@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai.autoconfigure;
+package com.ticketapp.openai.autoconfigure;
 
 import org.junit.jupiter.api.Test;
 
@@ -6,22 +6,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Unit tests for {@link MinimaxAiAutoConfiguration}.
+ * Unit tests for {@link OpenAiAutoConfiguration}.
  *
  * <p>The autoconfig wires {@link com.openai.client.OpenAIClient} from
- * {@link MinimaxAiProperties}. Tests instantiate the class directly
+ * {@link OpenAiProperties}. Tests instantiate the class directly
  * (no Spring context needed) and verify the bean factory produces a
  * usable client. The placeholder / blank-key guard lives here so a
  * missing credential fails fast at boot instead of 401-ing every tick.
  */
-class MinimaxAiAutoConfigurationTest {
+class OpenAiAutoConfigurationTest {
 
-    private static final MinimaxAiProperties PROPS = new MinimaxAiProperties(
-            "https://api.minimax.io/v1", "test-api-key", "MiniMax-M3", 30_000L, 0.0, 16384);
+    private static final OpenAiProperties PROPS = new OpenAiProperties(
+            "https://api.openai.com/v1", "test-api-key", "gpt-4o-mini", 30_000L, 0.0, 16384);
 
     @Test
     void openAIClientReturnsNonNullClient() {
-        MinimaxAiAutoConfiguration config = new MinimaxAiAutoConfiguration();
+        OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
 
         var client = config.openAIClient(PROPS);
 
@@ -34,7 +34,7 @@ class MinimaxAiAutoConfigurationTest {
         // the same properties yields two independent clients. Cheap
         // check that the autoconfig is safe to invoke multiple times
         // (e.g. when a Spring context is refreshed in tests).
-        MinimaxAiAutoConfiguration config = new MinimaxAiAutoConfiguration();
+        OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
 
         var first = config.openAIClient(PROPS);
         var second = config.openAIClient(PROPS);
@@ -46,20 +46,20 @@ class MinimaxAiAutoConfigurationTest {
 
     @Test
     void openAIClientRejectsPlaceholderKey() {
-        MinimaxAiAutoConfiguration config = new MinimaxAiAutoConfiguration();
-        var props = new MinimaxAiProperties(
-                "https://api.minimax.io/v1", "dev-placeholder", "MiniMax-M3", 30_000L, 0.0, 16384);
+        OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
+        var props = new OpenAiProperties(
+                "https://api.openai.com/v1", "dev-placeholder", "gpt-4o-mini", 30_000L, 0.0, 16384);
 
         assertThatThrownBy(() -> config.openAIClient(props))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("MINIMAX_API_KEY");
+                .hasMessageContaining("OPENAI_API_KEY");
     }
 
     @Test
     void openAIClientRejectsBlankKey() {
-        MinimaxAiAutoConfiguration config = new MinimaxAiAutoConfiguration();
-        var props = new MinimaxAiProperties(
-                "https://api.minimax.io/v1", "  ", "MiniMax-M3", 30_000L, 0.0, 16384);
+        OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
+        var props = new OpenAiProperties(
+                "https://api.openai.com/v1", "  ", "gpt-4o-mini", 30_000L, 0.0, 16384);
 
         assertThatThrownBy(() -> config.openAIClient(props))
                 .isInstanceOf(IllegalArgumentException.class);

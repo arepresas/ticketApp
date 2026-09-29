@@ -10,14 +10,14 @@ WORKDIR /workspace
 COPY pom.xml ./
 COPY domain/pom.xml domain/
 COPY persistence/pom.xml persistence/
-COPY minimax-ai/pom.xml minimax-ai/
+COPY openai-ai/pom.xml openai-ai/
 COPY bff/pom.xml bff/
 RUN mvn -B -ntp -pl bff -am -DskipTests dependency:go-offline
 
 # Copy sources and build the executable jar
 COPY domain domain
 COPY persistence persistence
-COPY minimax-ai minimax-ai
+COPY openai-ai openai-ai
 COPY bff bff
 RUN mvn -B -ntp -pl bff -am -DskipTests package \
  && cp bff/target/bff-*.jar /workspace/bff.jar

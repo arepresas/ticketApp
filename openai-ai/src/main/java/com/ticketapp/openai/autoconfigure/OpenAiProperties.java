@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai.autoconfigure;
+package com.ticketapp.openai.autoconfigure;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Provider-specific configuration for the MiniMax implementation
+ * Provider-specific configuration for the provider implementation
  * (ADR 0007). Bound from {@code application.yml} under
- * {@code ticketapp.ai.minimax.*}.
+ * {@code ticketapp.ai.openai.*}.
  *
  * <p>Why a separate properties class from the BFF's
  * {@code AiProperties}? The BFF owns provider-agnostic knobs
@@ -24,13 +24,13 @@ import org.springframework.validation.annotation.Validated;
  * <p>Validation runs at binding time. {@code application.yml} bakes
  * no defaults in (operator-layer contract — values come from env,
  * {@code .env}, or active-profile YAML), so a missing
- * {@code MINIMAX_API_KEY} or {@code MINIMAX_MODEL} fails the
+ * {@code OPENAI_API_KEY} or {@code OPENAI_MODEL} fails the
  * autoconfiguration at boot rather than silently producing a
  * 401-every-tick loop.
  */
-@ConfigurationProperties(prefix = "ticketapp.ai.minimax")
+@ConfigurationProperties(prefix = "ticketapp.ai.openai")
 @Validated
-public record MinimaxAiProperties(
+public record OpenAiProperties(
         @NotBlank String baseUrl,
         @NotBlank String apiKey,
         @NotBlank String model,

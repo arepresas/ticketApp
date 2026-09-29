@@ -13,7 +13,7 @@ import java.util.UUID;
  * Mirrors {@link TicketExtraction} but flattens the {@code products}
  * list into a plain array (it was a JSONB column on the server
  * side). The {@code model} and {@code extractedAt} fields are
- * surfaced for the UI's audit trail ("extracted by MiniMax-M3 on
+ * surfaced for the UI's audit trail ("extracted by gpt-4o-mini on
  * …") so the user can see when the AI did its work.
  *
  * <p>The full {@code rawResponse} (the model's raw reply before

@@ -8,8 +8,8 @@ import java.util.Arrays;
  * <p>The request carries the raw receipt bytes plus the MIME type
  * the uploader reported. The {@link ReceiptExtractor}
  * implementation decides what to do with that pair — for example,
- * the MiniMax implementation extracts text from PDFs before
- * sending (MiniMax's chat-completions endpoint does not accept
+ * the provider implementation extracts text from PDFs before
+ * sending (a chat-completions endpoint does not accept
  * PDFs natively; ADR 0006 D3); a future implementation might
  * pass the bytes through unchanged.
  *

@@ -33,7 +33,7 @@ The codebase is **strictly layered**. Dependencies flow one way only:
               ┌─────────────┘   └────────────┐
               │                              │
        ┌─────────────┐                ┌─────────────┐
-       │ persistence │                │  minimax-ai │   (ADR 0007)
+       │ persistence │                │  openai-ai │   (ADR 0007)
        └─────────────┘                └─────────────┘
               ▲                              ▲
               └─────────────┐   ┌────────────┘
@@ -45,8 +45,8 @@ The codebase is **strictly layered**. Dependencies flow one way only:
 
 - `domain` — pure Java. **No** Spring, **no** JDBC, **no** Jackson, **no** `java.util.logging`. Only `java.*` and (for value types) `org.jetbrains.annotations` or similar JDK-only annotations.
 - `persistence` — JDBC adapters, Liquibase change sets, mappers. Depends only on `domain`.
-- `minimax-ai` — provider implementation of the `ReceiptExtractor` port (today's AI provider). Depends only on `domain`. Other providers (`openai-ai`, ...) follow the same shape.
-- `bff` — HTTP edge, Spring configuration, DTOs, JWT/OAuth. Depends on all three (`domain`, `persistence`, `minimax-ai`).
+- `openai-ai` — provider implementation of the `ReceiptExtractor` port (today's AI provider). Depends only on `domain`. Other providers (`openai-ai`, ...) follow the same shape.
+- `bff` — HTTP edge, Spring configuration, DTOs, JWT/OAuth. Depends on all three (`domain`, `persistence`, `openai-ai`).
 
 Reverse dependencies (e.g. `domain` importing Spring, `persistence` importing `bff`) are a **build break**, not a style issue. CI will fail.
 
@@ -58,7 +58,7 @@ Cross-cutting decisions that change architecture (new module, new persistence te
 
 ### 2.1 Maven layout
 
-- Group: `com.ticketapp`. Artifact IDs are exactly the directory names: `domain`, `persistence`, `minimax-ai`, `bff`, `ticketapp-parent`.
+- Group: `com.ticketapp`. Artifact IDs are exactly the directory names: `domain`, `persistence`, `openai-ai`, `bff`, `ticketapp-parent`.
 - Java: 25. Source/target/release all pinned to 25 in the parent POM.
 - Maven plugins: `maven-compiler-plugin`, `maven-failsafe-plugin`, `jacoco-maven-plugin` are managed by the parent. Module POMs don't override them unless they must.
 
@@ -78,9 +78,9 @@ Examples (in repo today):
 | `com.ticketapp.persistence` | JDBC repositories (`JdbcTicketRepository`, `JdbcTicketExtractionRepository`, …) and mappers |
 | `com.ticketapp.domain.<bounded-context>` | Pure model (entities, value objects, domain services) |
 | `com.ticketapp.domain.ai` | Provider-agnostic ports (`ReceiptExtractor`) — ADR 0007 |
-| `com.ticketapp.minimaxai` | Provider implementation of the `ReceiptExtractor` port |
+| `com.ticketapp.openai` | Provider implementation of the `ReceiptExtractor` port |
 
-Repositories (`*Repository`) live in `persistence`, **never** in `bff`. `bff` wires them into controllers. Provider-specific AI code lives in dedicated provider modules (`minimax-ai` today); the BFF depends only on the port.
+Repositories (`*Repository`) live in `persistence`, **never** in `bff`. `bff` wires them into controllers. Provider-specific AI code lives in dedicated provider modules (`openai-ai` today); the BFF depends only on the port.
 
 ### 2.3 Banned module layouts
 
@@ -305,7 +305,7 @@ Default ratio per PR: ~70% unit, ~25% integration, ~5% E2E.
 A change is **done** when all of the following pass locally:
 
 ```bash
-# Backend (any change touching domain/, persistence/, minimax-ai/, bff/)
+# Backend (any change touching domain/, persistence/, openai-ai/, bff/)
 mvn -B verify
 
 # Frontend (any change touching front/)
@@ -330,7 +330,7 @@ CI runs the same gates. PRs that fail the Sonar quality gate are blocked from me
 |--------|-------|----------|
 | `domain` | 85% | 75% |
 | `persistence` | 75% | 65% |
-| `minimax-ai` | 80% | 70% |
+| `openai-ai` | 80% | 70% |
 | `bff` | 70% | 60% |
 | `front` | 70% | 60% |
 
@@ -379,5 +379,5 @@ Lower coverage on new code requires an explicit justification in the PR body.
 - `AGENTS.md` — operating manual for assistants. Update when the workflow changes.
 - `CONTRIBUTING.md` — human contribution guide.
 - `docs/adr/NNNN-<short-title>.md` — significant decisions. Use the MADR template.
-- Javadoc: required on every public type in `domain`. Optional but encouraged in `persistence`, `minimax-ai`, and `bff`.
+- Javadoc: required on every public type in `domain`. Optional but encouraged in `persistence`, `openai-ai`, and `bff`.
 - Inline comments: explain *why*, not *what*. Avoid restating the code.

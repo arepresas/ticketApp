@@ -1,24 +1,24 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.ticketapp.domain.ai.DocumentTextExtractionException;
 import com.ticketapp.domain.ai.DocumentTextExtractor;
-import com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties;
+import com.ticketapp.openai.autoconfigure.OpenAiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * MiniMax-backed implementation of {@link DocumentTextExtractor}.
+ * OpenAI-compatible implementation of {@link DocumentTextExtractor}.
  *
  * <p>Picks up the {@link com.openai.client.OpenAIClient} bean that
- * {@link com.ticketapp.minimaxai.autoconfigure.MinimaxAiAutoConfiguration}
- * exposes, plus the {@link MinimaxAiProperties} the autoconfig binds
- * under {@code ticketapp.ai.minimax.*}. The actual provider
+ * {@link com.ticketapp.openai.autoconfigure.OpenAiAutoConfiguration}
+ * exposes, plus the {@link OpenAiProperties} the autoconfig binds
+ * under {@code ticketapp.ai.openai.*}. The actual provider
  * round-trip lives in
- * {@link MiniMaxApiClient#transcribeImage(String, byte[], String)};
+ * {@link OpenAiApiClient#transcribeImage(String, byte[], String)};
  * this class is a thin adapter that maps
  * {@link DocumentTextExtractionException} onto provider failures
- * — the same shape {@link MiniMaxReceiptExtractor} uses to hide
- * MiniMax wire failures from the BFF's orchestrator (ADR 0007).
+ * — the same shape {@link OpenAiReceiptExtractor} uses to hide
+ * provider wire failures from the BFF's orchestrator (ADR 0007).
  *
  * <p><b>One port, two media types.</b> The orchestrator (BFF) feeds
  * the same {@link DocumentTextExtractor#extract(byte[], String)}
@@ -52,10 +52,10 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RequiredArgsConstructor
-public final class MiniMaxDocumentTextExtractor implements DocumentTextExtractor {
+public final class OpenAiDocumentTextExtractor implements DocumentTextExtractor {
 
-    private final MiniMaxApiClient client;
-    private final MinimaxAiProperties properties;
+    private final OpenAiApiClient client;
+    private final OpenAiProperties properties;
     private final PdfTextExtractor pdfExtractor;
 
     @Override
@@ -95,15 +95,15 @@ public final class MiniMaxDocumentTextExtractor implements DocumentTextExtractor
             String text = client.transcribeImage(
                     properties.model(), bytes, mime);
             return collapseEmptyToNull(text);
-        } catch (MiniMaxApiClient.MiniMaxApiException mae) {
+        } catch (OpenAiApiClient.OpenAiApiException mae) {
             throw new DocumentTextExtractionException(mae.statusCode(),
-                    "MiniMax OCR failed: " + mae.getMessage(), mae);
+                    "OCR failed: " + mae.getMessage(), mae);
         } catch (java.io.IOException ioe) {
             throw new DocumentTextExtractionException(0,
-                    "MiniMax OCR I/O failure: " + ioe.getMessage(), ioe);
+                    "OCR I/O failure: " + ioe.getMessage(), ioe);
         } catch (RuntimeException e) {
             throw new DocumentTextExtractionException(0,
-                    "MiniMax OCR failed (" + e.getClass().getSimpleName()
+                    "OCR failed (" + e.getClass().getSimpleName()
                             + "): " + e.getMessage(), e);
         }
     }

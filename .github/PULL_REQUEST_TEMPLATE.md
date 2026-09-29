@@ -16,7 +16,7 @@
 
 - [ ] `domain`
 - [ ] `persistence`
-- [ ] `minimax-ai` (or other AI provider module)
+- [ ] `openai-ai` (or other AI provider module)
 - [ ] `bff`
 - [ ] `front`
 - [ ] `local-environment`

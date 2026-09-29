@@ -29,7 +29,7 @@ package com.ticketapp.domain.ai;
  *
  * <p>Implementations:
  * <ul>
- *   <li>MiniMax today — sends image bytes as {@code image_url} with
+ *   <li>the OpenAI-compatible provider today — sends image bytes as
  *       a "transcribe verbatim" prompt; for PDFs, extracts text via
  *       a provider-side PDF text helper first and only falls back
  *       to the vision branch when the PDF carries no selectable

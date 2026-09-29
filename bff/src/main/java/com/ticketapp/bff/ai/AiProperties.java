@@ -20,8 +20,8 @@ import java.util.Objects;
  * — kill switch, cron, batch size, retry budget. Provider-specific
  * knobs (model id, base URL, API key, timeout) live with the
  * provider module under {@code ticketapp.ai.{provider}.*} — for
- * MiniMax today, {@code ticketapp.ai.minimax.*} in
- * {@link com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties}.
+ * today, {@code ticketapp.ai.openai.*} in
+ * {@link com.ticketapp.openai.autoconfigure.OpenAiProperties}.
  *
  * <p>No defaults are baked into YAML — the operator layer (env
  * vars, {@code .env}, application profiles) is the single source

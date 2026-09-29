@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -71,7 +72,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(got.purchaseDate()).isEqualTo(LocalDate.of(2026, Month.JULY, 4));
         assertThat(got.totalAmount()).isEqualByComparingTo("26.18");
         assertThat(got.currency()).isEqualTo("EUR");
-        assertThat(got.model()).isEqualTo("MiniMax-M3");
+        assertThat(got.model()).isEqualTo("gpt-4o-mini");
         assertThat(got.products()).hasSize(2);
         assertThat(got.products().get(0).name()).isEqualTo("Tomatoes");
         assertThat(got.products().get(0).quantity()).isEqualByComparingTo("1.200");
@@ -119,10 +120,96 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
     }
 
+    @Test
+    void migrationRewritesOnlyTheRenamedVendorsModelIds() {
+        // Executes the shipped migration rather than a copy of its
+        // SQL: the file is read from the classpath and run, so a
+        // widened predicate or a renamed file fails here.
+        Ticket legacy = tickets.save(Ticket.open(OWNER, "legacy", ""));
+        extractions.save(withModel(legacy.id(), "minimax-M3"));
+        Ticket modern = tickets.save(Ticket.open(OWNER, "modern", ""));
+        extractions.save(withModel(modern.id(), "gpt-4o-mini"));
+
+        runMigration("V21__neutralise_legacy_model_names.sql");
+
+        assertThat(modelOf(legacy.id())).isEqualTo("unknown");
+        // Other vendors' ids are real audit data, not leftovers.
+        assertThat(modelOf(modern.id())).isEqualTo("gpt-4o-mini");
+    }
+
+    @Test
+    void migrationKeepsTheAuditColumnNonNull() {
+        // The audit trail reads this column; a NULL would blow up
+        // ExtractionResponse instead of degrading. Uses the legacy id
+        // so the row is actually rewritten.
+        Ticket t = tickets.save(Ticket.open(OWNER, "any", ""));
+        extractions.save(withModel(t.id(), "MiniMax-M3"));
+
+        runMigration("V21__neutralise_legacy_model_names.sql");
+
+        assertThat(modelOf(t.id())).isNotBlank();
+    }
+
+    /**
+     * Runs a migration file with Spring's script executor — the same
+     * comment and dollar-quoting handling Liquibase relies on — so
+     * this test cannot drift from what the changelog would execute.
+     */
+    private void runMigration(String file) {
+        try (java.io.InputStream in = getClass().getResourceAsStream(
+                "/db/changelog/changes/" + file)) {
+            assertThat(in).as("migration on the classpath: %s", file).isNotNull();
+            var resource = new org.springframework.core.io.InputStreamResource(in);
+            jdbc.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) con -> {
+                org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                        con, resource);
+                return null;
+            });
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("cannot read " + file, e);
+        }
+    }
+
+    @Test
+    void v21IsRegisteredAndExecutedLast() {
+        // The behaviour tests above execute the SQL directly, so
+        // this pins the wiring the direct execution cannot see: the
+        // changeset is registered in the master changelog, ran, and
+        // ran after everything else.
+        // Match on either column: for an `include` without an
+        // explicit changeset id, Liquibase stores the file name in
+        // FILENAME and a path-derived id in ID. Asserting on one
+        // spelling made this test about a formatting detail.
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT exectype, orderexecuted FROM databasechangelog"
+                        + " WHERE filename LIKE ? OR id LIKE ?",
+                "%V21__neutralise_legacy_model_names%",
+                "%V21__neutralise_legacy_model_names%");
+        assertThat(rows).as("V21 registered in the changelog").hasSize(1);
+        assertThat(rows.getFirst().get("exectype")).isEqualTo("EXECUTED");
+        Integer lastOrder = jdbc.queryForObject(
+                "SELECT max(orderexecuted) FROM databasechangelog", Integer.class);
+        assertThat(((Number) rows.getFirst().get("orderexecuted")).intValue())
+                .isEqualTo(lastOrder);
+    }
+
+    private String modelOf(java.util.UUID ticketId) {
+        return jdbc.queryForObject(
+                "SELECT model FROM ticket_extractions WHERE ticket_id = ?",
+                String.class, ticketId);
+    }
+
+    private static TicketExtraction withModel(java.util.UUID ticketId, String model) {
+        return new TicketExtraction(ticketId, "M",
+                LocalDate.of(2026, Month.JANUARY, 1), "food", List.of(),
+                new BigDecimal("26.18"), "EUR", model, Instant.now(),
+                "{\"choices\":[]}");
+    }
+
     private static TicketExtraction sample(UUID id, String merchant, LocalDate date,
                                            List<ProductLine> products) {
         return new TicketExtraction(id, merchant, date, "food", products,
-                new BigDecimal("26.18"), "EUR", "MiniMax-M3", Instant.now(),
+                new BigDecimal("26.18"), "EUR", "gpt-4o-mini", Instant.now(),
                 "{\"choices\":[]}");
     }
 }

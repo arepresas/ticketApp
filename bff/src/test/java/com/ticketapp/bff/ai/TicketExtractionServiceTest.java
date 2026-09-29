@@ -74,11 +74,11 @@ import static org.mockito.Mockito.when;
  *
  * <p>Provider-specific tests (PDF routing, response parsing,
  * {@code <think>} stripping) live in
- * {@code minimax-ai/src/test/.../MiniMaxReceiptExtractorTest}.
+ * {@code openai-ai/src/test/.../OpenAiReceiptExtractorTest}.
  */
 class TicketExtractionServiceTest {
 
-    private static final String MODEL = "MiniMax-M3";
+    private static final String MODEL = "gpt-4o-mini";
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private TicketRepository tickets;
@@ -208,7 +208,8 @@ class TicketExtractionServiceTest {
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
                 .thenThrow(new ReceiptExtractionException(500, false,
-                        "the AI provider returned 500"));
+                        "provider 500 at https://internal.acme/v1",
+                        "the AI provider is failing on its side (status 500)"));
 
         boolean processed = service.processTicket(open);
 
@@ -226,8 +227,46 @@ class TicketExtractionServiceTest {
                 t.status() == Status.ON_ERROR
                         && t.errorMessage() != null
                         && t.errorMessage().contains("500")
-                        && t.errorMessage().contains("the AI provider returned 500")));
+                        && t.errorMessage().contains("failing on its side")
+                        // The provider's own text stays out of the row.
+                        && !t.errorMessage().contains("internal.acme")));
         verify(extractions, never()).save(any());
+    }
+
+    @Test
+    void onlyTheSafeMessageReachesTheTicketRow() throws Exception {
+        // The diagnostic may contain anything the provider returned:
+        // an endpoint, a model id, a key, a multi-KB body. It must
+        // reach the log and nothing else. The row is what the
+        // dashboard renders and what any later API call returns.
+        String hostile = "provider 401 for https://internal.acme/v1"
+                + " model=acme-secret-v2 key=sk-live-abcdef123456"
+                + System.lineSeparator() + "{\"note\":\"x\"}".repeat(200);
+        UUID id = UUID.randomUUID();
+        Ticket open = sampleTicket(id);
+        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+        when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(receiptExtractor.extract(any())).thenThrow(
+                new ReceiptExtractionException(401, false, hostile,
+                        "the AI provider rejected the request (check the configured key)"));
+
+        service.processTicket(open);
+
+        verify(tickets).save(argThat(t -> {
+            String persisted = t.errorMessage();
+            if (persisted == null || !t.status().equals(Status.ON_ERROR)) {
+                return false;
+            }
+            assertThat(persisted)
+                    .as("persisted error message")
+                    .doesNotContain("internal.acme")
+                    .doesNotContain("acme-secret-v2")
+                    .doesNotContain("sk-live-abcdef123456")
+                    .doesNotContain("\\\"note\\\"")
+                    .contains("check the configured key");
+            return true;
+        }));
     }
 
     @Test
@@ -249,13 +288,15 @@ class TicketExtractionServiceTest {
 
         service.processTicket(open);
 
+        // Bounded by construction now, not by truncation: whatever
+        // size the diagnostic is, the row only ever holds the short
+        // safe message. Truncation still guards the log line.
         verify(tickets).save(argThat(t -> {
             String msg = t.errorMessage();
             return t.status() == Status.ON_ERROR
                     && msg != null
                     && msg.length() <= TicketExtractionService.ERROR_MESSAGE_MAX_CHARS
-                            + "...[truncated]".length()
-                    && msg.endsWith("...[truncated]");
+                    && msg.contains(ReceiptExtractionException.GENERIC_SAFE_MESSAGE);
         }));
     }
 

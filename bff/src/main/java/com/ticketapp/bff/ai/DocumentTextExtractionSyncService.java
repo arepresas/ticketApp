@@ -26,7 +26,7 @@ import org.springframework.stereotype.Service;
  * on a background thread, expose the result through polling or
  * Server-Sent Events — buys snappier uploads but trades them for a
  * preview UI that has to reconcile state. The OCR call against
- * MiniMax typically returns in &lt; 2 s for a 1 MB photo or a
+ * The provider typically returns in &lt; 2 s for a 1 MB photo or a
  * digital-born PDF (the cheap text path returns in microseconds);
  * the upload UX already shows a "Uploading…" progress bar during
  * the multipart POST, so the user perceives the OCR cost as part
@@ -83,7 +83,8 @@ public class DocumentTextExtractionSyncService {
             // upload path was the one entry point to a paid provider
             // that `ticketapp.ai.enabled=false` could not silence —
             // which is how `mvn verify` ended up issuing real OCR
-            // requests against api.minimax.io with the test key.
+            // requests against the live provider endpoint with the test
+            // key. That was a 2026-09 bug; the suite is hermetic now.
             log.debug("ticketapp.ai.enabled=false — skipping OCR step");
             return ticket;
         }
