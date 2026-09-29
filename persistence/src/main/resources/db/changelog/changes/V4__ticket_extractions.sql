@@ -5,7 +5,7 @@
 --     kept even on failure so the cron can skip-on-success in the future without
 --     a schema change. Nullable: existing rows have never been attempted.
 --   * ticket_extractions — 1:1 join to tickets with the structured data
---     extracted by the MiniMax pipeline. PK is the ticket_id itself, so
+--     extracted by the AI pipeline. PK is the ticket_id itself, so
 --     re-extraction requires an explicit DELETE + INSERT (not a silent
 --     overwrite). FK uses ON DELETE CASCADE so a removed ticket removes
 --     its extraction automatically.
