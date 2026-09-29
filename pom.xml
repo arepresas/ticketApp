@@ -14,7 +14,7 @@
     <modules>
         <module>domain</module>
         <module>persistence</module>
-        <module>minimax-ai</module>
+        <module>openai-ai</module>
         <module>bff</module>
     </modules>
 
@@ -80,7 +80,7 @@
             </dependency>
             <dependency>
                 <groupId>com.ticketapp</groupId>
-                <artifactId>minimax-ai</artifactId>
+                <artifactId>openai-ai</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

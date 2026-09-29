@@ -44,7 +44,7 @@ const sampleExtraction: TicketExtraction = {
 	],
 	totalAmount: 1.2,
 	currency: 'EUR',
-	model: 'MiniMax-M3',
+	model: 'gpt-4o-mini',
 	extractedAt: '2026-07-03T17:05:00Z'
 };
 

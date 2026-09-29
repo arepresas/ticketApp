@@ -32,7 +32,7 @@ whichever is convenient.
 
 A useful report covers:
 
-- The affected component (`bff/`, `minimax-ai/`, `front/`, etc.) and
+- The affected component (`bff/`, `openai-ai/`, `front/`, etc.) and
   commit SHA / version tag.
 - A self-contained reproducer: curl commands, request bodies,
   screenshots, or a minimal test case.
@@ -76,7 +76,7 @@ In scope on this repository:
   OAuth callback, file-upload validation, owner-scoping enforcement.
 - The persistence layer (`persistence/`) — JDBC repos, Liquibase
   migrations, owner-scoped queries.
-- The provider module (`minimax-ai/`) — request shapes, secret
+- The provider module (`openai-ai/`) — request shapes, secret
   handling for the upstream API key.
 - The frontend (`front/`) — token storage, CSP-relevant behaviour,
   authenticated session management.

@@ -8,7 +8,7 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 |------|-------|
 | `domain/` | Pure Java domain model (no deps); owns the `ReceiptExtractor` port |
 | `persistence/` | JDBC + Liquibase persistence |
-| `minimax-ai/` | Provider implementation of the `ReceiptExtractor` port (MiniMax) |
+| `openai-ai/` | OpenAI-compatible provider implementation of the `ReceiptExtractor` port |
 | `bff/` | Spring Boot 4 backend-for-frontend; orchestrates against the port |
 | `front/` | Svelte 5 + Vite 8 web components |
 | `local-environment/` | docker-compose (PostgreSQL 18) |
@@ -112,13 +112,13 @@ fly secrets set -a ticketapp-bff \
   DB_USER='<user>' DB_PASSWORD='<pass>' \
   GOOGLE_CLIENT_ID='<...>.apps.googleusercontent.com' \
   BFF_JWT_SECRET="$(openssl rand -base64 32)" \
-  MINIMAX_API_KEY='<minimax-key>'
+  OPENAI_API_KEY='<provider-api-key>'
 ```
 
 CI also needs two repo secrets: `FLY_API_TOKEN` (`fly auth token`) and
 `VITE_GOOGLE_CLIENT_ID` (public OAuth client id, baked into the frontend
 bundle at build time). Non-secret tunables (`TICKETAPP_AI_*`,
-`MINIMAX_*` except the key) already have production defaults in the
+`OPENAI_*` except the key) already have production defaults in the
 root `fly.toml` `[env]`.
 
 ## Package registry

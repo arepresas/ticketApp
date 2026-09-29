@@ -69,7 +69,7 @@ const SAMPLE_EXTRACTION = {
 	],
 	totalAmount: 3.0,
 	currency: 'EUR',
-	model: 'MiniMax-M3',
+	model: 'gpt-4o-mini',
 	extractedAt: '2026-07-03T17:05:00Z'
 };
 

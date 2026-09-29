@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -143,7 +144,7 @@ public class TicketExtractionService {
      * case — see the {@code <think>} stripping incident from
      * 2026-07-05) which would otherwise bloat the {@code tickets}
      * row. 2000 chars is enough to keep the actionable headline
-     * ("MiniMax returned 500: ...", "MiniMax reply contained only
+     * ("the AI provider returned 500: ...", "the reply contained only
      * thinking...") and stays well under the operator-scannable
      * threshold for the dashboard.
      */
@@ -152,12 +153,23 @@ public class TicketExtractionService {
     /**
      * Provider-identifying text that must not reach the SPA: the
      * message is persisted on the ticket and rendered verbatim, and
-     * "MiniMax returned 500" leaks which vendor is behind the app and
-     * breaks the BFF's own tests every time the provider is swapped.
-     * The full text stays in the log line.
+     * a bare vendor name leaks who is behind the app while breaking
+     * the BFF's own tests every time the provider is swapped. The
+     * list covers the vendors this module has been pointed at, and
+     * the full text stays in the log line.
      */
+    private static final List<String> VENDOR_NAMES =
+            List.of("MiniMax", "OpenAI", "openai");
+
     private static String redact(String message) {
-        return message == null ? null : message.replace("MiniMax", "the AI provider");
+        if (message == null) {
+            return null;
+        }
+        String out = message;
+        for (String vendor : VENDOR_NAMES) {
+            out = out.replace(vendor, "the AI provider");
+        }
+        return out;
     }
 
     private final TicketRepository ticketRepository;

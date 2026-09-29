@@ -52,7 +52,7 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
      * Touches only the mutable columns — {@code model},
      * {@code extracted_at}, {@code raw_response_text}, and
      * {@code extraction_payload} keep the AI's audit
-     * ("extracted by MiniMax-M3 on …") so the dashboard's audit
+     * ("extracted by gpt-4o-mini on …") so the dashboard's audit
      * trail stays truthful after the user corrects a line item.
      */
     private static final String UPDATE_SQL = """

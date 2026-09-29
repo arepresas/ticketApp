@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,11 +17,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Pure parser for MiniMax assistant replies (ADR 0007).
+ * Pure parser for the provider assistant replies (ADR 0007).
  *
  * <p>Owns every model-specific parsing concern — {@code <think>} stripping,
  * code-fence stripping, JSON substring recovery — so
- * {@link MiniMaxReceiptExtractor} stays an orchestrator (PDF routing +
+ * {@link OpenAiReceiptExtractor} stays an orchestrator (PDF routing +
  * provider call + delegate to parse). No Spring SDK types, no HTTP, no
  * PDFBox: plain text in, typed result out. Unit-testable without mocks
  * for the SDK.
@@ -52,7 +52,7 @@ public class ReceiptResponseParser {
      * <p>Defensive:
      * <ul>
      *   <li>Strips {@code <think>...</think>} blocks (DeepSeek-style
-     *       chain-of-thought that some MiniMax model revisions emit
+     *       chain-of-thought that some the provider model revisions emit
      *       even with {@code response_format: json_object}).</li>
      *   <li>Strips code fences if present.</li>
      *   <li>Falls back to the first balanced JSON object substring
@@ -66,7 +66,7 @@ public class ReceiptResponseParser {
         if (stripped.isBlank()) {
             throw new ReceiptExtractionException(0, false,
                 
-                "MiniMax reply contained only thinking, no JSON payload"
+                "the reply contained only thinking, no JSON payload"
                             + " (token budget likely exhausted mid-reasoning): "
                             + truncate(raw, 4096));
         }
@@ -79,7 +79,7 @@ public class ReceiptResponseParser {
             }
             throw new ReceiptExtractionException(0, false,
                 
-                "MiniMax returned a non-JSON reply: " + truncate(raw, 4096),
+                "the provider returned a non-JSON reply: " + truncate(raw, 4096),
                     primaryFailure);
         }
     }
@@ -165,7 +165,7 @@ public class ReceiptResponseParser {
     }
 
     private static String stripThinkBlocks(String s) {
-        return MiniMaxApiClient.stripThinkBlocks(s);
+        return OpenAiApiClient.stripThinkBlocks(s);
     }
 
     static String extractFirstJsonObject(String s) {

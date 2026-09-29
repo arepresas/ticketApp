@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
  * <p>The job is a thin scheduler: it filters candidates, then calls
  * {@link TicketExtractionService#processTicket(Ticket)} for each. The
  * "is the API call correct?" coverage lives in
- * {@code MiniMaxApiClientTest}; the "is the status reverted on
+ * {@code OpenAiApiClientTest}; the "is the status reverted on
  * failure?" coverage lives in {@code TicketExtractionServiceTest}.
  * Here we pin the job's contract: filter, batch-size cap, and
  * short-circuit when the kill switch is off.

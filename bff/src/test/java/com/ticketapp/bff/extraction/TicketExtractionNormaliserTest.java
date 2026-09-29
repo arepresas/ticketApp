@@ -127,7 +127,7 @@ class TicketExtractionNormaliserTest {
                 lines,
                 new BigDecimal("3.50"),
                 "EUR",
-                "MiniMax-M3",
+                "gpt-4o-mini",
                 Instant.parse("2026-07-04T10:00:00Z"),
                 rawReply,
                 null);

@@ -1,29 +1,29 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
 import com.ticketapp.domain.ai.ReceiptExtractor;
-import com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties;
+import com.ticketapp.openai.autoconfigure.OpenAiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Provider implementation of the {@link ReceiptExtractor} port
- * backed by MiniMax (ADR 0007).
+ * backed by the provider (ADR 0007).
  *
  * <p>Composes four collaborators:
  * <ul>
- *   <li>{@link MiniMaxApiClient} — sends the chat-completion request
+ *   <li>{@link OpenAiApiClient} — sends the chat-completion request
  *       and reads the raw assistant text.</li>
  *   <li>{@link PdfTextExtractor} — pre-processes PDF receipts into
- *       plain text (MiniMax's chat-completions endpoint doesn't
+ *       plain text (the provider's chat-completions endpoint doesn't
  *       accept PDFs natively; ADR 0006 D3).</li>
  *   <li>{@link ReceiptResponseParser} — owns the model-specific parsing
  *       concerns ({@code <think>} stripper, code-fence stripper, JSON
  *       substring fallback).</li>
- *   <li>{@link MinimaxAiProperties} — provider-specific configuration
+ *   <li>{@link OpenAiProperties} — provider-specific configuration
  *       (model id, timeout). Read once at construction.</li>
  * </ul>
  *
@@ -36,19 +36,19 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RequiredArgsConstructor
-public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
+public final class OpenAiReceiptExtractor implements ReceiptExtractor {
 
-    private final MiniMaxApiClient client;
+    private final OpenAiApiClient client;
     private final PdfTextExtractor pdfExtractor;
     private final ReceiptResponseParser parser;
-    private final MinimaxAiProperties properties;
+    private final OpenAiProperties properties;
 
     @Override
     public ReceiptExtraction extract(ReceiptExtractionRequest request)
             throws ReceiptExtractionException {
-        MiniMaxApiClient.ReceiptInput input;
+        OpenAiApiClient.ReceiptInput input;
         if (request.isPdf()) {
-            // PDF preprocessing is a MiniMax concern: MiniMax's
+            // PDF preprocessing is a provider concern: the provider's
             // chat-completions endpoint doesn't accept PDFs natively
             // (ADR 0006 D3). Future implementations with native PDF
             // support would skip this step.
@@ -84,35 +84,35 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
                     throw new ReceiptExtractionException(0, false,
                             "PDF has no pages to rasterize");
                 }
-                input = MiniMaxApiClient.ReceiptInput.image(
+                input = OpenAiApiClient.ReceiptInput.image(
                         properties.model(), pngBytes, "image/png");
             } else {
-                input = MiniMaxApiClient.ReceiptInput.pdfText(properties.model(), text);
+                input = OpenAiApiClient.ReceiptInput.pdfText(properties.model(), text);
             }
         } else {
-            input = MiniMaxApiClient.ReceiptInput.image(properties.model(),
+            input = OpenAiApiClient.ReceiptInput.image(properties.model(),
                     request.content(), request.contentType());
         }
 
         final String raw;
         try {
             raw = client.extractReceipt(input);
-        } catch (MiniMaxApiClient.MiniMaxApiException mae) {
+        } catch (OpenAiApiClient.OpenAiApiException mae) {
             // The provider knows whether its own failure is worth
             // another attempt, so it says so here instead of leaving
             // the caller to read the status code.
             throw new ReceiptExtractionException(mae.statusCode(),
                     isRetriableStatus(mae.statusCode()),
-                    "MiniMax extraction failed: " + mae.getMessage(), mae);
+                    "the extraction failed: " + mae.getMessage(), mae);
         } catch (java.io.IOException ioe) {
             throw new ReceiptExtractionException(0, true,
-                    "MiniMax extraction failed: " + ioe.getMessage(), ioe);
+                    "the extraction failed: " + ioe.getMessage(), ioe);
         } catch (RuntimeException e) {
             // Provider-call bugs (mock failures in tests, SDK transport
             // errors) are retriable provider failures — wrap them so the
             // orchestrator marks ON_ERROR.
             throw new ReceiptExtractionException(0, true,
-                    "MiniMax extraction failed: " + e.getMessage(), e);
+                    "the extraction failed: " + e.getMessage(), e);
         }
         try {
             // Parsing and domain validation are inside the guard on
@@ -125,7 +125,7 @@ public final class MiniMaxReceiptExtractor implements ReceiptExtractor {
             throw e;
         } catch (RuntimeException e) {
             throw new ReceiptExtractionException(0, false,
-                    "MiniMax returned an unusable extraction: " + e.getMessage(), e);
+                    "the provider returned an unusable extraction: " + e.getMessage(), e);
         }
     }
 

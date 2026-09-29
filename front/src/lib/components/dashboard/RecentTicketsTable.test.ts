@@ -76,7 +76,7 @@ const sample: CreatedTicket[] = [
 		contentType: 'image/jpeg',
 		fileName: 'broken.jpg',
 		sizeBytes: 4096,
-		errorMessage: 'status=502 MiniMax returned 500: provider overloaded',
+		errorMessage: 'status=502 the AI provider returned 500: provider overloaded',
 		attempts: 3,
 		ocrText: null
 	}

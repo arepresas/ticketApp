@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;

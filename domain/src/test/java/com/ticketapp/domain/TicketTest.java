@@ -65,10 +65,10 @@ class TicketTest {
     @Test
     void markErrorSetsOnErrorStatusAndStoresMessage() {
         Ticket t = Ticket.open(OWNER, "x", "");
-        Ticket failed = t.markError("MiniMax returned 500");
+        Ticket failed = t.markError("the AI provider returned 500");
 
         assertEquals(Ticket.Status.ON_ERROR, failed.status());
-        assertEquals("MiniMax returned 500", failed.errorMessage());
+        assertEquals("the AI provider returned 500", failed.errorMessage());
     }
 
     @Test

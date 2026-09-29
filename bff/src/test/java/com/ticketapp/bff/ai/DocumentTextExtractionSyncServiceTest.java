@@ -121,7 +121,7 @@ class DocumentTextExtractionSyncServiceTest {
         UUID id = UUID.randomUUID();
         Ticket png = ticketWithFile(id, "image/png");
         when(extractor.extract(png.fileData(), "image/png"))
-                .thenThrow(new DocumentTextExtractionException(502, "MiniMax returned 502"));
+                .thenThrow(new DocumentTextExtractionException(502, "the AI provider returned 502"));
 
         Ticket returned = service.runOnUpload(png);
 

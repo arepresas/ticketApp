@@ -74,11 +74,11 @@ import static org.mockito.Mockito.when;
  *
  * <p>Provider-specific tests (PDF routing, response parsing,
  * {@code <think>} stripping) live in
- * {@code minimax-ai/src/test/.../MiniMaxReceiptExtractorTest}.
+ * {@code openai-ai/src/test/.../OpenAiReceiptExtractorTest}.
  */
 class TicketExtractionServiceTest {
 
-    private static final String MODEL = "MiniMax-M3";
+    private static final String MODEL = "gpt-4o-mini";
     private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private TicketRepository tickets;

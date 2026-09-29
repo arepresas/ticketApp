@@ -42,9 +42,37 @@ every IT that posted a file issued a real paid request. The kill
 switch now covers both entry points and the OCR port has a test
 double registered for the whole IT suite.
 
+## Amendment: 2026-09-27 (b) — the implementation is provider-agnostic
+
+The decisions below were written against MiniMax as *the* provider and
+are kept as the historical record. What changed is the implementation:
+the `minimax-ai` module became `openai-ai`, and it is now a generic
+**OpenAI-compatible** provider rather than a MiniMax client. Nothing in
+the code names a vendor — the model id and the base URL are
+configuration, and the official OpenAI Java SDK does the transport.
+
+Consequences for the text below:
+
+- D2/D3 (PDF preprocessing with PDFBox) are provider-specific by
+  nature, but they stay in the provider module, which is exactly the
+  seam ADR 0007 describes: a different vendor's module may implement
+  the step differently without the BFF noticing.
+- D6 ("OpenAI-compatible HTTP client, hand-rolled") describes what the
+  SDK gives us, and the SDK is what ships. The *base URL* it points at
+  is no longer part of the decision — it is `OPENAI_BASE_URL` in the
+  operator layer.
+- D5's property table below is superseded: the namespace is
+  `ticketapp.ai.openai.*`, and there is **no default base URL** — it
+  is required configuration, validated at binding time, so a missing
+  value fails the boot instead of silently hitting the wrong endpoint.
+
+The net effect on cost: the same extraction can now run against any
+endpoint that speaks the OpenAI chat-completions protocol, and
+swapping vendors is a configuration change rather than a new module.
+
 ## Amendment: 2026-07-05
 
-On 2026-07-05 MiniMax-M3 started wrapping its reply in `<output>...</output>`
+On 2026-07-05 gpt-4o-mini started wrapping its reply in `<output>...</output>`
 markup. PG rejected the save (`invalid input syntax for type json`), the
 scheduler's transaction aborted, and the ticket was stuck in
 `IN_PROGRESS` until manual cleanup. D2's assumption — "raw_response is
@@ -60,7 +88,7 @@ human reads it. As the volume grows, manual triage is the bottleneck.
 
 We need an automated pipeline that:
 1. Picks up `OPEN` tickets on a schedule.
-2. Sends the receipt to the [MiniMax API](https://platform.minimax.io)
+2. Sends the receipt to the [provider API](https://platform.minimax.io)
    for structured extraction.
 3. Persists the structured result alongside the ticket.
 4. Marks the ticket as `IN_PROGRESS` while it is being processed.
@@ -185,9 +213,9 @@ the semantics the user asked for.
 | Property | Default | Purpose |
 |---|---|---|
 | `enabled` | `true` | Kill switch (set to `false` in tests) |
-| `base-url` | `https://api.minimax.chat` | MiniMax API root |
-| `api-key` | `${MINIMAX_API_KEY:dev-placeholder}` | Bearer token (env var only) |
-| `model` | `MiniMax-M3` | Model identifier |
+| `base-url` | `https://api.minimax.chat` | provider API root |
+| `api-key` | `${OPENAI_API_KEY:dev-placeholder}` | Bearer token (env var only) |
+| `model` | `gpt-4o-mini` | Model identifier |
 | `cron` | `0 */15 * * * *` | When the job runs |
 | `batch-size` | `5` | Max tickets per tick |
 | `timeout-ms` | `30000` | HTTP client timeout |
@@ -196,7 +224,7 @@ the semantics the user asked for.
 **Why.** `application.yml` is the project's configuration root
 (backend.md §Configuration). `@ConfigurationProperties` records
 replace `@Value` for grouped properties (backend.md §Idioms). The API
-key is bound to `${MINIMAX_API_KEY:dev-placeholder}` — the placeholder
+key is bound to `${OPENAI_API_KEY:dev-placeholder}` — the placeholder
 is obviously useless and there is no default that could accidentally
 work in production (security.md §Secrets).
 
@@ -222,7 +250,7 @@ specific abstraction layer. We'd rather see the raw JSON.
 **Decision.** Unit tests use a stub `HttpClient` to verify the wire
 format MiniMax expects. The integration test for the job boots a full
 Spring context with `ticketapp.ai.enabled=false` and a
-`@TestConfiguration` that swaps in a fake `MiniMaxApiClient` to verify
+`@TestConfiguration` that swaps in a fake `OpenAiApiClient` to verify
 the orchestration logic (status transitions, persistence, error
 revert). No test ever hits `api.minimax.chat`.
 
@@ -288,14 +316,14 @@ is forward-compatible at every step.
   `@Scheduled` with cron), so a slow tick simply delays the next one.
   No risk of overlapping runs on a single instance.
 - **Privacy.** Receipts are personal financial data. The
-  `MiniMaxApiClient` does not log request or response bodies, and the
+  `OpenAiApiClient` does not log request or response bodies, and the
   `raw_response` column is stored for internal re-parsing only —
   no read path exposes it to the front-end in this PR. (The column
   type is moving JSONB → TEXT in D8; the privacy posture is unchanged.)
 
 ### Operational
 
-- New env var: `MINIMAX_API_KEY`. Documented in `.env.example` (the
+- New env var: `OPENAI_API_KEY`. Documented in `.env.example` (the
   template, not `.env`).
 - New migration: `V4__ticket_extractions.sql` + the
   `last_extraction_attempt_at` column on `tickets`.
@@ -305,10 +333,10 @@ is forward-compatible at every step.
 ## See also
 
 - ADR 0007 (2026-07-05) splits the `infrastructure` module into
-  `persistence` + `minimax-ai`, moves the `MiniMaxApiClient` into
+  `persistence` + `openai-ai`, moves the `OpenAiApiClient` into
   the latter, and introduces a domain port
   (`com.ticketapp.domain.ai.ReceiptExtractor`) that the orchestrator
   depends on. D6 (this ADR) is partially superseded — the HTTP
   client is now driven by the OpenAI SDK via Spring Boot
   autoconfiguration rather than by a BFF-owned `@Configuration`,
-  and the orchestrator no longer imports `MiniMaxApiClient` directly.
+  and the orchestrator no longer imports `OpenAiApiClient` directly.

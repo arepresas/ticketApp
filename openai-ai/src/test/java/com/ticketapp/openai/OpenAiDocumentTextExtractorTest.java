@@ -1,8 +1,8 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.ticketapp.domain.ai.DocumentTextExtractionException;
-import com.ticketapp.minimaxai.MiniMaxApiClient.MiniMaxApiException;
-import com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties;
+import com.ticketapp.openai.OpenAiApiClient.OpenAiApiException;
+import com.ticketapp.openai.autoconfigure.OpenAiProperties;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link MiniMaxDocumentTextExtractor}.
+ * Unit tests for {@link OpenAiDocumentTextExtractor}.
  *
  * <p>Pins the contract the BFF's
  * {@code DocumentTextExtractionSyncService} depends on:
@@ -36,7 +36,7 @@ import static org.mockito.Mockito.when;
  *       distinguish "OCR ran, empty" from "OCR never ran".</li>
  *   <li>Provider HTTP failures translate into
  *       {@link DocumentTextExtractionException} with the same HTTP
- *       status the client saw; {@link MiniMaxApiException}
+ *       status the client saw; {@link OpenAiApiException}
  *       (I/O, parse) maps to status 0.</li>
  *   <li>Argument validation — non-empty bytes, non-blank MIME —
  *       surfaces as {@link IllegalArgumentException} so the BFF
@@ -46,22 +46,22 @@ import static org.mockito.Mockito.when;
  *       message rather than silently swallowing them.</li>
  * </ul>
  */
-class MiniMaxDocumentTextExtractorTest {
+class OpenAiDocumentTextExtractorTest {
 
     private static final byte[] ONE_PIXEL_PNG = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
 
-    private MiniMaxApiClient client;
+    private OpenAiApiClient client;
     private PdfTextExtractor pdfExtractor;
-    private MinimaxAiProperties properties;
-    private MiniMaxDocumentTextExtractor extractor;
+    private OpenAiProperties properties;
+    private OpenAiDocumentTextExtractor extractor;
 
     @BeforeEach
     void setUp() {
-        client = mock(MiniMaxApiClient.class);
+        client = mock(OpenAiApiClient.class);
         pdfExtractor = mock(PdfTextExtractor.class);
-        properties = new MinimaxAiProperties(
-                "https://api.minimax.io/v1", "sk-test", "MiniMax-M3", 30_000L, 0.0, 16384);
-        extractor = new MiniMaxDocumentTextExtractor(client, properties, pdfExtractor);
+        properties = new OpenAiProperties(
+                "https://api.openai.com/v1", "sk-test", "gpt-4o-mini", 30_000L, 0.0, 16384);
+        extractor = new OpenAiDocumentTextExtractor(client, properties, pdfExtractor);
     }
 
     // ------------------------------------------------------------------
@@ -74,7 +74,7 @@ class MiniMaxDocumentTextExtractorTest {
         // unchanged — the upload preview renders it directly below
         // the thumbnail, so a trimming/uppercasing rewrite would
         // mislead the user about what the model "saw".
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenReturn("Mercadona\nC/ Gran Vía 12\nTOTAL 12,34 EUR");
 
         String got = extractor.extract(ONE_PIXEL_PNG, "image/png");
@@ -88,7 +88,7 @@ class MiniMaxDocumentTextExtractorTest {
         // Some browsers / clients send `IMAGE/PNG` rather than
         // `image/png`. The port normalises to lowercase before
         // branching so the vision path still picks up.
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenReturn("hi");
 
         assertThat(extractor.extract(ONE_PIXEL_PNG, "IMAGE/PNG")).isEqualTo("hi");
@@ -96,7 +96,7 @@ class MiniMaxDocumentTextExtractorTest {
 
     @Test
     void imageEmptyProviderReplyCollapsesToNull() throws Exception {
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenReturn("   \n  ");
 
         assertThat(extractor.extract(ONE_PIXEL_PNG, "image/png")).isNull();
@@ -130,7 +130,7 @@ class MiniMaxDocumentTextExtractorTest {
         byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
         when(pdfExtractor.extract(pdfBytes)).thenReturn("   ");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdfBytes)).thenReturn(pngBytes);
-        when(client.transcribeImage("MiniMax-M3", pngBytes, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", pngBytes, "image/png"))
                 .thenReturn("OCR FROM RASTERIZED PNG");
 
         String got = extractor.extract(pdfBytes, "application/pdf");
@@ -158,7 +158,7 @@ class MiniMaxDocumentTextExtractorTest {
     void pdfBoxIoFailureSurfacesAsDomainExceptionWithStatusZero() throws Exception {
         // A malformed PDF is a user-supplied error, not a provider
         // failure. Status 0 lets the BFF log/return without
-        // attributing it to MiniMax.
+        // attributing it to the provider.
         byte[] pdfBytes = "%PDF-1.4 garbled".getBytes();
         when(pdfExtractor.extract(pdfBytes))
                 .thenThrow(new java.io.IOException("malformed PDF trailer"));
@@ -200,8 +200,8 @@ class MiniMaxDocumentTextExtractorTest {
     @Test
     void providerHttpErrorSurfacesAsDocumentTextExtractionExceptionWithStatus()
             throws Exception {
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
-                .thenThrow(new MiniMaxApiException(502, "MiniMax returned 502: provider overloaded"));
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
+                .thenThrow(new OpenAiApiException(502, "the provider returned 502: provider overloaded"));
 
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))
                 .isInstanceOf(DocumentTextExtractionException.class)
@@ -215,7 +215,7 @@ class MiniMaxDocumentTextExtractorTest {
 
     @Test
     void clientIoExceptionSurfacesWithStatusZero() throws Exception {
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenThrow(new java.io.IOException("DNS lookup failed"));
 
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))
@@ -230,7 +230,7 @@ class MiniMaxDocumentTextExtractorTest {
     @Test
     void unexpectedRuntimeExceptionStillBecomesDocumentTextExtractionException()
             throws Exception {
-        when(client.transcribeImage("MiniMax-M3", ONE_PIXEL_PNG, "image/png"))
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenThrow(new IllegalStateException("boom"));
 
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))

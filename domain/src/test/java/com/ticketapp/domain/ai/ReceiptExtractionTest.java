@@ -31,11 +31,11 @@ class ReceiptExtractionTest {
     void carriesResultRawReplyAndModel() {
         ReceiptExtractionResult result = sampleResult();
 
-        ReceiptExtraction e = new ReceiptExtraction(result, "raw-text", "MiniMax-M3");
+        ReceiptExtraction e = new ReceiptExtraction(result, "raw-text", "gpt-4o-mini");
 
         assertSame(result, e.result());
         assertEquals("raw-text", e.rawReply());
-        assertEquals("MiniMax-M3", e.model());
+        assertEquals("gpt-4o-mini", e.model());
     }
 
     @Test
@@ -43,7 +43,7 @@ class ReceiptExtractionTest {
         // Some future provider implementations return only structured
         // output and have no concept of a "raw reply". The record
         // explicitly allows null on rawReply.
-        ReceiptExtraction e = new ReceiptExtraction(sampleResult(), null, "MiniMax-M3");
+        ReceiptExtraction e = new ReceiptExtraction(sampleResult(), null, "gpt-4o-mini");
 
         assertNull(e.rawReply());
     }
@@ -51,7 +51,7 @@ class ReceiptExtractionTest {
     @Test
     void rejectsNullResult() {
         NullPointerException ex = assertThrows(NullPointerException.class,
-                () -> new ReceiptExtraction(null, "raw", "MiniMax-M3"));
+                () -> new ReceiptExtraction(null, "raw", "gpt-4o-mini"));
         assertEquals("result", ex.getMessage());
     }
 

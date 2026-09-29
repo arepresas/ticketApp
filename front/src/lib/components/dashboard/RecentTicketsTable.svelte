@@ -201,7 +201,7 @@
 	// Truncate the error message to a single line in the table cell.
 	// The full text is preserved in the title attribute (tooltip on
 	// hover) and in the detail view. 60 chars is wide enough for the
-	// common "status=503 MiniMax returned 500: ..." shape without
+	// common "status=503 the AI provider returned 500: ..." shape without
 	// forcing the cell to expand.
 	function truncateError(msg: string | null, max = 60): string {
 		if (!msg) return '';

@@ -14,13 +14,13 @@
 |------|---------|-------|
 | `domain/` | Pure Java domain model (no dependencies); owns the `ReceiptExtractor` port | Java 25 |
 | `persistence/` | Persistence: JDBC repositories, Liquibase migrations | Java 25, PostgreSQL 18 |
-| `minimax-ai/` | Provider implementation of the `ReceiptExtractor` port (MiniMax) | Java 25, OpenAI Java SDK, Apache PDFBox |
+| `openai-ai/` | OpenAI-compatible provider implementation of the `ReceiptExtractor` port | Java 25, OpenAI Java SDK, Apache PDFBox |
 | `bff/` | Backend-for-frontend, REST + OAuth (Google); orchestrates the AI extraction pipeline against the `ReceiptExtractor` port | Spring Boot 4.1, Java 25 |
 | `front/` | Web components, landing + dashboard | Svelte 5, Vite 8, TypeScript, Tailwind 4 |
 | `local-environment/` | docker-compose (Postgres 18) | Docker |
 | `.github/` | CI workflows, Dependabot, PR template | GitHub Actions |
 
-The active AI provider is whichever `<dependency>` is declared in `bff/pom.xml` (ADR 0007). Today that's `minimax-ai`; swapping to a different provider is a single `<dependency>` line.
+The active AI provider is whichever `<dependency>` is declared in `bff/pom.xml` (ADR 0007). Today that's `openai-ai`; swapping to a different provider is a single `<dependency>` line.
 
 Group: `com.ticketapp` · Version: `0.0.1-SNAPSHOT` · Java: 25 · Node: 24 LTS · Package manager: pnpm 11.
 
@@ -53,7 +53,7 @@ All commands must succeed before a change is considered done. See `CONVENTIONS.m
 
 ## 3. Repository rules — read these before changing anything
 
-1. **Layer boundaries are non-negotiable.** `domain` depends on nothing; `persistence` and `minimax-ai` depend only on `domain`; `bff` depends on all three. Reverse dependencies are a build break, not a style issue. AI provider modules depend only on `domain` — never on `persistence` or `bff`.
+1. **Layer boundaries are non-negotiable.** `domain` depends on nothing; `persistence` and `openai-ai` depend only on `domain`; `bff` depends on all three. Reverse dependencies are a build break, not a style issue. AI provider modules depend only on `domain` — never on `persistence` or `bff`.
 2. **No new top-level Maven modules** without an ADR in `docs/adr/`.
 3. **Database changes go through Liquibase.** Never edit schema in Java code or runtime DDL. New migrations: `persistence/src/main/resources/db/changelog/changes/`.
 4. **Migrations are additive.** Backfills ship in a separate, ordered migration. No `DROP` in the same release that removes the column from code.
@@ -77,8 +77,8 @@ ticketApp/
 ├── persistence/                     # Adapters: JDBC repositories, Liquibase migrations
 │   └── src/main/java/com/ticketapp/persistence/
 │   └── src/main/resources/db/changelog/changes/
-├── minimax-ai/                      # MiniMax provider implementation of the ReceiptExtractor port
-│   └── src/main/java/com/ticketapp/minimaxai/
+├── openai-ai/                      # OpenAI-compatible provider impl of the ReceiptExtractor port
+│   └── src/main/java/com/ticketapp/openai/
 │   └── src/main/resources/META-INF/spring/...AutoConfiguration.imports
 ├── bff/                             # HTTP edge: controllers, auth, DTOs, application config
 │   └── src/main/java/com/ticketapp/bff/
@@ -119,7 +119,7 @@ They are not loaded by default — load only the ones relevant to the current ta
 
 | File | Load when… |
 |------|------------|
-| `.rules/backend.md` | Touching Java/Spring code under `domain/`, `persistence/`, `minimax-ai/`, or `bff/` |
+| `.rules/backend.md` | Touching Java/Spring code under `domain/`, `persistence/`, `openai-ai/`, or `bff/` |
 | `.rules/frontend.md` | Touching anything under `front/src/` |
 | `.rules/database.md` | Writing or reviewing Liquibase migrations, JDBC queries, schema changes |
 | `.rules/testing.md` | Adding tests (Testcontainers, Vitest, Spring `@SpringBootTest`) |
@@ -163,7 +163,7 @@ Keep these terms stable across code, commits, and PR descriptions:
 - **Web component** — A custom element exposed from `front/src/index.ts`. Each is its own bundle entry when imported via `define`.
 - **Landing** — Public marketing page (`front/src/lib/landing/`). No auth required.
 - **Dashboard** — Authenticated app (`front/src/lib/auth/DashboardApp.svelte`). Requires valid session.
-- **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`minimax-ai`, future `openai-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
+- **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`openai-ai`, future `openai-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
 
 ---
 

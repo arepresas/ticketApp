@@ -179,7 +179,7 @@ class PendingTicketsIT {
 
         tickets.save(inAnalysis.withStatus(Ticket.Status.IN_ANALYSIS));
         tickets.save(inProgress.withStatus(Ticket.Status.IN_PROGRESS));
-        tickets.save(errored.markError("MiniMax returned 500"));
+        tickets.save(errored.markError("the AI provider returned 500"));
         tickets.save(done.withStatus(Ticket.Status.DONE));
         tickets.save(cancelled.withStatus(Ticket.Status.CANCELLED));
 
@@ -231,7 +231,7 @@ class PendingTicketsIT {
         UUID owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "still pending",
                 "application/pdf", "broken.pdf", new byte[]{1})
-                .markError("MiniMax returned 500: bad gateway"));
+                .markError("the AI provider returned 500: bad gateway"));
 
         List<TicketResponse> body = web().get().uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
@@ -245,7 +245,7 @@ class PendingTicketsIT {
         assertThat(body).hasSize(1);
         assertThat(body.get(0).id()).isEqualTo(failed.id());
         assertThat(body.get(0).status()).isEqualTo(Ticket.Status.ON_ERROR);
-        assertThat(body.get(0).errorMessage()).isEqualTo("MiniMax returned 500: bad gateway");
+        assertThat(body.get(0).errorMessage()).isEqualTo("the AI provider returned 500: bad gateway");
     }
 
     @Test
@@ -258,7 +258,7 @@ class PendingTicketsIT {
         UUID owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "broken",
                 "application/pdf", "broken.pdf", new byte[]{1})
-                .markError("MiniMax returned 502: bad gateway"));
+                .markError("the AI provider returned 502: bad gateway"));
 
         TicketResponse body = web().get().uri("/api/tickets/" + failed.id())
                 .header("authorization", "Bearer " + token)
@@ -270,7 +270,7 @@ class PendingTicketsIT {
 
         assertThat(body).isNotNull();
         assertThat(body.status()).isEqualTo(Ticket.Status.ON_ERROR);
-        assertThat(body.errorMessage()).isEqualTo("MiniMax returned 502: bad gateway");
+        assertThat(body.errorMessage()).isEqualTo("the AI provider returned 502: bad gateway");
     }
 
     @Test
@@ -283,7 +283,7 @@ class PendingTicketsIT {
         UUID owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "retry.pdf", "retry me",
                 "application/pdf", "retry.pdf", new byte[]{1})
-                .markError("MiniMax returned 500"));
+                .markError("the AI provider returned 500"));
 
         TicketResponse patched = web().patch()
                 .uri("/api/tickets/" + failed.id() + "/status")

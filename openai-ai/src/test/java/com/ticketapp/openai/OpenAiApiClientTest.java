@@ -1,4 +1,4 @@
-package com.ticketapp.minimaxai;
+package com.ticketapp.openai;
 
 import com.openai.client.OpenAIClient;
 import com.openai.core.JsonValue;
@@ -8,8 +8,8 @@ import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.services.blocking.ChatService;
 import com.openai.services.blocking.chat.ChatCompletionService;
-import com.ticketapp.minimaxai.MiniMaxApiClient.MiniMaxApiException;
-import com.ticketapp.minimaxai.MiniMaxApiClient.ReceiptInput;
+import com.ticketapp.openai.OpenAiApiClient.OpenAiApiException;
+import com.ticketapp.openai.OpenAiApiClient.ReceiptInput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for {@link MiniMaxApiClient}. The {@link OpenAIClient} is
+ * Unit tests for {@link OpenAiApiClient}. The {@link OpenAIClient} is
  * stubbed with Mockito so we never hit the network — these tests
  * pin the wire contract the orchestrator depends on, not the
  * upstream service.
@@ -35,13 +35,13 @@ import static org.mockito.Mockito.when;
  * failure path (typed exceptions, parse errors, network issues).
  * Tests below cover all three.
  */
-class MiniMaxApiClientTest {
+class OpenAiApiClientTest {
 
     private OpenAIClient client;
     private ChatService chat;
     private ChatCompletionService completions;
     private ChatCompletionService.WithRawResponse completionsRaw;
-    private MiniMaxApiClient api;
+    private OpenAiApiClient api;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -55,8 +55,8 @@ class MiniMaxApiClientTest {
         when(completions.withRawResponse()).thenReturn(completionsRaw);
         // The autoconfig injects OpenAIClient + properties via Spring DI;
         // tests instantiate the wrapper directly with a Mockito stub.
-        api = new MiniMaxApiClient(client, new com.ticketapp.minimaxai.autoconfigure.MinimaxAiProperties(
-                "https://api.minimax.io/v1", "k", "MiniMax-M3", 30_000L, 0.0, 16384));
+        api = new OpenAiApiClient(client, new com.ticketapp.openai.autoconfigure.OpenAiProperties(
+                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384));
     }
 
     @Test
@@ -64,13 +64,13 @@ class MiniMaxApiClientTest {
         stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
         byte[] png = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
 
-        api.extractReceipt(ReceiptInput.image("MiniMax-M3", png, "image/png"));
+        api.extractReceipt(ReceiptInput.image("gpt-4o-mini", png, "image/png"));
 
         ArgumentCaptor<ChatCompletionCreateParams> cap =
                 ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
         verify(completionsRaw).create(cap.capture());
         ChatCompletionCreateParams params = cap.getValue();
-        assertThat(params.model().toString()).isEqualTo("MiniMax-M3");
+        assertThat(params.model().toString()).isEqualTo("gpt-4o-mini");
 
         var messages = params.messages();
         assertThat(messages).hasSize(2);
@@ -95,7 +95,7 @@ class MiniMaxApiClientTest {
     void pdfTextInputSendsTextPartNotImage() throws Exception {
         stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
 
-        api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "MERCADONA\nTotal: 25,28"));
+        api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA\nTotal: 25,28"));
 
         ArgumentCaptor<ChatCompletionCreateParams> cap =
                 ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
@@ -115,7 +115,7 @@ class MiniMaxApiClientTest {
     void returnsAssistantContentOn2xx() throws Exception {
         stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"merchant\\\":\\\"X\\\"}\"},\"finish_reason\":\"stop\"}]}");
 
-        String content = api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x"));
+        String content = api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x"));
 
         assertThat(content).isEqualTo("{\"merchant\":\"X\"}");
     }
@@ -127,8 +127,8 @@ class MiniMaxApiClientTest {
         when(e.body()).thenReturn(JsonValue.from("{\"message\":\"invalid api key\"}"));
         when(completionsRaw.create(any(ChatCompletionCreateParams.class))).thenThrow(e);
 
-        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x")))
-                .isInstanceOf(MiniMaxApiException.class)
+        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x")))
+                .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("401")
                 .hasMessageContaining("invalid api key");
     }
@@ -146,8 +146,8 @@ class MiniMaxApiClientTest {
         when(resp.body()).thenReturn(new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8)));
         when(completionsRaw.create(any(ChatCompletionCreateParams.class))).thenReturn(resp);
 
-        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x")))
-                .isInstanceOf(MiniMaxApiException.class)
+        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x")))
+                .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("404 Not Found")
                 .hasMessageContaining("DOCTYPE");
     }
@@ -161,8 +161,8 @@ class MiniMaxApiClientTest {
         when(resp.body()).thenReturn(new ByteArrayInputStream(malformed.getBytes(StandardCharsets.UTF_8)));
         when(completionsRaw.create(any(ChatCompletionCreateParams.class))).thenReturn(resp);
 
-        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x")))
-                .isInstanceOf(MiniMaxApiException.class)
+        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x")))
+                .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("not valid JSON")
                 .hasMessageContaining("{\"choices\":[");
     }
@@ -172,17 +172,17 @@ class MiniMaxApiClientTest {
         when(completionsRaw.create(any(ChatCompletionCreateParams.class)))
                 .thenThrow(new RuntimeException("connection reset"));
 
-        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("MiniMax-M3", "x")))
-                .isInstanceOf(MiniMaxApiException.class)
+        assertThatThrownBy(() -> api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x")))
+                .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("connection reset");
     }
 
     @Test
     void receiptInputImageFactoryCarriesImageFields() {
         byte[] bytes = new byte[]{1, 2, 3};
-        ReceiptInput input = ReceiptInput.image("MiniMax-M3", bytes, "image/png");
+        ReceiptInput input = ReceiptInput.image("gpt-4o-mini", bytes, "image/png");
 
-        assertThat(input.model()).isEqualTo("MiniMax-M3");
+        assertThat(input.model()).isEqualTo("gpt-4o-mini");
         assertThat(input.bytes()).isEqualTo(bytes);
         assertThat(input.mimeType()).isEqualTo("image/png");
         assertThat(input.pdfText()).isNull();
@@ -190,9 +190,9 @@ class MiniMaxApiClientTest {
 
     @Test
     void receiptInputPdfTextFactoryCarriesTextFields() {
-        ReceiptInput input = ReceiptInput.pdfText("MiniMax-M3", "MERCADONA\nTotal: 12.50");
+        ReceiptInput input = ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA\nTotal: 12.50");
 
-        assertThat(input.model()).isEqualTo("MiniMax-M3");
+        assertThat(input.model()).isEqualTo("gpt-4o-mini");
         assertThat(input.bytes()).isNull();
         assertThat(input.mimeType()).isNull();
         assertThat(input.pdfText()).isEqualTo("MERCADONA\nTotal: 12.50");
@@ -204,8 +204,8 @@ class MiniMaxApiClientTest {
         // image bytes must compare as equal even when constructed
         // independently.
         byte[] bytes = new byte[]{1, 2, 3};
-        ReceiptInput a = ReceiptInput.image("MiniMax-M3", bytes, "image/png");
-        ReceiptInput b = ReceiptInput.image("MiniMax-M3", bytes.clone(), "image/png");
+        ReceiptInput a = ReceiptInput.image("gpt-4o-mini", bytes, "image/png");
+        ReceiptInput b = ReceiptInput.image("gpt-4o-mini", bytes.clone(), "image/png");
 
         assertThat(a).isEqualTo(b);
         assertThat(a.hashCode()).isEqualTo(b.hashCode());
@@ -213,8 +213,8 @@ class MiniMaxApiClientTest {
 
     @Test
     void receiptInputEqualsDistinguishesDifferentBytes() {
-        ReceiptInput a = ReceiptInput.image("MiniMax-M3", new byte[]{1, 2, 3}, "image/png");
-        ReceiptInput b = ReceiptInput.image("MiniMax-M3", new byte[]{4, 5, 6}, "image/png");
+        ReceiptInput a = ReceiptInput.image("gpt-4o-mini", new byte[]{1, 2, 3}, "image/png");
+        ReceiptInput b = ReceiptInput.image("gpt-4o-mini", new byte[]{4, 5, 6}, "image/png");
 
         assertThat(a).isNotEqualTo(b);
     }
@@ -225,8 +225,8 @@ class MiniMaxApiClientTest {
         // override distinguishes them (otherwise a record carrying
         // pdfText would compare as equal to one carrying image bytes,
         // since both would have non-null content fields).
-        ReceiptInput image = ReceiptInput.image("MiniMax-M3", new byte[]{1, 2, 3}, "image/png");
-        ReceiptInput text = ReceiptInput.pdfText("MiniMax-M3", "MERCADONA");
+        ReceiptInput image = ReceiptInput.image("gpt-4o-mini", new byte[]{1, 2, 3}, "image/png");
+        ReceiptInput text = ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA");
 
         assertThat(image).isNotEqualTo(text);
         assertThat(text).isNotEqualTo(image);
@@ -236,11 +236,11 @@ class MiniMaxApiClientTest {
     void receiptInputToStringShowsByteCountNotRawBytes() {
         // Critical: the bytes may contain a receipt image — toString
         // must not dump them into a log line.
-        ReceiptInput input = ReceiptInput.image("MiniMax-M3",
+        ReceiptInput input = ReceiptInput.image("gpt-4o-mini",
                 new byte[]{(byte) 0x89, 'P', 'N', 'G'}, "image/png");
 
         String rendered = input.toString();
-        assertThat(rendered).contains("4 bytes").contains("image/png").contains("MiniMax-M3");
+        assertThat(rendered).contains("4 bytes").contains("image/png").contains("gpt-4o-mini");
         assertThat(rendered).doesNotContain("89"); // PNG header byte must not leak
     }
 
@@ -250,7 +250,7 @@ class MiniMaxApiClientTest {
         // could be hundreds of lines. toString must report the size
         // (so an operator knows there's a payload) without dumping
         // the content into a log line.
-        ReceiptInput input = ReceiptInput.pdfText("MiniMax-M3", "MERCADONA\nTotal: 12.50");
+        ReceiptInput input = ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA\nTotal: 12.50");
 
         String rendered = input.toString();
         assertThat(rendered).contains("22 chars"); // length of "MERCADONA\nTotal: 12.50"
