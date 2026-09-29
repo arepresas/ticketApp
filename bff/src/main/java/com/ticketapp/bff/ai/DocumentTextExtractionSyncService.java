@@ -83,7 +83,8 @@ public class DocumentTextExtractionSyncService {
             // upload path was the one entry point to a paid provider
             // that `ticketapp.ai.enabled=false` could not silence —
             // which is how `mvn verify` ended up issuing real OCR
-            // requests against the real endpoint with the test key.
+            // requests against the live provider endpoint with the test
+            // key. That was a 2026-09 bug; the suite is hermetic now.
             log.debug("ticketapp.ai.enabled=false — skipping OCR step");
             return ticket;
         }

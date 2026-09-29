@@ -1,5 +1,13 @@
 -- AI extraction pipeline (ADR 0006).
 --
+-- Header reworded 2026-09-27, before any production deployment: it
+-- named a specific vendor, and the pipeline is now provider-agnostic
+-- (any OpenAI-compatible endpoint). The reword is comment-only and
+-- changes no DDL. Liquibase checksums the file, so an environment
+-- that has already applied this changeset must reconcile its
+-- DATABASECHANGELOG checksum; the release notes for this change carry
+-- the procedure. No schema or data is affected either way.
+--
 -- Adds:
 --   * last_extraction_attempt_at to tickets — bookkeeping for the scheduler;
 --     kept even on failure so the cron can skip-on-success in the future without
