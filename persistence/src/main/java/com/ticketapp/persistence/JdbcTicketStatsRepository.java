@@ -118,6 +118,14 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
             GROUP BY e.category
             """;
 
+    /**
+     * Named-parameter key for the owner scope. Every aggregate here is
+     * filtered by it, so it is stated once rather than repeated inline
+     * (java:S1192) — and, more importantly, a typo in one of the three
+     * would silently turn an owner-scoped read into a global one.
+     */
+    private static final String PARAM_OWNER = "owner";
+
     private final NamedParameterJdbcTemplate namedJdbc;
 
     public JdbcTicketStatsRepository(JdbcTemplate jdbc) {
@@ -128,7 +136,7 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
     public TicketStats loadStats(long ownerId, String currency) {
         String code = normaliseCurrency(currency);
         var params = new MapSqlParameterSource()
-                .addValue("owner", ownerId)
+                .addValue(PARAM_OWNER, ownerId)
                 .addValue("currency", code);
 
         // The currency is an input, not a column on the row: it comes
@@ -140,7 +148,7 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
     @Override
     public List<MonthlyTicketCount> countByMonth(long ownerId, YearMonth from, YearMonth to) {
         var params = new MapSqlParameterSource()
-                .addValue("owner", ownerId)
+                .addValue(PARAM_OWNER, ownerId)
                 // First day of `from`, and first day of the month after
                 // `to`, so `to` itself stays inside the window.
                 .addValue("from", LocalDate.of(from.getYear(), from.getMonthValue(), 1))
@@ -153,7 +161,7 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
     @Override
     public List<CategorySpend> sumByCategory(long ownerId, String currency) {
         var params = new MapSqlParameterSource()
-                .addValue("owner", ownerId)
+                .addValue(PARAM_OWNER, ownerId)
                 .addValue("currency", normaliseCurrency(currency));
 
         return namedJdbc.query(SUM_BY_CATEGORY_SQL, params, JdbcTicketStatsRepository::mapCategorySpend);

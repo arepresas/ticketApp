@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.YearMonth;
+import java.time.Month;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,7 +65,7 @@ class DashboardServiceTest {
 
         service.load(OWNER);
 
-        YearMonth current = YearMonth.now();
+        YearMonth current = YearMonth.now(ZoneId.systemDefault());
         YearMonth expectedFrom = current.minusMonths(DashboardService.MONTHS_OF_HISTORY - 1L);
         verify(stats).countByMonth(eq(OWNER), eq(expectedFrom), eq(current));
     }
@@ -76,7 +78,7 @@ class DashboardServiceTest {
         // zeros or the chart's x-axis gets holes. Stubbed *after*
         // stubStats() so it is not overwritten by the default empty list.
         when(stats.countByMonth(anyLong(), any(), any())).thenReturn(List.of(
-                new MonthlyTicketCount(YearMonth.now(), 4)));
+                new MonthlyTicketCount(YearMonth.now(ZoneId.systemDefault()), 4)));
 
         List<MonthlyTicketCount> series = service.load(OWNER).ticketsPerMonth();
 

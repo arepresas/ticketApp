@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -65,7 +66,11 @@ public class DashboardService {
     public DashboardView load(long ownerId) {
         TicketStats kpis = stats.loadStats(ownerId, REPORTING_CURRENCY);
 
-        YearMonth currentMonth = YearMonth.now();
+        // Zone stated explicitly (java:S8688). Leaving it implicit makes
+        // the series window depend on whichever zone the JVM happens to
+        // run in, so the same deployment would show a different x-axis
+        // in Madrid than in a UTC container.
+        YearMonth currentMonth = YearMonth.now(ZoneId.systemDefault());
         YearMonth from = currentMonth.minusMonths(MONTHS_OF_HISTORY - 1L);
         List<MonthlyTicketCount> perMonth = MonthlyTicketCount.complete(
                 from, currentMonth, stats.countByMonth(ownerId, from, currentMonth));

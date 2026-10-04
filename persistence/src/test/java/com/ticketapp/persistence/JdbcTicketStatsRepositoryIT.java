@@ -16,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.Month;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -152,10 +153,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("c", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 3, 20)));
 
             List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, 1), YearMonth.of(2026, 3));
+                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH));
 
             assertThat(rows).extracting(MonthlyTicketCount::month)
-                    .containsExactly(YearMonth.of(2026, 1), YearMonth.of(2026, 3));
+                    .containsExactly(YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH));
             assertThat(rows).extracting(MonthlyTicketCount::count).containsExactly(1L, 2L);
         }
 
@@ -165,7 +166,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("a", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
 
             List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, 1), YearMonth.of(2026, 6));
+                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
 
             assertThat(rows).hasSize(1);
         }
@@ -177,7 +178,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("pending", Ticket.Status.OPEN);
 
             List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, 2), YearMonth.of(2026, 2));
+                    owner, YearMonth.of(2026, Month.FEBRUARY), YearMonth.of(2026, Month.FEBRUARY));
 
             assertThat(rows).extracting(MonthlyTicketCount::count).containsExactly(1L);
         }
@@ -190,10 +191,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("out", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 7, 1)));
 
             List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, 1), YearMonth.of(2026, 6));
+                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
 
             assertThat(rows).extracting(MonthlyTicketCount::month)
-                    .containsExactly(YearMonth.of(2026, 1), YearMonth.of(2026, 6));
+                    .containsExactly(YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
         }
 
         @Test
@@ -202,7 +203,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicketFor(otherOwner, "theirs", Ticket.Status.DONE,
                     withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
 
-            assertThat(repository.countByMonth(owner, YearMonth.of(2026, 1), YearMonth.of(2026, 1)))
+            assertThat(repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JANUARY)))
                     .isEmpty();
         }
     }

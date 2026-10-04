@@ -1,7 +1,7 @@
 package com.ticketapp.domain;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -45,10 +45,11 @@ public record CategorySpend(SpendCategory category, BigDecimal amount) {
         for (CategorySpend row : rows) {
             totals.merge(row.category(), row.amount(), BigDecimal::add);
         }
-        List<CategorySpend> series = new ArrayList<>();
-        for (SpendCategory category : SpendCategory.values()) {
-            series.add(new CategorySpend(category, totals.get(category)));
-        }
-        return List.copyOf(series);
+        // Streamed in declaration order rather than collected from a
+        // loop, so the arc order still follows the enum and the donut's
+        // colours stay pinned to the same category.
+        return Arrays.stream(SpendCategory.values())
+                .map(category -> new CategorySpend(category, totals.get(category)))
+                .toList();
     }
 }
