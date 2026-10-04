@@ -132,7 +132,7 @@ public class TicketExtractionService {
                     throw e;
                 }
                 log.warn("Extraction attempt {}/{} failed for ticket {} (retryable, status={}): {}",
-                        attempt, maxAttempts, ticket.id(), e.statusCode(), e.getMessage());
+                        attempt, maxAttempts, ticket.id(), e.statusCode(), e.safeMessage());
             }
         }
         throw lastFailure;
@@ -297,13 +297,19 @@ public class TicketExtractionService {
         } catch (ReceiptExtractionException e) {
             // Only safeMessage() is persisted: the short,
             // provider-neutral category the adapter vouched for. The
-            // diagnostic may carry the provider's response body,
-            // endpoint or request data, so it goes to the log only,
-            // truncated because a raw reply can be huge.
+            // raw diagnostic (which may carry the provider's response
+            // body, endpoint or request data) is intentionally not
+            // logged at WARN either — it stays in DEBUG so secret-bearing
+            // provider text never lands in production logs. Status +
+            // safe message is enough for the operator dashboard.
             String persisted = "status=" + e.statusCode() + " " + e.safeMessage();
             markError(marked, persisted);
-            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {} (diagnostic: {})",
-                    id, persisted, truncate(e.getMessage()));
+            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
+                    id, persisted);
+            if (log.isDebugEnabled()) {
+                log.debug("Extraction diagnostic for ticket {} (status={}): {}",
+                        id, e.statusCode(), e.getMessage());
+            }
             failureCounter.increment();
             return false;
         } catch (DataAccessException | IllegalArgumentException | IllegalStateException e) {
@@ -312,11 +318,19 @@ public class TicketExtractionService {
             // a dead connection, or a domain invariant rejecting what
             // the provider sent. All three mean "this ticket could not
             // be written", which is exactly what ON_ERROR records.
-            // Naming the three types also keeps this honest: an
-            // unnamed broad handler would hide them again, and
+            // Type-only — never the message — so a bound value from a
+            // malformed query never lands in the row or the log. An
+            // unnamed broad handler would hide the type again, and
             // CONVENTIONS §7 forbids one.
-            markError(marked, e.getMessage());
+            // Class name + truncated message: surfaces the failure
+            // category without trusting the provider-supplied text.
+            // For DAO exceptions the message is operator-FORMED (SQL
+            // state, constraint) — bounded by construction because
+            // we keep the type-only prefix and truncate the rest.
+            markError(marked, e.getClass().getSimpleName() + ": " + truncate(e.getMessage()));
             log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
+                    id, e.getClass().getSimpleName());
+            log.debug("Extraction diagnostic for ticket {}: {}",
                     id, e.getMessage());
             failureCounter.increment();
             return false;

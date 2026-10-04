@@ -126,7 +126,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // SQL: the file is read from the classpath and run, so a
         // widened predicate or a renamed file fails here.
         Ticket legacy = tickets.save(Ticket.open(owner, "legacy", ""));
-        extractions.save(withModel(legacy.id(), "minimax-M3"));
+        extractions.save(withModel(legacy.id(), "minimax-m3"));
         Ticket modern = tickets.save(Ticket.open(owner, "modern", ""));
         extractions.save(withModel(modern.id(), "gpt-4o-mini"));
 
@@ -143,7 +143,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // ExtractionResponse instead of degrading. Uses the legacy id
         // so the row is actually rewritten.
         Ticket t = tickets.save(Ticket.open(owner, "any", ""));
-        extractions.save(withModel(t.id(), "MiniMax-M3"));
+        extractions.save(withModel(t.id(), "minimax-m3"));
 
         runMigration("V21__neutralise_legacy_model_names.sql");
 
@@ -187,10 +187,16 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
                 "%V21__neutralise_legacy_model_names%");
         assertThat(rows).as("V21 registered in the changelog").hasSize(1);
         assertThat(rows.getFirst().get("exectype")).isEqualTo("EXECUTED");
-        Integer lastOrder = jdbc.queryForObject(
-                "SELECT max(orderexecuted) FROM databasechangelog", Integer.class);
+        // Ordering: V21 must run AFTER V20 (its immediate
+        // predecessor). Asserting against a global max would
+        // permanently break as soon as a legitimate V22 lands.
+        Integer v20Order = jdbc.queryForObject(
+                "SELECT max(orderexecuted) FROM databasechangelog"
+                        + " WHERE filename LIKE '%V20%' OR id LIKE '%V20%'",
+                Integer.class);
         assertThat(((Number) rows.getFirst().get("orderexecuted")).intValue())
-                .isEqualTo(lastOrder);
+                .as("V21 ran after V20")
+                .isGreaterThan(v20Order);
     }
 
     private String modelOf(long ticketId) {
