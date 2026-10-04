@@ -45,7 +45,7 @@ The codebase is **strictly layered**. Dependencies flow one way only:
 
 - `domain` — pure Java. **No** Spring, **no** JDBC, **no** Jackson, **no** `java.util.logging`. Only `java.*` and (for value types) `org.jetbrains.annotations` or similar JDK-only annotations.
 - `persistence` — JDBC adapters, Liquibase change sets, mappers. Depends only on `domain`.
-- `openai-ai` — provider implementation of the `ReceiptExtractor` port (today's AI provider). Depends only on `domain`. Other providers (`openai-ai`, ...) follow the same shape.
+- `openai-ai` — provider implementation of the `ReceiptExtractor` port (today's AI provider). Depends only on `domain`. Other providers (`anthropic-ai`, `local-llm-ai`, ...) follow the same shape.
 - `bff` — HTTP edge, Spring configuration, DTOs, JWT/OAuth. Depends on all three (`domain`, `persistence`, `openai-ai`).
 
 Reverse dependencies (e.g. `domain` importing Spring, `persistence` importing `bff`) are a **build break**, not a style issue. CI will fail.
