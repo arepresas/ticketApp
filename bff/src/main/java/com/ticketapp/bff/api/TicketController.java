@@ -4,8 +4,15 @@ import com.ticketapp.bff.api.dto.ChangeStatusRequest;
 import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.api.dto.UpdateTicketRequest;
 import com.ticketapp.bff.application.TicketApplicationService;
+import com.ticketapp.bff.application.TicketEditService;
+import com.ticketapp.bff.application.TicketEditService.ExtractionEdit;
+import com.ticketapp.bff.api.dto.ProductLineDto;
 import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.exceptions.ResourceNotFoundException;
+import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
+import com.ticketapp.bff.api.dto.UpdateTicketAndExtractionRequest;
 import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.bff.security.CurrentUser;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -60,6 +68,7 @@ public class TicketController {
 
     private final TicketRepository repository;
     private final TicketApplicationService applicationService;
+    private final TicketEditService editService;
 
     @GetMapping
     public List<TicketResponse> list() {
@@ -190,6 +199,100 @@ public class TicketController {
                     return ResponseEntity.ok(TicketResponse.of(repository.save(next)));
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    /**
+     * Applies a detail-screen edit — metadata and extraction — as one
+     * atomic unit.
+     *
+     * <p>Replaces the old pair of calls (metadata {@code PATCH} then
+     * extraction {@code PUT}). Those were not atomic: the metadata
+     * committed and the extraction could then fail, leaving the server
+     * holding half the edit while the UI reported a failure and kept the
+     * rest in memory. The status actions flush automatically, so that
+     * half-save was reachable without the user doing anything unusual.
+     *
+     * <p>Both parts are sparse — a {@code null} field is left alone, and
+     * a {@code null} {@code extraction} means "no extraction to write",
+     * not "clear it". Validation is the same set the two original
+     * endpoints applied, so a body that was rejected before is still
+     * rejected.
+     *
+     * <p>Owner-scoped: same 404 rule as the read paths, and the same
+     * answer for "does not exist" and "not yours".
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<TicketResponse> applyEdit(@PathVariable long id,
+                                                    @RequestBody UpdateTicketAndExtractionRequest body) {
+        // No null-body check: @RequestBody is required by default, so
+        // Spring rejects a missing body before this runs.
+        if (body.title() != null && body.title().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
+        }
+        ExtractionEdit extraction = body.extraction() == null
+                ? null
+                : toExtractionEdit(body.extraction());
+
+        AuthenticatedUser user = CurrentUser.get();
+        try {
+            return ResponseEntity.ok(TicketResponse.of(editService.applyEdit(
+                    id, user.id(), body.title(), body.description(), extraction)));
+        } catch (ResourceNotFoundException e) {
+            // 404, not the 422 the global domain handler would give.
+            // Every other read and write path on this controller
+            // answers 404 for "missing or not yours", and answering
+            // differently here would tell an attacker which of the two
+            // it was. Same answer either way, existence not leaked.
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+    }
+
+    /**
+     * Maps the wire shape onto the service's input, applying the same
+     * rules {@code TicketExtractionController} does so the two paths
+     * cannot drift: merchant and currency required, quantity positive,
+     * null prices coerced to zero.
+     */
+    private static ExtractionEdit toExtractionEdit(UpdateExtractionRequest body) {
+        if (body.merchant() == null || body.merchant().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "merchant must not be blank");
+        }
+        if (body.purchaseDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purchaseDate is required");
+        }
+        if (body.totalAmount() == null || body.totalAmount().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "totalAmount must be >= 0");
+        }
+        if (body.currency() == null || !body.currency().matches("[A-Za-z]{3}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "currency must be an ISO 4217 code (3 letters)");
+        }
+        List<ProductLineDto> lineDtos = body.products() == null ? List.of() : body.products();
+        for (int i = 0; i < lineDtos.size(); i++) {
+            ProductLineDto p = lineDtos.get(i);
+            if (p == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "] must not be null");
+            }
+            if (p.name() == null || p.name().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].name must not be blank");
+            }
+            if (p.quantity() == null || p.quantity().signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].quantity must be > 0");
+            }
+        }
+
+        List<TicketExtraction.ProductLine> lines = lineDtos.stream()
+                .map(p -> new TicketExtraction.ProductLine(
+                        p.name(), p.quantity(), p.unit(),
+                        p.pricePerUnit() == null ? java.math.BigDecimal.ZERO : p.pricePerUnit(),
+                        p.lineTotal() == null ? java.math.BigDecimal.ZERO : p.lineTotal()))
+                .toList();
+        return new ExtractionEdit(
+                body.merchant(), body.purchaseDate(), body.category(),
+                lines, body.totalAmount(), body.currency().toUpperCase(java.util.Locale.ROOT));
     }
 
     @DeleteMapping("/{id}")
