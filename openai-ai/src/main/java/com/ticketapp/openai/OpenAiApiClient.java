@@ -2,6 +2,7 @@ package com.ticketapp.openai;
 
 import com.openai.client.OpenAIClient;
 import com.openai.core.JsonValue;
+import com.openai.core.http.HttpResponseFor;
 import com.openai.errors.OpenAIServiceException;
 import com.openai.models.ResponseFormatJsonObject;
 import com.openai.models.chat.completions.ChatCompletion;
@@ -196,16 +197,39 @@ public final class OpenAiApiClient {
      */
     private ChatCompletion sendChatRequest(ChatCompletionCreateParams params)
             throws java.io.IOException {
-        com.openai.core.http.HttpResponseFor<ChatCompletion> resp;
+        if (log.isDebugEnabled()) {
+            // Operator-visible diagnostic for "did we send what we think
+            // we sent". The SDK's own logLevel toggle is gated
+            // separately (see OpenAiProperties.debugHttp) and turns off
+            // by default; this log is independent and emits whenever
+            // DEBUG is enabled for our package.
+            //
+            // Values and bodies are deliberately not dumped — the model
+            // prompt carries the receipt text and the headers carry
+            // session tokens. Operators get the model id, the number of
+            // messages and a coarse byte estimate, which is enough to
+            // tell "I sent the right request" from "I sent the wrong
+            // model id" without leaking the payload.
+            int messageCount = params.messages() == null ? 0 : params.messages().size();
+            log.debug("openai request: model={} messages={} temp={} maxTokens={}",
+                    params.model(), messageCount,
+                    params.temperature(), params.maxCompletionTokens());
+        }
+        HttpResponseFor<ChatCompletion> resp;
         try {
             resp = client.chat().completions().withRawResponse().create(params);
         } catch (OpenAIServiceException e) {
             // The SDK throws a typed exception per status: 401, 429,
             // 500, etc. All extend OpenAIServiceException. The
             // exception already carries the response body for non-2xx
-            // — we surface it in the WARN log.
+            // — we surface it in the WARN log. When the body is empty
+            // (gateway rejected before parsing, or HTML/non-JSON body
+            // the SDK could not ingest) the response headers are the
+            // only diagnostic the operator gets — we always include
+            // them so a 400 with no body is not a dead end.
             throw new OpenAiApiException(e.statusCode(),
-                    "provider returned " + e.statusCode() + ": " + bodyAsString(e));
+                    "provider returned " + e.statusCode() + ": " + bodyAsString(e)
+                            + " | headers=" + responseHeaders(e.headers()));
         } catch (RuntimeException e) {
             // Connection refused / DNS / timeout — no response at all.
             throw new OpenAiApiException(0,
@@ -217,7 +241,8 @@ public final class OpenAiApiClient {
             String bodyText = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
             if (status / 100 != 2) {
                 throw new OpenAiApiException(status,
-                        "provider returned " + status + ": " + truncate(bodyText));
+                        "provider returned " + status + ": " + truncate(bodyText)
+                                + " | headers=" + responseHeaders(resp.headers()));
             }
             try {
                 return com.openai.core.ObjectMappers.jsonMapper()
@@ -230,6 +255,35 @@ public final class OpenAiApiClient {
         } finally {
             resp.close();
         }
+    }
+
+    /**
+     * Format the response headers for inclusion in an error message.
+     * Key names only that look operational (no {@code Set-Cookie}, no
+     * {@code Authorization}), and values truncated — gateway error
+     * diagnostics live here when the body is empty, so the operator
+     * can read the {@code x-request-id}, {@code x-ratelimit-*}, or
+     * vendor-specific code without dumping megabytes of metadata.
+     */
+    private static String responseHeaders(com.openai.core.http.Headers headers) {
+        if (headers == null || headers.isEmpty()) {
+            return "{}";
+        }
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        for (String name : headers.names()) {
+            String lower = name.toLowerCase();
+            if (lower.equals("set-cookie") || lower.equals("authorization")
+                    || lower.startsWith("set-cookie")) {
+                continue;
+            }
+            java.util.List<String> values = headers.values(name);
+            String value = values.isEmpty() ? "" : values.get(0);
+            if (value.length() > 200) {
+                value = value.substring(0, 200) + "...";
+            }
+            parts.add(name + "=" + value);
+        }
+        return parts.isEmpty() ? "{}" : "{" + String.join(", ", parts) + "}";
     }
 
     private static byte[] readAllBytes(com.openai.core.http.HttpResponseFor<?> resp) throws java.io.IOException {

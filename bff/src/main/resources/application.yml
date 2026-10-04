@@ -71,3 +71,14 @@ ticketapp:
       temperature: ${OPENAI_TEMPERATURE}
       max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS}
       api-key: ${OPENAI_API_KEY}
+      # Extra headers attached to every provider request. Comma-separated
+      # `key=value` pairs, e.g. `X-OpenCode-Session=ses-1234,X-Org-Id=org-1`.
+      # Empty by default — most providers don't. Required by some gateways
+      # that route on a session or tenant header (opencode-go, etc.).
+      # Values are not logged; treat them like credentials.
+      custom-headers: ${OPENAI_HEADERS:}
+      # Opt-in SDK HTTP debug logging. Toggles the OpenAI SDK's own
+      # logLevel(LogLevel.DEBUG) so request/response lines are emitted
+      # via SLF4J. Off by default; flip to `true` when a gateway rejects
+      # with an empty body and you need to see the wire shape.
+      debug-http: ${OPENAI_DEBUG_HTTP:false}
