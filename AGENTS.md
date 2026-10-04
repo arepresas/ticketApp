@@ -163,7 +163,7 @@ Keep these terms stable across code, commits, and PR descriptions:
 - **Web component** — A custom element exposed from `front/src/index.ts`. Each is its own bundle entry when imported via `define`.
 - **Landing** — Public marketing page (`front/src/lib/landing/`). No auth required.
 - **Dashboard** — Authenticated app (`front/src/lib/auth/DashboardApp.svelte`). Requires valid session.
-- **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`openai-ai`, future `openai-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
+- **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`openai-ai` today, future `anthropic-ai`, `local-llm-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
 
 ---
 
@@ -182,11 +182,30 @@ DB_PASSWORD=ticketAppPass
 GOOGLE_CLIENT_ID=...                       # from Google Cloud Console
 BFF_JWT_SECRET=...                         # openssl rand -base64 32
 
-# CI / quality (GitHub Actions secrets, required for the sonar job)
-SONAR_TOKEN=...                            # sqp_... from SonarCloud
-SONAR_HOST_URL=...                         # https://sonarcloud.io
-SONAR_ORGANIZATION=arepresas
+# opencode MCP server — local .env only, read at MCP startup
+SONARQUBE_TOKEN=...                        # from https://sonarcloud.io/account/security
+SONARQUBE_ORG=arepresas
+SONARQUBE_URL=https://sonarcloud.io
 ```
+
+**Two different variable families — do not mix them up.** Sonar-related
+settings exist twice under different names, and confusing them is the
+usual reason the opencode MCP answers `Not authorized`:
+
+| Name | Read by | Set where |
+|------|---------|-----------|
+| `SONARQUBE_TOKEN` / `SONARQUBE_ORG` / `SONARQUBE_URL` | the opencode **MCP server** | local `.env` (gitignored) |
+| `SONAR_TOKEN` / `SONAR_HOST_URL` / `SONAR_ORGANIZATION` | the **scanner** (`pom.xml`, `sonar-project.properties`) | GitHub Actions secrets; local env only if you run the scanner by hand |
+
+The MCP container is launched once with `docker run -e SONARQUBE_TOKEN`
+(see `mcp.sonarqube` in `~/.config/opencode/opencode.json`), so the token
+is **baked in at container start**. Editing `.env` does not reach an
+already-running container — restart the MCP server (or opencode) after
+rotating the token.
+
+Token format: SonarCloud user tokens are 40-character hex strings; newer
+tokens may carry an `sqp_` prefix. Both are accepted — do not assume the
+prefix is present when validating one.
 
 Tests under `bff/` ignore these and spin up Postgres via Testcontainers.
 

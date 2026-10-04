@@ -201,7 +201,7 @@ clean with old paths.
 
 ### Positive
 
-- A future provider (`openai-ai`, `anthropic-ai`, `local-llm-ai`) drops in as
+- A new provider (`anthropic-ai`, `local-llm-ai`, ...) drops in as
   a new Maven module that ships one bean — no BFF changes.
 - The BFF module's dependency footprint shrinks: it no longer pulls
   `openai-java-core` or `pdfbox` directly. Those become transitive through

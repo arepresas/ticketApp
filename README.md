@@ -88,13 +88,24 @@ Variables defined:
 | `GOOGLE_CLIENT_ID`  | `bff` (`google.client-id`) + `front` (`VITE_GOOGLE_CLIENT_ID`) | OAuth 2.0 Web client id from Google Cloud Console. Same value on both sides — the SPA exchanges the Google `id_token` and the BFF verifies it against this audience. |
 | `BFF_JWT_SECRET`    | `bff` (`bff.jwt.secret`)                             | HS256 signing key for BFF-issued session JWTs. **≥32 chars (256 bits)** or the app refuses to start. Generate with `openssl rand -base64 32`. A dev placeholder ships in `application.yml` so `mvn verify` works without it; replace it in any non-local environment. |
 | `OPENAI_HEADERS`    | `bff` (`ticketapp.ai.openai.custom-headers`)         | Optional comma-separated `key=value` list of extra HTTP headers attached to every provider request. Empty by default. Required by some gateways that route on a session or tenant header (opencode-go rejects calls without `X-OpenCode-Session`, for example). Values are never logged. Example: `X-OpenCode-Session=ses-abc123,X-Org-Id=org-1`. |
-| `SONARQUBE_TOKEN`   | opencode MCP server, CI workflows (as GitHub secret) | `sqp_...` from <https://sonarcloud.io/account/security>; required |
-| `SONARQUBE_ORG`     | opencode MCP server, CI workflows (as GitHub secret) | this repo's organization: `arepresas`; required |
-| `SONARQUBE_URL`     | opencode MCP server, CI workflows (as GitHub secret) | required, no default — set to `https://sonarcloud.io` (or `https://sonarqube.us` for SonarQube Cloud US, or your self-hosted URL) |
+| `SONARQUBE_TOKEN`   | opencode MCP server                     | User token from <https://sonarcloud.io/account/security>; required. SonarCloud tokens are 40-char hex; newer ones may carry an `sqp_` prefix. |
+| `SONARQUBE_ORG`     | opencode MCP server                     | this repo's organization: `arepresas`; required |
+| `SONARQUBE_URL`     | opencode MCP server                     | required, no default — set to `https://sonarcloud.io` (or `https://sonarqube.us` for SonarQube Cloud US, or your self-hosted URL) |
+| `SONAR_TOKEN`       | the scanner (`pom.xml`, `sonar-project.properties`) | GitHub Actions secret for the `sonar` CI job. **Different variable** from `SONARQUBE_TOKEN` — see below. |
+| `SONAR_HOST_URL`    | the scanner                             | GitHub Actions secret; `https://sonarcloud.io` |
+| `SONAR_ORGANIZATION` | the scanner                            | GitHub Actions secret; `arepresas` |
 
-The opencode MCP server reads `.env` via `dotenv-cli` at startup; the back-end
-reads `POSTGRES_*` via docker compose variable substitution. SonarQube vars are
-required everywhere — the scanner refuses to run if any is missing.
+Two families, do not mix them up: `SONARQUBE_*` is read by the opencode MCP
+server from the local `.env`, while `SONAR_TOKEN` / `SONAR_HOST_URL` /
+`SONAR_ORGANIZATION` are read by the scanner and supplied as GitHub Actions
+secrets. Confusing them is the usual reason the MCP answers `Not authorized`.
+
+The opencode MCP server sources `.env` at startup (`set -a && . .env && set +a`
+in `mcp.sonarqube`, `~/.config/opencode/opencode.json`) and passes the values to
+a `docker run -e SONARQUBE_TOKEN` container. The env is baked in at container
+start, so editing `.env` does not reach an already-running container — restart
+the MCP server (or opencode) after rotating the token. The back-end
+reads `POSTGRES_*` via docker compose variable substitution.
 
 ## Deploy to Fly.io
 
