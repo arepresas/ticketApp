@@ -71,6 +71,7 @@
 	} from '../api/tickets';
 	import { searchProducts, type ProductSummary } from '../api/products';
 	import { navigateBack } from '../navigation';
+	import { flushThenAct } from './flushThenAct';
 	import { formatDate as sharedFmtDate, formatDateTime as sharedFmtDateTime } from '../utils/date';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
@@ -580,16 +581,46 @@
 		};
 	});
 
+	/**
+	 * Move the ticket to a terminal status, flushing any pending edits
+	 * first.
+	 *
+	 * <p>The flush is the point of this change. The Save button and
+	 * "Mark as done" are peers in the UI, and users reasonably expect
+	 * "mark as done" to keep what they just typed. It did not: the PATCH
+	 * fired with unsaved edits still only in component state and then
+	 * `close()` unmounted the view, so the corrections were silently
+	 * lost while the status change appeared to succeed.
+	 *
+	 * <p>If the save fails we abort and stay on the ticket. Flipping the
+	 * status anyway would mark a ticket DONE that still carries the
+	 * pre-edit data, which is the half-applied state we are trying to
+	 * avoid.
+	 */
 	async function setStatus(status: 'DONE' | 'CANCELLED'): Promise<void> {
-		if (!ticketId || acting) return;
+		// Captured before the awaits: TypeScript cannot carry the null
+		// narrowing of `ticketId` into the closure below.
+		const id = ticketId;
+		if (!id || acting) return;
 		const token = readSessionToken();
 		if (!token) return;
 		acting = true;
 		errorMessage = null;
 		try {
-			await updateTicketStatus(token, ticketId, status);
-			window.dispatchEvent(new CustomEvent('ticket:updated'));
-			close();
+			const progressed = await flushThenAct(
+				dirty ? () => saveChanges() : null,
+				async () => {
+					await updateTicketStatus(token, id, status);
+					window.dispatchEvent(new CustomEvent('ticket:updated'));
+					close();
+				}
+			);
+			if (!progressed) {
+				// The save failed and has already surfaced its own
+				// message; stay on the ticket so the edits are still
+				// there to retry.
+				return;
+			}
 		} catch (err: unknown) {
 			if (err instanceof TicketApiError) {
 				errorMessage = `Could not mark as ${status} (${err.status}): ${err.message}`;
@@ -675,17 +706,28 @@
 	 * action failed. Closed-on-success mirrors {@link setStatus}: the
 	 * detail screen is no longer useful once the status flips because
 	 * the orchestrator will mutate the extraction row asynchronously.
+	 *
+	 * <p>Also flushes pending edits first, for the same reason as
+	 * {@link setStatus}: this closes the view, so unsaved edits would be
+	 * unreachable rather than merely pending.
 	 */
 	async function resetStatus(): Promise<void> {
-		if (!ticketId || acting) return;
+		const id = ticketId;
+		if (!id || acting) return;
 		const token = readSessionToken();
 		if (!token) return;
 		acting = true;
 		errorMessage = null;
 		try {
-			await retryTicket(token, ticketId);
-			window.dispatchEvent(new CustomEvent('ticket:updated'));
-			close();
+			const progressed = await flushThenAct(
+				dirty ? () => saveChanges() : null,
+				async () => {
+					await retryTicket(token, id);
+					window.dispatchEvent(new CustomEvent('ticket:updated'));
+					close();
+				}
+			);
+			if (!progressed) return;
 		} catch (err: unknown) {
 			if (err instanceof TicketApiError) {
 				errorMessage = `Could not reset ticket (${err.status}): ${err.message}`;
@@ -756,6 +798,9 @@
 	/** Anything changed since the last successful save? Drives the
 	 * Save button's enabled state and the visual "Unsaved" hint. */
 	let dirty = $state(false);
+
+	/** The save currently running, so a second caller awaits it. */
+	let saveInFlight: Promise<boolean> | null = null;
 
 	/** Save in-flight; disables the Save button. */
 	let savingChanges = $state(false);
@@ -911,22 +956,53 @@
 		});
 	}
 
-	async function saveChanges(): Promise<void> {
-		if (!ticket || !dirty || savingChanges) return;
+	/**
+	 * Persist pending edits (metadata + extraction).
+	 *
+	 * <p>Returns whether the edits reached the server, so callers that
+	 * do more afterwards — {@link setStatus} flushing before a status
+	 * change — can abort instead of half-applying. `true` also when
+	 * there was nothing to save.
+	 */
+	async function saveChanges(): Promise<boolean> {
+		const current = ticket;
+		if (!current) return true;
+		// A save is already running: wait for that one. Reporting
+		// success here would let the caller act on edits whose write
+		// has not landed yet, and the status change could normalise the
+		// catalogue against the pre-edit row.
+		if (saveInFlight) return saveInFlight;
+		if (!dirty) return true;
 		const token = readSessionToken();
 		if (!token) {
 			errorMessage = 'Session expired. Sign in again to save changes.';
 			setSaveOutcome('error', 3000);
-			return;
+			return false;
 		}
 		savingChanges = true;
 		errorMessage = null;
+		saveInFlight = persistEdits(token, current);
+		try {
+			return await saveInFlight;
+		} finally {
+			savingChanges = false;
+			saveInFlight = null;
+		}
+	}
+
+	/**
+	 * The two PUTs behind {@link saveChanges}, in a separate function so
+	 * the in-flight promise can be shared: the Save button and
+	 * "Mark as done" are both reachable while a save runs, and two
+	 * concurrent writes could land out of order.
+	 */
+	async function persistEdits(token: string, current: CreatedTicket): Promise<boolean> {
 		try {
 			// 1) metadata first — `await` so a failure here stops
 			// the extraction PUT (no half-saves).
-			const updatedTicket = await updateTicketMetadata(token, ticket.id, {
-				title: ticket.title,
-				description: ticket.description
+			const updatedTicket = await updateTicketMetadata(token, current.id, {
+				title: current.title,
+				description: current.description
 			});
 			ticket = updatedTicket;
 
@@ -954,6 +1030,7 @@
 			dirty = false;
 			setSaveOutcome('saved', 2000);
 			window.dispatchEvent(new CustomEvent('ticket:updated'));
+			return true;
 		} catch (err) {
 			console.warn('TicketDetailApp: save failed', err);
 			if (err instanceof TicketApiError) {
@@ -962,8 +1039,7 @@
 				errorMessage = `Save failed: ${err instanceof Error ? err.message : 'unknown error'}`;
 			}
 			setSaveOutcome('error', 3000);
-		} finally {
-			savingChanges = false;
+			return false;
 		}
 	}
 
@@ -974,6 +1050,11 @@
 	 * elaborate "you have unsaved changes, are you sure?" guard:
 	 * the screen is for quick edits, and the Save button is the
 	 * only way to persist. No shadow buffer.
+	 *
+	 * <p>Marking the ticket DONE or CANCELLED is the one exception —
+	 * it flushes first (see {@link setStatus}), because that action
+	 * closes the view, so unsaved edits there would be unreachable
+	 * rather than merely pending.
 	 */
 
 	function addProductRow(): void {
