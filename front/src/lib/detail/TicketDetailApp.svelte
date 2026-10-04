@@ -58,8 +58,7 @@
 		getTicketExtraction,
 		getTicketFile,
 		updateTicketStatus,
-		updateTicketMetadata,
-		replaceTicketExtraction,
+			applyTicketEdit,
 		getTicketCatalogue,
 		retryTicket,
 		deleteTicket,
@@ -998,33 +997,40 @@
 	 */
 	async function persistEdits(token: string, current: CreatedTicket): Promise<boolean> {
 		try {
-			// 1) metadata first — `await` so a failure here stops
-			// the extraction PUT (no half-saves).
-			const updatedTicket = await updateTicketMetadata(token, current.id, {
+			// One request, one transaction. The previous pair (metadata
+			// PATCH then extraction PUT) was not atomic: the metadata
+			// committed and the extraction could then fail, so the server
+			// kept half of an edit the UI had reported as failed — and the
+			// status actions flush this automatically, which made it
+			// reachable without doing anything unusual.
+			const updatedTicket = await applyTicketEdit(token, current.id, {
 				title: current.title,
-				description: current.description
+				description: current.description,
+				// Products map here so lineTotal is always qty × €/unit
+				// regardless of stale state. Null when the AI has not read
+				// this ticket yet: "nothing to write", not "clear it".
+				extraction: extraction
+					? {
+							merchant: extraction.merchant,
+							purchaseDate: extraction.purchaseDate,
+							category: extraction.category,
+							products: extraction.products.map((p) => ({
+								name: p.name,
+								quantity: p.quantity ?? 1,
+								unit: p.unit,
+								pricePerUnit: p.pricePerUnit ?? 0,
+								lineTotal: computedLineTotal(p)
+							})),
+							totalAmount: extraction.totalAmount,
+							currency: extraction.currency
+						}
+					: null
 			});
 			ticket = updatedTicket;
 
-			// 2) extraction only if the AI has produced a row to
-			// update. Same PUT maps products so lineTotal is always
-			// the product of qty × €/unit regardless of stale state.
+			// Re-read so the audit fields the server preserved come back.
 			if (extraction) {
-				const updatedEx = await replaceTicketExtraction(token, ticket.id, {
-					merchant: extraction.merchant,
-					purchaseDate: extraction.purchaseDate,
-					category: extraction.category,
-					products: extraction.products.map((p) => ({
-						name: p.name,
-						quantity: p.quantity ?? 1,
-						unit: p.unit,
-						pricePerUnit: p.pricePerUnit ?? 0,
-						lineTotal: computedLineTotal(p)
-					})),
-					totalAmount: extraction.totalAmount,
-					currency: extraction.currency
-				});
-				extraction = updatedEx;
+				extraction = await getTicketExtraction(token, updatedTicket.id);
 			}
 
 			dirty = false;
