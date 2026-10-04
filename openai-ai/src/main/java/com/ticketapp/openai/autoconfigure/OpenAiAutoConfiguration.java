@@ -56,13 +56,30 @@ public class OpenAiAutoConfiguration {
     @Bean
     public OpenAIClient openAIClient(OpenAiProperties properties) {
         requireKey(properties.apiKey());
-        log.info("the provider OpenAI client configured: baseUrl={} model={} timeoutMs={}",
-                properties.baseUrl(), properties.model(), properties.timeoutMs());
-        return OpenAIOkHttpClient.builder()
+        java.util.Map<String, String> headers = OpenAiHeaders.parse(properties.customHeaders());
+        // Log only the keys, never the values — a header can carry a
+        // session id, a tenant token, or a vendor routing key.
+        log.info("the provider OpenAI client configured: baseUrl={} model={} timeoutMs={} customHeaderNames={} debugHttp={}",
+                properties.baseUrl(), properties.model(), properties.timeoutMs(),
+                headers.keySet(), properties.debugHttp());
+        // putHeader() runs for each entry: the SDK applies them as
+        // default headers on every request. putHeader — not headers()
+        // — because the SDK's bulk .headers(Map) takes Iterable<String>
+        // values, which is a worse fit for the single-value operator
+        // contract.
+        OpenAIOkHttpClient.Builder builder = OpenAIOkHttpClient.builder()
                 .baseUrl(properties.baseUrl())
                 .apiKey(properties.apiKey())
-                .timeout(Duration.ofMillis(properties.timeoutMs()))
-                .build();
+                .timeout(Duration.ofMillis(properties.timeoutMs()));
+        headers.forEach(builder::putHeader);
+        if (properties.debugHttp()) {
+            // The SDK gates its request/response logging behind this
+            // setting, not behind SLF4J level — see the javadoc on
+            // {@link OpenAiProperties#debugHttp}. Off by default;
+            // turn on with OPENAI_DEBUG_HTTP=true.
+            builder.logLevel(com.openai.core.LogLevel.DEBUG);
+        }
+        return builder.build();
     }
 
     @Bean

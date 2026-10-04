@@ -56,7 +56,7 @@ class OpenAiApiClientTest {
         // The autoconfig injects OpenAIClient + properties via Spring DI;
         // tests instantiate the wrapper directly with a Mockito stub.
         api = new OpenAiApiClient(client, new com.ticketapp.openai.autoconfigure.OpenAiProperties(
-                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384));
+                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384, "", false));
     }
 
     @Test
