@@ -32,6 +32,16 @@ public record CategorySpend(SpendCategory category, BigDecimal amount) {
         if (amount == null) {
             throw new IllegalArgumentException("amount must not be null");
         }
+        if (amount.signum() < 0) {
+            // Enforced here rather than trusted to the schema, because
+            // this is the type that feeds the donut and pie/doughnut
+            // renderers cannot represent a negative slice. The
+            // `ck_ticket_extractions_total_nonneg` constraint makes it
+            // unreachable today; refusing here means a future source of
+            // signed amounts fails at the boundary instead of rendering
+            // as a broken chart.
+            throw new IllegalArgumentException("amount must not be negative: " + amount);
+        }
     }
 
     /**

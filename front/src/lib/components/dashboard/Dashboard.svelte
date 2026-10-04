@@ -36,11 +36,14 @@
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
 	function readSessionToken(): string | null {
-		const g = globalThis as { window?: { sessionStorage?: Storage } };
-		const s = g.window?.sessionStorage;
-		if (!s) return null;
+		// Both the `sessionStorage` property access and `getItem` live
+		// inside the guard: a browser with storage blocked throws
+		// SecurityError from the *getter*, and an exception here would
+		// escape `load()`'s own try/catch and leave the page stuck on
+		// its loading skeleton forever.
 		try {
-			return s.getItem(SESSION_STORAGE_KEY);
+			const g = globalThis as { window?: { sessionStorage?: Storage } };
+			return g.window?.sessionStorage?.getItem(SESSION_STORAGE_KEY) ?? null;
 		} catch {
 			return null;
 		}
@@ -54,6 +57,9 @@
 	let data = $state<Dashboard | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+
+	/** Bumped per request; stale responses are discarded. */
+	let loadGeneration = 0;
 
 	// Icon-name → KpiIconName mapping. Static literals, so plain const — no
 	// need to wrap in $derived.
@@ -87,13 +93,21 @@
 			loading = false;
 			return;
 		}
+		// Monotonic request generation. A response is only committed if
+		// it still belongs to the newest request: without this, a slow
+		// fetch for user A could resolve after a logout and login as
+		// user B and paint A's dashboard into B's screen.
+		const generation = ++loadGeneration;
 		try {
-			data = await fetchDashboard(token);
+			const payload = await fetchDashboard(token);
+			if (generation !== loadGeneration) return;
+			data = payload;
 		} catch (err) {
+			if (generation !== loadGeneration) return;
 			error = err instanceof Error ? err.message : 'Failed to load dashboard';
 			data = null;
 		} finally {
-			loading = false;
+			if (generation === loadGeneration) loading = false;
 		}
 	}
 

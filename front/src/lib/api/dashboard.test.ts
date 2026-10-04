@@ -76,7 +76,12 @@ describe('fetchDashboard', () => {
 			text: async () => 'boom'
 		} as Response);
 
-		await expect(fetchDashboard('jwt-123')).rejects.toThrow(DashboardApiError);
+		// Both the type and the status: asserting only the type would
+		// pass with an omitted or wrong status.
+		const error = await fetchDashboard('jwt-123').catch((e: unknown) => e);
+
+		expect(error).toBeInstanceOf(DashboardApiError);
+		expect((error as DashboardApiError).status).toBe(500);
 	});
 
 	it('bubbles auth:expired on 401 so the session host clears the token', async () => {
@@ -94,22 +99,57 @@ describe('fetchDashboard', () => {
 		globalThis.removeEventListener('auth:expired', listener);
 	});
 
-	it('does not bubble auth:expired on a non-auth failure', async () => {
-		const listener = vi.fn();
-		globalThis.addEventListener('auth:expired', listener);
+	// A 403 means "authenticated but not allowed". Treating it as an
+	// expired session clears a valid token, which is how a permission
+	// edge turns into a logout loop. Only 401 expires the session.
+	it.each([400, 403, 404, 429, 503])(
+		'does not bubble auth:expired on %i',
+		async (status) => {
+			const listener = vi.fn();
+			globalThis.addEventListener('auth:expired', listener);
+			fetchSpy.mockResolvedValue({
+				ok: false,
+				status,
+				text: async () => 'nope'
+			} as Response);
+
+			await expect(fetchDashboard('jwt-123')).rejects.toThrow(DashboardApiError);
+
+			expect(listener).not.toHaveBeenCalled();
+			globalThis.removeEventListener('auth:expired', listener);
+		}
+	);
+
+	// The BFF answers RFC 7807 ProblemDetail, whose user-facing field is
+	// `detail`. Reading only the legacy `message` meant every real API
+	// failure fell through to the raw body.
+	it('reads the user-facing detail out of an RFC 7807 ProblemDetail', async () => {
 		fetchSpy.mockResolvedValue({
 			ok: false,
-			status: 503,
-			text: async () => 'unavailable'
+			status: 400,
+			text: async () =>
+				JSON.stringify({
+					type: 'about:blank',
+					title: 'Bad Request',
+					status: 400,
+					detail: 'merchant must not be blank'
+				})
 		} as Response);
 
-		await expect(fetchDashboard('jwt-123')).rejects.toThrow(DashboardApiError);
-
-		expect(listener).not.toHaveBeenCalled();
-		globalThis.removeEventListener('auth:expired', listener);
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow('merchant must not be blank');
 	});
 
-	it('surfaces the server message when the error body is JSON', async () => {
+	it('falls back to the ProblemDetail title when detail is absent', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 409,
+			text: async () => JSON.stringify({ title: 'Conflict', status: 409 })
+		} as Response);
+
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow('Conflict');
+	});
+
+	it('still reads a legacy message field', async () => {
 		fetchSpy.mockResolvedValue({
 			ok: false,
 			status: 400,
@@ -119,13 +159,18 @@ describe('fetchDashboard', () => {
 		await expect(fetchDashboard('jwt-123')).rejects.toThrow('nope');
 	});
 
-	it('falls back to the raw body when the error is not JSON', async () => {
+	// An intermediary's HTML error page must not become the message a
+	// user reads, nor leak internal text if backend sanitisation slips.
+	it('never surfaces a non-JSON body verbatim', async () => {
 		fetchSpy.mockResolvedValue({
 			ok: false,
 			status: 502,
 			text: async () => '<html>bad gateway</html>'
 		} as Response);
 
-		await expect(fetchDashboard('jwt-123')).rejects.toThrow('<html>bad gateway</html>');
+		const error = await fetchDashboard('jwt-123').catch((e: unknown) => e);
+
+		expect((error as Error).message).toBe('Request failed with 502');
+		expect((error as Error).message).not.toContain('html');
 	});
 });

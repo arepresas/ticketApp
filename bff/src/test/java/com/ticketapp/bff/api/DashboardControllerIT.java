@@ -131,8 +131,20 @@ class DashboardControllerIT {
 
         assertThat(body).isNotNull();
         assertThat(body.kpis().totalTickets()).isZero();
+        assertThat(body.kpis().openTickets()).isZero();
+        assertThat(body.kpis().extractedTicketsInCurrency()).isZero();
         assertThat(body.kpis().totalSpent()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(body.spendByCategory()).hasSize(4);
+        assertThat(body.kpis().avgTicketValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(body.kpis().currency()).isEqualTo("EUR");
+        assertThat(body.spendByCategory())
+                .hasSize(4)
+                .extracting(DashboardResponse.CategoryAmount::category)
+                .containsExactly("transport", "food", "lodging", "other");
+        assertThat(body.spendByCategory())
+                .allSatisfy(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
+        assertThat(body.ticketsPerMonth())
+                .isNotEmpty()
+                .allSatisfy(row -> assertThat(row.count()).isZero());
     }
 
     @Test
@@ -164,6 +176,11 @@ class DashboardControllerIT {
         assertThat(body.kpis().totalSpent()).isEqualByComparingTo("25.00");
         assertThat(body.kpis().avgTicketValue()).isEqualByComparingTo("25.00");
         assertThat(body.kpis().currency()).isEqualTo("EUR");
+        // The GBP row must not appear in the donut either.
+        assertThat(body.spendByCategory())
+                .filteredOn(row -> row.category().equals("food"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("25.00"));
     }
 
     @Test
@@ -185,7 +202,18 @@ class DashboardControllerIT {
 
         assertThat(body).isNotNull();
         assertThat(body.kpis().totalTickets()).isZero();
+        assertThat(body.kpis().openTickets()).isZero();
+        assertThat(body.kpis().extractedTicketsInCurrency()).isZero();
         assertThat(body.kpis().totalSpent()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(body.kpis().avgTicketValue()).isEqualByComparingTo(BigDecimal.ZERO);
+        // Both series too: an unscoped aggregate would leak another
+        // owner's activity even with the KPIs correct.
+        assertThat(body.spendByCategory())
+                .hasSize(4)
+                .allSatisfy(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
+        assertThat(body.ticketsPerMonth())
+                .isNotEmpty()
+                .allSatisfy(row -> assertThat(row.count()).isZero());
     }
 
     private WebTestClient web() {

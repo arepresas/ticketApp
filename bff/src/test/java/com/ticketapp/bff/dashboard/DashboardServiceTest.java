@@ -132,18 +132,64 @@ class DashboardServiceTest {
                 YearMonth.of(2025, Month.OCTOBER), YearMonth.of(2026, Month.MARCH));
     }
 
+    /**
+     * A clock that advances by a month on every read.
+     *
+     * <p>A {@code Clock.fixed} cannot detect a double read: it returns
+     * the same instant forever, so an implementation calling
+     * {@code YearMonth.now(clock)} once per bound would pass every
+     * boundary test while still producing a five- or seven-month window
+     * at a real rollover. This one makes the second read disagree.
+     */
+    private static final class AdvancingClock extends Clock {
+        private final ZoneId zone;
+        /** Shared with every {@link #withZone} view, so the caller's
+         *  counter reflects reads made through the derived clock. */
+        private final java.util.concurrent.atomic.AtomicInteger reads;
+
+        AdvancingClock(ZoneId zone) {
+            this(zone, new java.util.concurrent.atomic.AtomicInteger());
+        }
+
+        private AdvancingClock(ZoneId zone, java.util.concurrent.atomic.AtomicInteger reads) {
+            this.zone = zone;
+            this.reads = reads;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(ZoneId targetZone) {
+            return new AdvancingClock(targetZone, reads);
+        }
+
+        @Override
+        public Instant instant() {
+            // March on the first read, April on every later one.
+            return reads.incrementAndGet() == 1
+                    ? Instant.parse("2026-03-31T23:59:59Z")
+                    : Instant.parse("2026-04-01T00:00:00Z");
+        }
+    }
+
     @Test
     @DisplayName("resolves the current month once per request")
     void resolvesMonthOnce() {
         stubStats(List.of());
-        service = serviceAt("2026-03-31T23:59:59.999Z");
+        AdvancingClock clock = new AdvancingClock(UTC);
+        service = new DashboardService(stats, clock);
 
-        // Both bounds must come from the same read. Asking twice could
-        // straddle a boundary and yield a five- or seven-month window.
         service.load(OWNER);
 
+        // Both bounds must come from a single read. With a clock that
+        // rolls over on the second call, a second read would produce
+        // April here and a seven-month window.
         verify(stats).countByMonth(eq(OWNER),
                 eq(YearMonth.of(2025, Month.OCTOBER)), eq(YearMonth.of(2026, Month.MARCH)));
+        assertThat(clock.reads.get()).isEqualTo(1);
     }
 
     @Test
@@ -162,6 +208,15 @@ class DashboardServiceTest {
         assertThat(series).filteredOn(r -> r.category() == SpendCategory.FOOD)
                 .singleElement()
                 .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("12.00"));
+        // Absent categories must be zero, not merely present — a
+        // regression inventing non-zero defaults would pass a
+        // presence-only check.
+        for (SpendCategory absent : List.of(SpendCategory.TRANSPORT,
+                SpendCategory.LODGING, SpendCategory.OTHER)) {
+            assertThat(series).filteredOn(r -> r.category() == absent)
+                    .singleElement()
+                    .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
+        }
     }
 
     @Test
@@ -175,8 +230,13 @@ class DashboardServiceTest {
         DashboardService.DashboardView view = service.load(OWNER);
 
         assertThat(view.kpis().totalTickets()).isZero();
-        assertThat(view.ticketsPerMonth()).hasSize(DashboardService.MONTHS_OF_HISTORY);
-        assertThat(view.spendByCategory()).hasSize(SpendCategory.values().length);
+        assertThat(view.ticketsPerMonth())
+                .hasSize(DashboardService.MONTHS_OF_HISTORY)
+                .allSatisfy(row -> assertThat(row.count()).isZero());
+        // Every category present *and* zero, not just the right count.
+        assertThat(view.spendByCategory())
+                .hasSize(SpendCategory.values().length)
+                .allSatisfy(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
     }
 
     @Test

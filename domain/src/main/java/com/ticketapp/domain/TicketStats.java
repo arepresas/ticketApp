@@ -57,6 +57,24 @@ public record TicketStats(
             throw new IllegalArgumentException(
                     "openTickets (" + openTickets + ") cannot exceed totalTickets (" + totalTickets + ")");
         }
+        if (extractedTicketsInCurrency > totalTickets) {
+            // The two counters count the same population with
+            // different filters, so the narrower one can only ever be
+            // smaller. A larger value means the projection disagreed
+            // with itself and every figure it produced is suspect.
+            throw new IllegalArgumentException(
+                    "extractedTicketsInCurrency (" + extractedTicketsInCurrency
+                            + ") cannot exceed totalTickets (" + totalTickets + ")");
+        }
+        if (extractedTicketsInCurrency == 0
+                && (totalSpent.signum() != 0 || averageTicketValue.signum() != 0)) {
+            // Money summed over nothing has to be zero, and the average
+            // of no samples has no value to report. Allowing a
+            // non-zero pair here would publish a KPI the database
+            // cannot support.
+            throw new IllegalArgumentException(
+                    "totalSpent and averageTicketValue must be zero when no tickets were extracted");
+        }
         currency = Objects.requireNonNull(currency, "currency must not be null").trim();
         if (currency.isEmpty()) {
             throw new IllegalArgumentException("currency must not be blank");

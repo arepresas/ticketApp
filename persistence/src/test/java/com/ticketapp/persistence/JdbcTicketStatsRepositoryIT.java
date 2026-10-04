@@ -67,9 +67,13 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
      * assertions — never before.
      */
     @AfterEach
-    void dropOwnedTickets() {
-        // ticket_extractions goes with it via ON DELETE CASCADE.
+    void dropFixtures() {
+        // Children first: ticket_extractions goes with the tickets via
+        // ON DELETE CASCADE. The app_users rows are deleted too —
+        // leaving them behind is how a "per test unique owner" fixture
+        // quietly fills the shared container with orphans.
         jdbc.update("DELETE FROM tickets WHERE owner_id IN (?, ?)", owner, otherOwner);
+        jdbc.update("DELETE FROM app_users WHERE id IN (?, ?)", owner, otherOwner);
     }
 
     @Nested
@@ -83,16 +87,24 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("b", Ticket.Status.OPEN);
             seedTicket("c", Ticket.Status.ON_ERROR);
             seedTicket("d", Ticket.Status.IN_PROGRESS);
-            seedTicket("e", Ticket.Status.CANCELLED, withExtraction("99.00", "EUR", "food", date(2026, 1, 6)));
-            seedTicket("f", Ticket.Status.DELETED, withExtraction("77.00", "EUR", "food", date(2026, 1, 7)));
+            seedTicket("e", Ticket.Status.IN_ANALYSIS);
+            seedTicket("f", Ticket.Status.CANCELLED, withExtraction("99.00", "EUR", "food", date(2026, 1, 6)));
+            seedTicket("g", Ticket.Status.DELETED, withExtraction("77.00", "EUR", "food", date(2026, 1, 7)));
 
             TicketStats stats = repository.loadStats(owner, "EUR");
 
-            // DONE, OPEN, ON_ERROR, IN_PROGRESS — the two terminal
-            // ones are excluded so the KPI matches the tickets table.
-            assertThat(stats.totalTickets()).isEqualTo(4);
-            // Everything not terminal, matching GET /api/tickets/pending.
-            assertThat(stats.openTickets()).isEqualTo(3);
+            // DONE, OPEN, ON_ERROR, IN_PROGRESS, IN_ANALYSIS — the two
+            // terminal ones are excluded so the KPI matches the
+            // tickets table. IN_ANALYSIS matters: countByMonth treats
+            // it as non-terminal, so the KPI must agree.
+            assertThat(stats.totalTickets()).isEqualTo(5);
+            assertThat(stats.openTickets()).isEqualTo(4);
+            // Money too: a query that filters the terminal statuses out
+            // of the counts but not out of SUM/AVG would pass a
+            // count-only assertion while reporting 186.00.
+            assertThat(stats.extractedTicketsInCurrency()).isEqualTo(1);
+            assertThat(stats.totalSpent()).isEqualByComparingTo("10.00");
+            assertThat(stats.averageTicketValue()).isEqualByComparingTo("10.00");
         }
 
         @Test
@@ -108,6 +120,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             assertThat(eur.totalSpent()).isEqualByComparingTo("10.00");
             assertThat(eur.extractedTicketsInCurrency()).isEqualTo(1);
             assertThat(eur.currency()).isEqualTo("EUR");
+            // The average must respect the same filter. An AVG that
+            // included the GBP row would read 15.00 while the sum still
+            // correctly read 10.00.
+            assertThat(eur.averageTicketValue()).isEqualByComparingTo("10.00");
         }
 
         @Test
@@ -291,6 +307,35 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
                     .singleElement()
                     .extracting(CategorySpend::amount)
                     .isEqualTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("isolates the requested currency in category totals")
+        void isolatesCurrency() {
+            // Every other sumByCategory fixture is EUR-only, so
+            // dropping the currency predicate entirely would pass them.
+            seedTicket("eur", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
+            seedTicket("gbp", Ticket.Status.DONE, withExtraction("999.00", "GBP", "food", date(2026, 1, 6)));
+
+            assertThat(amountFor(repository.sumByCategory(owner, "EUR"), SpendCategory.FOOD))
+                    .isEqualByComparingTo("10.00");
+        }
+
+        @Test
+        @DisplayName("aggregates every non-terminal status, not just DONE")
+        void aggregatesAllNonTerminalStatuses() {
+            // A query hard-coded to `status = 'DONE'` would pass every
+            // other category fixture here.
+            seedTicket("done", Ticket.Status.DONE, withExtraction("1.00", "EUR", "food", date(2026, 1, 1)));
+            seedTicket("open", Ticket.Status.OPEN, withExtraction("2.00", "EUR", "food", date(2026, 1, 2)));
+            seedTicket("in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("4.00", "EUR", "food", date(2026, 1, 3)));
+            seedTicket("in-progress", Ticket.Status.IN_PROGRESS, withExtraction("8.00", "EUR", "food", date(2026, 1, 4)));
+            seedTicket("on-error", Ticket.Status.ON_ERROR, withExtraction("16.00", "EUR", "food", date(2026, 1, 5)));
+            seedTicket("cancelled", Ticket.Status.CANCELLED, withExtraction("32.00", "EUR", "food", date(2026, 1, 6)));
+            seedTicket("deleted", Ticket.Status.DELETED, withExtraction("64.00", "EUR", "food", date(2026, 1, 7)));
+
+            assertThat(amountFor(repository.sumByCategory(owner, "EUR"), SpendCategory.FOOD))
+                    .isEqualByComparingTo("31.00");
         }
 
         @Test

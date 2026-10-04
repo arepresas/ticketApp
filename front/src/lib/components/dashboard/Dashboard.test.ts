@@ -13,13 +13,18 @@ import type { AuthUser } from '../../auth/types';
 
 // `vi.hoisted` runs before `vi.mock` factories — needed because the mock
 // factory below closes over `fetchSpy` but the spy itself is declared later.
+// Typed as the real client type on purpose: a bare `as const` object
+// has no compile-time relationship to the wire contract, so a renamed or
+// retyped field would pass here and only fail in the browser.
+type DashboardResponse = Awaited<ReturnType<typeof fetchDashboard>>;
+
 const { fetchSpy } = vi.hoisted(() => ({
 	fetchSpy: vi.fn(async (_token: string): Promise<unknown> => DASHBOARD_PAYLOAD)
 }));
 
-// Shape mirrors the BFF's DashboardResponse. Kept inline (rather than
-// importing the deleted mock JSON) so the test fails loudly if the wire
-// contract drifts.
+// Kept inline (rather than importing the deleted mock JSON) and typed
+// against the client, so removing or retyping a response field breaks
+// this file at compile time.
 const DASHBOARD_PAYLOAD = {
 	kpis: {
 		totalTickets: 42,
@@ -40,7 +45,7 @@ const DASHBOARD_PAYLOAD = {
 		{ category: 'lodging', amount: 920 },
 		{ category: 'other', amount: 302 }
 	]
-} as const;
+} satisfies DashboardResponse;
 
 // Chart components: stub them so jsdom doesn't need a real canvas. Each stub
 // exposes a data-testid so tests can assert presence without coupling to the
@@ -100,6 +105,7 @@ vi.mock('../../api/tickets', async () => {
 
 // Now safe to import — the spy wrapper is already in the mocked module.
 import Dashboard from './Dashboard.svelte';
+import { fetchDashboard } from '../../api/dashboard';
 
 const user: AuthUser = {
 	id: 'sub-1',
@@ -167,8 +173,10 @@ describe('Dashboard', () => {
 	it('renders count cards without a currency symbol and money cards with one', async () => {
 		const { container } = render(Dashboard, { user });
 
+		// Wait for a value that only exists once loaded — "Total spent"
+		// is also in the loading skeleton, so it proves nothing.
 		await waitFor(() => {
-			expect(container.textContent).toContain('Total spent');
+			expect(container.textContent).toContain('€3,187.50');
 		});
 
 		const text = container.textContent ?? '';
@@ -193,9 +201,12 @@ describe('Dashboard', () => {
 		await waitFor(() => {
 			expect(getByText('Not signed in.')).toBeTruthy();
 		});
-		// No token means no request: the endpoint would answer 401 and
-		// trip the auth:expired handler for a user never logged in.
+		// No token means no request anywhere: the dashboard endpoint
+		// would answer 401 and trip auth:expired for a user who was
+		// never logged in, and the self-fetching table would do the
+		// same on its own account.
 		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(listAllTicketsStub).not.toHaveBeenCalled();
 	});
 
 	it('renders the all-tickets table headers and a row from the mocked fetch', async () => {

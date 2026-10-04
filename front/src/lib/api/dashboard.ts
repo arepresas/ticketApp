@@ -88,28 +88,51 @@ export const fetchDashboard = async (token: string): Promise<Dashboard> => {
 };
 
 /**
- * Fire `auth:expired` on 401/403 so the session host clears the stale
- * token. Identical to the helper in `api/tickets.ts`; duplicated rather
- * than exported from there because each API module is meant to stay
- * independently importable.
+ * Fire `auth:expired` on 401 only.
+ *
+ * A 403 means "authenticated but not allowed", which is a permission
+ * answer, not an expired session. Dispatching on it would clear a valid
+ * token and bounce the user to the login screen on any authorisation
+ * edge — a logout loop with no way back in. Only the BFF's 401 means the
+ * session is gone.
+ *
+ * Note this deliberately differs from `api/tickets.ts`, which still
+ * treats 403 as expiry; that is a bug there, not a convention to copy.
  */
 function bubbleAuthExpired(res: Response): void {
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     globalThis.dispatchEvent(new CustomEvent('auth:expired'));
   }
 }
 
+/**
+ * Extract a human-readable message from an error body.
+ *
+ * <p>The BFF answers errors as RFC 7807 `ProblemDetail`, whose
+ * user-facing field is {@code detail} — {@code message} is a legacy
+ * Spring shape and is usually absent. Reading only {@code message} meant
+ * every real API failure fell through to the raw body, dumping the whole
+ * JSON (and whatever internal text it carried) into the UI.
+ *
+ * <p>Falls back to a status-based message rather than echoing the raw
+ * body: an HTML error page from an intermediary is not a message worth
+ * showing, and a regression in backend sanitisation should not turn into
+ * a UI that renders internal error text.
+ */
 async function parseError(res: Response): Promise<string> {
-  const text = await res.text().catch(() => '');
-  if (!text) return `Request failed with ${res.status}`;
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === 'object' && 'message' in parsed) {
-      const message = (parsed as { message?: unknown }).message;
-      if (typeof message === 'string' && message) return message;
+  const body = await res.text().catch(() => '');
+  if (body) {
+    try {
+      const parsed: unknown = JSON.parse(body);
+      if (parsed && typeof parsed === 'object') {
+        const problem = parsed as { detail?: unknown; title?: unknown; message?: unknown };
+        for (const field of [problem.detail, problem.title, problem.message]) {
+          if (typeof field === 'string' && field) return field;
+        }
+      }
+    } catch {
+      /* not JSON — fall through to the generic message */
     }
-  } catch {
-    /* not JSON — fall through to the raw text */
   }
-  return text;
+  return `Request failed with ${res.status}`;
 }
