@@ -1,102 +1,110 @@
 /**
- * Dashboard data service.
+ * HTTP client for the BFF dashboard aggregate — the four KPI cards and
+ * both charts.
  *
- * Pure module — no shared state, no DOM access, no console.
- * Currently returns imported mock JSON; swap `USE_MOCK` to `false` and
- * replace the body of `fetchDashboard()` with a `fetch('/api/dashboard')`
- * call once the BFF endpoint lands. Types stay identical either way.
- */
-import mockData from '../mocks/dashboard.json';
-
-/**
- * Toggle to switch the service from local mock JSON to the real BFF.
+ * Replaces the mock JSON this module used to ship. The wire contract
+ * mirrors `DashboardController.DashboardResponse`; see
+ * `bff/.../api/dto/DashboardResponse.java`.
  *
- * To wire the live endpoint:
- *   1. Flip `USE_MOCK` to `false`.
- *   2. Replace the body of `fetchDashboard()` with a `fetch('/api/dashboard')`
- *      call (mirror the `AuthApiError` pattern from `auth/api.ts`).
- *   3. Keep the exported types unchanged — consumers are insulated.
+ * 401 handling: every protected call funnels through
+ * {@link bubbleAuthExpired} before throwing, matching
+ * `api/tickets.ts`, so an expired session fires the `auth:expired` DOM
+ * event that `auth/host.ts` listens for.
  */
-export const USE_MOCK = true;
+const API_BASE = '/api/dashboard';
 
-// ---------------------------------------------------------------------------
-// Domain types — keep dependency-free so they can be imported by components,
-// tests, and any future real client without dragging runtime code in.
-// ---------------------------------------------------------------------------
+export class DashboardApiError extends Error {
+	constructor(
+		message: string,
+		readonly status: number
+	) {
+		super(message);
+		this.name = 'DashboardApiError';
+	}
+}
 
-export type TicketStatus = 'open' | 'closed';
-
-export type TicketCategory = 'transport' | 'food' | 'lodging' | 'other';
+/** The four categories the donut knows about, in wire (lowercase) form. */
+export type SpendCategory = 'transport' | 'food' | 'lodging' | 'other';
 
 export type Kpi = {
+  /** Tickets the user can still see a record of (excludes deleted/cancelled). */
   totalTickets: number;
+  /** Tickets not yet in a terminal state. */
   openTickets: number;
-  totalSpentEur: number;
-  avgTicketEur: number;
+  /** Tickets the AI actually read — the average is taken over these. */
+  extractedTickets: number;
+  /**
+   * Sum over {@link extractedTickets}, expressed in {@link currency}.
+   * Not suffixed `Eur` on purpose: the BFF reports one currency and
+   * names it, so the UI must not assume euros.
+   */
+  totalSpent: number;
+  avgTicketValue: number;
+  /** ISO 4217 code the money figures above are denominated in. */
+  currency: string;
 };
 
 export type TicketsPerMonth = {
-  /** ISO year-month, e.g. "2026-05". */
+  /**
+   * ISO year-month, e.g. "2026-05". This is the receipt's purchase
+   * month, not its upload date, and the series is always gap-free.
+   */
   month: string;
   count: number;
 };
 
 export type SpendByCategory = {
-  category: TicketCategory;
-  amountEur: number;
-};
-
-export type RecentTicket = {
-  id: number;
-  title: string;
-  category: TicketCategory;
-  /** ISO date, YYYY-MM-DD. */
-  date: string;
-  amountEur: number;
-  status: TicketStatus;
+  category: SpendCategory;
+  amount: number;
 };
 
 export type Dashboard = {
   kpis: Kpi;
   ticketsPerMonth: TicketsPerMonth[];
   spendByCategory: SpendByCategory[];
-  recentTickets: RecentTicket[];
 };
-
-// ---------------------------------------------------------------------------
-// Module-level delay — exported setter so tests can override it without
-// monkey-patching globals (vitest-friendly). Default 300ms per the bundle.
-// ---------------------------------------------------------------------------
-
-let mockDelayMs = 300;
 
 /**
- * Test hook: override the simulated network delay (ms). Pass `0` to disable.
- * No-op when `USE_MOCK` is false, so production code is unaffected.
+ * Fetch the dashboard payload.
+ *
+ * @param token BFF session JWT. The endpoint returns 401 without one —
+ *              callers must hold a live session before rendering.
  */
-export const __setMockDelay = (ms: number): void => {
-  mockDelayMs = ms;
-};
-
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, ms);
+export const fetchDashboard = async (token: string): Promise<Dashboard> => {
+  const res = await fetch(API_BASE, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
   });
-
-// Narrow the imported JSON to the contract type. Vite ships the JSON as a
-// typed const, but the cast keeps us honest if the file drifts.
-const loadMock = (): Dashboard => mockData as Dashboard;
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new DashboardApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as Dashboard;
+};
 
 /**
- * Fetch the dashboard payload. Currently serves the mock JSON after a
- * short artificial delay so the UI exercises its loading states.
+ * Fire `auth:expired` on 401/403 so the session host clears the stale
+ * token. Identical to the helper in `api/tickets.ts`; duplicated rather
+ * than exported from there because each API module is meant to stay
+ * independently importable.
  */
-export const fetchDashboard = async (): Promise<Dashboard> => {
-  if (USE_MOCK) {
-    await sleep(mockDelayMs);
-    return loadMock();
+function bubbleAuthExpired(res: Response): void {
+  if (res.status === 401 || res.status === 403) {
+    globalThis.dispatchEvent(new CustomEvent('auth:expired'));
   }
-  // Placeholder for the real call — intentionally not implemented so a
-  // stale flip to `false` fails loudly instead of silently returning mock.
-  throw new Error('fetchDashboard: live BFF not yet wired');
-};
+}
+
+async function parseError(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  if (!text) return `Request failed with ${res.status}`;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && 'message' in parsed) {
+      const message = (parsed as { message?: unknown }).message;
+      if (typeof message === 'string' && message) return message;
+    }
+  } catch {
+    /* not JSON — fall through to the raw text */
+  }
+  return text;
+}

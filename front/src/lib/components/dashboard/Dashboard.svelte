@@ -30,6 +30,22 @@
 
 	let { user }: Props = $props();
 
+	// The BFF session JWT. Read from sessionStorage rather than the auth
+	// store because the store deliberately exposes identity, not the
+	// token — same pattern as PendingTicketsApp and TicketDetailApp.
+	const SESSION_STORAGE_KEY = 'ticketapp.session';
+
+	function readSessionToken(): string | null {
+		const g = globalThis as { window?: { sessionStorage?: Storage } };
+		const s = g.window?.sessionStorage;
+		if (!s) return null;
+		try {
+			return s.getItem(SESSION_STORAGE_KEY);
+		} catch {
+			return null;
+		}
+	}
+
 	// Refresh hook for the tickets table. Set by RecentTicketsTable via its
 	// `registerLoad` prop on mount. No-op until then — the table owns the
 	// fetch, we just provide a clickable affordance in the greeting header.
@@ -61,8 +77,18 @@
 	async function load(): Promise<void> {
 		loading = true;
 		error = null;
+		const token = readSessionToken();
+		if (!token) {
+			// No session means no request: the endpoint answers 401, and
+			// firing it anyway would trip the auth:expired handler for a
+			// user who was never logged in.
+			data = null;
+			error = 'Not signed in.';
+			loading = false;
+			return;
+		}
 		try {
-			data = await fetchDashboard();
+			data = await fetchDashboard(token);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load dashboard';
 			data = null;
@@ -170,27 +196,37 @@
 		<div class="h-64 animate-pulse rounded-xl border border-border bg-card" aria-hidden="true"></div>
 		<p class="sr-only">Loading…</p>
 	{:else if data}
-		<!-- 4 KPI cards. Responsive: 1 col mobile, 2 cols tablet, 4 cols desktop. -->
+		<!-- 4 KPI cards. Responsive: 1 col mobile, 2 cols tablet, 4 cols desktop.
+		     The counts are formatted as counts and the money figures as
+		     money — previously both went through a label-sniffing
+		     heuristic, which rendered "Total tickets" as "€42.00". -->
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 			<KpiCard
 				label="Total tickets"
 				value={data.kpis.totalTickets}
+				format="count"
 				icon={KPI_ICONS.totalTickets}
 			/>
 			<KpiCard
 				label="Open tickets"
 				value={data.kpis.openTickets}
+				format="count"
 				icon={KPI_ICONS.openTickets}
 				hint="{data.kpis.openTickets} open"
 			/>
 			<KpiCard
 				label="Total spent"
-				value={data.kpis.totalSpentEur}
+				value={data.kpis.totalSpent}
+				format="money"
+				currency={data.kpis.currency}
 				icon={KPI_ICONS.totalSpent}
+				hint="{data.kpis.extractedTickets} extracted"
 			/>
 			<KpiCard
 				label="Avg ticket value"
-				value={data.kpis.avgTicketEur}
+				value={data.kpis.avgTicketValue}
+				format="money"
+				currency={data.kpis.currency}
 				icon={KPI_ICONS.avgTicket}
 			/>
 		</div>
@@ -206,12 +242,13 @@
 		</div>
 
 		<!--
-			All-tickets table is now self-fetching (talks to the BFF
-			directly via `listAllTickets`). Charts/KPI cards stay on
-			the mocked `fetchDashboard()` until we wire them to a real
-			endpoint — that data path is out of scope here. The parent
-			header above wires into `load()` via `registerLoad` so a
-			click on the greeting header refetches this table.
+			All-tickets table is self-fetching (talks to the BFF
+			directly via `listAllTickets`) — it is an entity list, not an
+			aggregate, so it does not belong in the dashboard payload.
+			Charts and KPI cards come from `fetchDashboard()` against
+			`GET /api/dashboard`. The parent header above wires into
+			`refreshTickets` via `registerLoad` so a click on the
+			greeting header refetches this table.
 		-->
 		<RecentTicketsTable
 			registerLoad={(loadFn) => {
