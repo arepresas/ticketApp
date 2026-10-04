@@ -11,10 +11,17 @@ import java.util.Map;
  * in a single currency.
  *
  * <p>{@code amount} is never {@code null}: an adapter that cannot
- * produce a number is a bug, not a zero. Negative values are possible
- * in principle (a refund modelled as a negative line) and are left for
- * the adapter to defend against, because a refund legitimately reduces
- * the category total.
+ * produce a number is a bug, not a zero.
+ *
+ * <p>{@code amount} is also never negative in practice, because
+ * {@code ticket_extractions} carries
+ * {@code CHECK (total_amount >= 0)} — so a category total is a sum of
+ * non-negative lines. That is why {@link #complete} hands its result
+ * straight to a donut chart: pie and doughnut renderers cannot
+ * represent a negative slice, and there is no reachable input that
+ * would ask them to. A future source of negative amounts (a refund
+ * ledger, say) would have to make that decision here rather than
+ * discover it in the renderer.
  */
 public record CategorySpend(SpendCategory category, BigDecimal amount) {
 

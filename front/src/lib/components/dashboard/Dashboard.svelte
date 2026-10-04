@@ -220,7 +220,7 @@
 				format="money"
 				currency={data.kpis.currency}
 				icon={KPI_ICONS.totalSpent}
-				hint="{data.kpis.extractedTickets} extracted"
+				hint="{data.kpis.extractedTicketsInCurrency} extracted"
 			/>
 			<KpiCard
 				label="Avg ticket value"

@@ -16,7 +16,7 @@ const payload: Dashboard = {
 	kpis: {
 		totalTickets: 42,
 		openTickets: 7,
-		extractedTickets: 30,
+		extractedTicketsInCurrency: 30,
 		totalSpent: 3187.5,
 		avgTicketValue: 75.89,
 		currency: 'EUR'

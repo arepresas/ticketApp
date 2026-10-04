@@ -31,8 +31,13 @@ export type Kpi = {
   totalTickets: number;
   /** Tickets not yet in a terminal state. */
   openTickets: number;
-  /** Tickets the AI actually read — the average is taken over these. */
-  extractedTickets: number;
+  /**
+   * Tickets the AI read *in {@link currency}* — the average is taken
+   * over these, not over `totalTickets`. Deliberately named so the gap
+   * against `totalTickets` (an owner holding receipts in another
+   * currency) reads as intentional rather than as a bug.
+   */
+  extractedTicketsInCurrency: number;
   /**
    * Sum over {@link extractedTickets}, expressed in {@link currency}.
    * Not suffixed `Eur` on purpose: the BFF reports one currency and

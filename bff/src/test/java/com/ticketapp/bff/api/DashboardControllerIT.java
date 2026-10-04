@@ -71,9 +71,10 @@ class DashboardControllerIT {
     @Test
     @DisplayName("returns the KPI payload the SPA charts and cards expect")
     void returnsKpiPayload() {
-        String token = loginAndGetToken();
-        seedTicketForCurrentUser("done", Ticket.Status.DONE, "25.00", "EUR", "food");
-        seedTicketForCurrentUser("open", Ticket.Status.OPEN, null, null, null);
+        Login login = loginAndGetTokenAndUser();
+        String token = login.token();
+        seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food");
+        seedTicketForCurrentUser(login.userId(), "open", Ticket.Status.OPEN, null, null, null);
 
         DashboardResponse body = web().get().uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
@@ -86,7 +87,7 @@ class DashboardControllerIT {
         assertThat(body).isNotNull();
         assertThat(body.kpis().totalTickets()).isEqualTo(2);
         assertThat(body.kpis().openTickets()).isEqualTo(1);
-        assertThat(body.kpis().extractedTickets()).isEqualTo(1);
+        assertThat(body.kpis().extractedTicketsInCurrency()).isEqualTo(1);
         assertThat(body.kpis().totalSpent()).isEqualByComparingTo("25.00");
         assertThat(body.kpis().currency()).isEqualTo("EUR");
     }
@@ -94,8 +95,9 @@ class DashboardControllerIT {
     @Test
     @DisplayName("always returns four category slices and a gap-free monthly series")
     void returnsCompleteSeries() {
-        String token = loginAndGetToken();
-        seedTicketForCurrentUser("done", Ticket.Status.DONE, "25.00", "EUR", "food");
+        Login login = loginAndGetTokenAndUser();
+        String token = login.token();
+        seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food");
 
         DashboardResponse body = web().get().uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
@@ -117,7 +119,7 @@ class DashboardControllerIT {
     @Test
     @DisplayName("returns zeros for a user with no tickets instead of failing")
     void returnsZerosForEmptyAccount() {
-        String token = loginAndGetToken();
+        String token = loginAndGetTokenAndUser().token();
 
         DashboardResponse body = web().get().uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
@@ -131,6 +133,37 @@ class DashboardControllerIT {
         assertThat(body.kpis().totalTickets()).isZero();
         assertThat(body.kpis().totalSpent()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(body.spendByCategory()).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("keeps non-EUR tickets in the counts but out of the EUR spend")
+    void mixedCurrencyKeepsTicketsInCounts() {
+        // The two counters answer different questions on purpose:
+        // totalTickets counts everything the owner has, while
+        // extractedTicketsInCurrency only counts what the average was
+        // taken over. This pins that split against real SQL — a mock
+        // could not catch a currency filter leaking into the counts.
+        Login login = loginAndGetTokenAndUser();
+        String token = login.token();
+        seedTicketForCurrentUser(login.userId(), "eur", Ticket.Status.DONE, "25.00", "EUR", "food");
+        seedTicketForCurrentUser(login.userId(), "gbp", Ticket.Status.DONE, "40.00", "GBP", "food");
+        seedTicketForCurrentUser(login.userId(), "open-gbp", Ticket.Status.OPEN, null, null, null);
+
+        DashboardResponse body = web().get().uri("/api/dashboard")
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(DashboardResponse.class)
+                .returnResult()
+                .getResponseBody();
+
+        assertThat(body).isNotNull();
+        assertThat(body.kpis().totalTickets()).isEqualTo(3);
+        assertThat(body.kpis().openTickets()).isEqualTo(1);
+        assertThat(body.kpis().extractedTicketsInCurrency()).isEqualTo(1);
+        assertThat(body.kpis().totalSpent()).isEqualByComparingTo("25.00");
+        assertThat(body.kpis().avgTicketValue()).isEqualByComparingTo("25.00");
+        assertThat(body.kpis().currency()).isEqualTo("EUR");
     }
 
     @Test
@@ -163,6 +196,22 @@ class DashboardControllerIT {
     }
 
     private String loginAndGetToken() {
+        return loginAndGetTokenAndUser().token();
+    }
+
+    /**
+     * Signs in and returns the session plus the user's database id.
+     *
+     * <p>The id has to come from the login response rather than
+     * {@code SELECT id FROM app_users ORDER BY id DESC}: the fixed test
+     * token reuses one account across every test, so a fixture row
+     * created by an earlier test can carry the highest id and silently
+     * receive the next test's tickets.
+     */
+    private record Login(String token, long userId) {
+    }
+
+    private Login loginAndGetTokenAndUser() {
         var resp = web().post().uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
@@ -171,18 +220,16 @@ class DashboardControllerIT {
                 .returnResult()
                 .getResponseBody();
         assertThat(resp).isNotNull();
-        return resp.token();
+        return new Login(resp.token(), resp.user().id());
     }
 
     /**
-     * Seeds a ticket for the user created by this test's login. Call
-     * {@link #loginAndGetToken()} first — there is no current user to
-     * attach to before that.
+     * Seeds a ticket for the user that just logged in. Takes the owner
+     * id explicitly rather than looking it up, so a fixture row from an
+     * earlier test cannot be mistaken for the current user.
      */
-    private void seedTicketForCurrentUser(String title, Ticket.Status status, String amount,
-                                          String currency, String category) {
-        Long ownerId = jdbc.queryForObject(
-                "SELECT id FROM app_users ORDER BY id DESC LIMIT 1", Long.class);
+    private void seedTicketForCurrentUser(long ownerId, String title, Ticket.Status status,
+                                          String amount, String currency, String category) {
         seedTicketFor(ownerId, title, status, amount, currency, category);
     }
 

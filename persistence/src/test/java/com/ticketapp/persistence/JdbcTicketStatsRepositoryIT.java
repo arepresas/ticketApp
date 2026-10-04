@@ -6,6 +6,7 @@ import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketStats;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.Month;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,12 +45,31 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
     private long owner;
     private long otherOwner;
 
+    /**
+     * Fresh owner per test instead of a global wipe.
+     *
+     * <p>Every repository method is owner-scoped, so a unique owner is
+     * all the isolation this suite needs. Deleting every ticket and
+     * extraction on the way in was neither isolated nor atomic: it
+     * reached into rows another test may have been using, and it fails
+     * outright if any other table still references a ticket.
+     */
     @BeforeEach
-    void cleanSlate() {
-        jdbc.update("DELETE FROM ticket_extractions");
-        jdbc.update("DELETE FROM tickets");
-        owner = seedOwner(jdbc, "stats-owner");
-        otherOwner = seedOwner(jdbc, "stats-other-owner");
+    void freshOwner() {
+        String suffix = UUID.randomUUID().toString();
+        owner = seedOwner(jdbc, "stats-" + suffix);
+        otherOwner = seedOwner(jdbc, "stats-other-" + suffix);
+    }
+
+    /**
+     * Scoped cleanup so the container does not accumulate rows across
+     * the suite. Deletes only this test's owner, and only after the
+     * assertions — never before.
+     */
+    @AfterEach
+    void dropOwnedTickets() {
+        // ticket_extractions goes with it via ON DELETE CASCADE.
+        jdbc.update("DELETE FROM tickets WHERE owner_id IN (?, ?)", owner, otherOwner);
     }
 
     @Nested
@@ -85,7 +106,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // Adding 10.00 EUR to 20.00 GBP would be a meaningless
             // number, so the GBP row is simply not counted.
             assertThat(eur.totalSpent()).isEqualByComparingTo("10.00");
-            assertThat(eur.extractedTickets()).isEqualTo(1);
+            assertThat(eur.extractedTicketsInCurrency()).isEqualTo(1);
             assertThat(eur.currency()).isEqualTo("EUR");
         }
 
@@ -111,7 +132,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // amount to average in.
             assertThat(stats.averageTicketValue()).isEqualByComparingTo("20.00");
             assertThat(stats.totalTickets()).isEqualTo(3);
-            assertThat(stats.extractedTickets()).isEqualTo(2);
+            assertThat(stats.extractedTicketsInCurrency()).isEqualTo(2);
         }
 
         @Test
@@ -206,6 +227,32 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             assertThat(repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JANUARY)))
                     .isEmpty();
         }
+
+        @Test
+        @DisplayName("counts every non-terminal status and excludes both terminal ones")
+        void appliesStatusPolicy() {
+            // One in-window extraction per status. Without this, a query
+            // that quietly dropped OPEN tickets — or let CANCELLED /
+            // DELETED through — would still pass every other test here
+            // and render a wrong chart.
+            seedTicket("done", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 3, 5)));
+            seedTicket("open", Ticket.Status.OPEN, withExtraction("10.00", "EUR", "food", date(2026, 3, 6)));
+            seedTicket("in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("10.00", "EUR", "food", date(2026, 3, 7)));
+            seedTicket("in-progress", Ticket.Status.IN_PROGRESS, withExtraction("10.00", "EUR", "food", date(2026, 3, 8)));
+            seedTicket("on-error", Ticket.Status.ON_ERROR, withExtraction("10.00", "EUR", "food", date(2026, 3, 9)));
+            seedTicket("cancelled", Ticket.Status.CANCELLED, withExtraction("10.00", "EUR", "food", date(2026, 3, 10)));
+            seedTicket("deleted", Ticket.Status.DELETED, withExtraction("10.00", "EUR", "food", date(2026, 3, 11)));
+
+            List<MonthlyTicketCount> rows = repository.countByMonth(
+                    owner, YearMonth.of(2026, Month.MARCH), YearMonth.of(2026, Month.MARCH));
+
+            // Five non-terminal statuses counted; the two terminal ones
+            // excluded, matching the total/open KPI policy.
+            assertThat(rows).singleElement().satisfies(row -> {
+                assertThat(row.month()).isEqualTo(YearMonth.of(2026, Month.MARCH));
+                assertThat(row.count()).isEqualTo(5L);
+            });
+        }
     }
 
     @Nested
@@ -287,6 +334,38 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
                     withExtraction("999.00", "EUR", "food", date(2026, 1, 5)));
 
             assertThat(repository.sumByCategory(owner, "EUR")).isEmpty();
+        }
+
+        @Test
+        @DisplayName("collapses several unknown labels and NULL into one OTHER row")
+        void collapsesUnknownLabelsIntoOneOtherRow() {
+            // The raw column is free text, so grouping by it directly
+            // would emit one OTHER row per distinct label — three
+            // overlapping slices, or two silently overwritten.
+            seedTicket("a", Ticket.Status.DONE, withExtraction("10.00", "EUR", "groceries", date(2026, 1, 5)));
+            seedTicket("b", Ticket.Status.DONE, withExtraction("20.00", "EUR", "supermarket", date(2026, 1, 6)));
+            seedTicket("c", Ticket.Status.DONE, withExtraction("30.00", "EUR", null, date(2026, 1, 7)));
+
+            List<CategorySpend> rows = repository.sumByCategory(owner, "EUR");
+
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).category()).isEqualTo(SpendCategory.OTHER);
+            assertThat(rows.get(0).amount()).isEqualByComparingTo("60.00");
+        }
+
+        @Test
+        @DisplayName("never returns more rows than there are categories")
+        void resultCardinalityIsBoundedByTheWhitelist() {
+            // Six distinct raw labels must collapse to at most four rows.
+            seedTicket("a", Ticket.Status.DONE, withExtraction("1.00", "EUR", "food", date(2026, 1, 1)));
+            seedTicket("b", Ticket.Status.DONE, withExtraction("1.00", "EUR", "transport", date(2026, 1, 2)));
+            seedTicket("c", Ticket.Status.DONE, withExtraction("1.00", "EUR", "lodging", date(2026, 1, 3)));
+            seedTicket("d", Ticket.Status.DONE, withExtraction("1.00", "EUR", "gas station", date(2026, 1, 4)));
+            seedTicket("e", Ticket.Status.DONE, withExtraction("1.00", "EUR", "pharmacy", date(2026, 1, 5)));
+            seedTicket("f", Ticket.Status.DONE, withExtraction("1.00", "EUR", null, date(2026, 1, 6)));
+
+            assertThat(repository.sumByCategory(owner, "EUR"))
+                    .hasSizeLessThanOrEqualTo(SpendCategory.values().length);
         }
     }
 

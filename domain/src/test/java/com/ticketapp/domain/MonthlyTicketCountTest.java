@@ -37,11 +37,19 @@ class MonthlyTicketCountTest {
         List<MonthlyTicketCount> series = MonthlyTicketCount.complete(
                 YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.APRIL), rows);
 
+        // Exact size, exact months, exact order. Asserting only on the
+        // counts would let an implementation emit duplicate or
+        // out-of-order buckets through, which is what produces a chart
+        // with repeated or shuffled x-axis points.
         assertEquals(4, series.size());
-        assertEquals(5, series.get(0).count());
-        assertEquals(0, series.get(1).count());
-        assertEquals(0, series.get(2).count());
-        assertEquals(9, series.get(3).count());
+        assertEquals(List.of(
+                YearMonth.of(2026, Month.JANUARY),
+                YearMonth.of(2026, Month.FEBRUARY),
+                YearMonth.of(2026, Month.MARCH),
+                YearMonth.of(2026, Month.APRIL)),
+                series.stream().map(MonthlyTicketCount::month).toList());
+        assertEquals(List.of(5L, 0L, 0L, 9L),
+                series.stream().map(MonthlyTicketCount::count).toList());
     }
 
     @Test
@@ -56,9 +64,13 @@ class MonthlyTicketCountTest {
                 YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH), rows);
 
         assertEquals(3, series.size());
-        assertEquals(0, series.get(0).count());
-        assertEquals(4, series.get(1).count());
-        assertEquals(0, series.get(2).count());
+        assertEquals(List.of(
+                YearMonth.of(2026, Month.JANUARY),
+                YearMonth.of(2026, Month.FEBRUARY),
+                YearMonth.of(2026, Month.MARCH)),
+                series.stream().map(MonthlyTicketCount::month).toList());
+        assertEquals(List.of(0L, 4L, 0L),
+                series.stream().map(MonthlyTicketCount::count).toList());
     }
 
     @Test
@@ -86,6 +98,11 @@ class MonthlyTicketCountTest {
                 List.of(new MonthlyTicketCount(YearMonth.of(2026, Month.FEBRUARY), 4),
                         new MonthlyTicketCount(YearMonth.of(2026, Month.FEBRUARY), 6)));
 
+        // The defining invariant: two rows in, one month out. An
+        // implementation that echoed both back would still satisfy
+        // "the count is 10" and would draw a duplicated chart point.
+        assertEquals(1, series.size());
+        assertEquals(YearMonth.of(2026, Month.FEBRUARY), series.get(0).month());
         assertEquals(10, series.get(0).count());
     }
 }

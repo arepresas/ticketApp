@@ -107,16 +107,58 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
      * would hide it. A {@code NULL} or unrecognised label lands in
      * {@link SpendCategory#OTHER}.
      */
+    /**
+     * Groups on the <em>canonicalised</em> category, not the raw column.
+     *
+ * <p>{@code e.category} is free text emitted by a model, so grouping by
+ * it directly yields one row per distinct label: "groceries",
+ * "supermarket" and {@code NULL} would each become their own
+ * {@code OTHER} row. A consumer keying a map by category would then
+ * either draw three overlapping slices or overwrite two of them and
+ * understate the spend, and the row count would be bounded by whatever
+ * the model happened to emit rather than by the domain whitelist.
+ *
+ * <p>Mapping the known labels with {@link #CATEGORY_CASE} and everything
+ * else to {@code other} collapses that to at most one row per
+ * {@link SpendCategory} before aggregation. The whitelist is still owned
+ * by the domain — the enum's wire names are read into the CASE at
+ * construction rather than duplicated as string literals, so adding a
+ * category to the enum is enough.
+ */
+    private static final String CATEGORY_CASE = buildCategoryCase();
+
     private static final String SUM_BY_CATEGORY_SQL = """
-            SELECT e.category,
+            SELECT %s AS category,
                    sum(e.total_amount) AS amount
             FROM tickets t
             JOIN ticket_extractions e ON e.ticket_id = t.id
             WHERE t.owner_id = :owner
               AND t.status NOT IN ('DELETED', 'CANCELLED')
               AND e.currency = :currency
-            GROUP BY e.category
-            """;
+            GROUP BY %s
+            """.formatted(CATEGORY_CASE, CATEGORY_CASE);
+
+    /**
+     * Derives the SQL CASE from {@link SpendCategory}'s own wire names,
+     * so the whitelist has exactly one definition. {@code NULL} and
+     * anything unrecognised fall through to {@code other} — an
+     * unclassifiable receipt is still money the user spent, and dropping
+     * it would make this total disagree with the KPI total.
+     */
+    private static String buildCategoryCase() {
+        StringBuilder branches = new StringBuilder("CASE");
+        for (SpendCategory category : SpendCategory.values()) {
+            if (category == SpendCategory.OTHER) {
+                continue;
+            }
+            branches.append(" WHEN lower(btrim(e.category)) = '")
+                    .append(category.wireName())
+                    .append("' THEN '")
+                    .append(category.wireName())
+                    .append('\'');
+        }
+        return branches.append(" ELSE 'other' END").toString();
+    }
 
     /**
      * Named-parameter key for the owner scope. Every aggregate here is

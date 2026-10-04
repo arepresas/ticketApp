@@ -29,16 +29,19 @@ public record DashboardResponse(
      * @param totalTickets      tickets the user can still see a record of
      *                          (excludes deleted and cancelled)
      * @param openTickets       tickets not yet in a terminal state
-     * @param extractedTickets  tickets the AI has actually read; the
-     *                          average is taken over these, not over
-     *                          {@code totalTickets}
-     * @param totalSpent        sum over {@code extractedTickets} in
+     * @param extractedTicketsInCurrency tickets the AI has read
+     *                          <em>in {@link #currency()}</em>; the average
+     *                          is taken over these, not over
+     *                          {@code totalTickets}. Smaller than
+     *                          {@code totalTickets} when the owner
+     *                          holds receipts in another currency.
+     * @param totalSpent        sum over {@code extractedTicketsInCurrency} in
      *                          {@code currency}
      */
     public record Kpi(
             long totalTickets,
             long openTickets,
-            long extractedTickets,
+            long extractedTicketsInCurrency,
             BigDecimal totalSpent,
             BigDecimal avgTicketValue,
             String currency) {
@@ -61,7 +64,7 @@ public record DashboardResponse(
                 new Kpi(
                         view.kpis().totalTickets(),
                         view.kpis().openTickets(),
-                        view.kpis().extractedTickets(),
+                        view.kpis().extractedTicketsInCurrency(),
                         view.kpis().totalSpent(),
                         view.kpis().averageTicketValue(),
                         view.kpis().currency()),

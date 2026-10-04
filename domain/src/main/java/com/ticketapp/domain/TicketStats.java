@@ -38,16 +38,17 @@ import java.util.Objects;
 public record TicketStats(
         long totalTickets,
         long openTickets,
-        long extractedTickets,
+        long extractedTicketsInCurrency,
         BigDecimal totalSpent,
         BigDecimal averageTicketValue,
         String currency) {
 
     public TicketStats {
-        if (totalTickets < 0 || openTickets < 0 || extractedTickets < 0) {
+        if (totalTickets < 0 || openTickets < 0 || extractedTicketsInCurrency < 0) {
             throw new IllegalArgumentException(
                     "ticket counts must not be negative: total=" + totalTickets
-                            + " open=" + openTickets + " extracted=" + extractedTickets);
+                            + " open=" + openTickets
+                            + " extracted=" + extractedTicketsInCurrency);
         }
         if (totalSpent == null || averageTicketValue == null) {
             throw new IllegalArgumentException("amounts must not be null");
