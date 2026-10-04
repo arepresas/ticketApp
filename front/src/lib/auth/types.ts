@@ -6,6 +6,11 @@
  */
 
 export type AuthUser = {
+  /**
+   * Opaque, and deliberately NOT `app_users.id`: on the client this is
+   * Google's `sub` from the decoded id_token. Nothing in the SPA keys
+   * off it — ownership is enforced by the BFF from the session JWT.
+   */
   id: string;
   email: string;
   name: string;

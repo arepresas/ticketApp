@@ -19,10 +19,18 @@ class GlobalExceptionHandlerTest {
     @Test
     void optimisticLockMapsToConflictWithRetryGuidance() {
         var problem = handler.handleOptimisticLock(
-                new OptimisticLockException(UUID.randomUUID(), "boom"));
+                new OptimisticLockException(nextId(), "boom"));
 
         assertThat(problem.getStatus()).isEqualTo(409);
         assertThat(problem.getTitle()).isEqualTo("Concurrent modification");
         assertThat(problem.getDetail()).contains("retry");
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

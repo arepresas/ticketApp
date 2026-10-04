@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * Maps {@code ticket_extractions} rows to {@link TicketExtraction}
@@ -41,7 +41,7 @@ final class ExtractionRowMapper {
     private final ObjectMapper objectMapper;
 
     TicketExtraction mapRow(ResultSet rs) throws SQLException {
-        UUID ticketId = rs.getObject("ticket_id", UUID.class);
+        long ticketId = rs.getLong("ticket_id");
         String merchant = rs.getString("merchant");
         LocalDate purchaseDate = rs.getObject("purchase_date", LocalDate.class);
         String category = rs.getString("category");

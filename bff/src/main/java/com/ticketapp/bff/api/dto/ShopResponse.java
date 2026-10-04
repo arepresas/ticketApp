@@ -3,14 +3,14 @@ package com.ticketapp.bff.api.dto;
 import com.ticketapp.domain.Shop;
 
 import java.time.Instant;
-import java.util.UUID;
+
 
 /**
  * Full read shape for shops — every column from {@link Shop}. The
  * frontend can render {@code null} fields as "—" rather than " ".
  */
 public record ShopResponse(
-        UUID id,
+        long id,
         String name,
         String normalisedName,
         String addressLine,

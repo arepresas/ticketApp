@@ -1,6 +1,6 @@
 package com.ticketapp.domain.exceptions;
 
-import java.util.UUID;
+
 
 /**
  * A row the caller addressed by id (or by owner-scoped lookup) is
@@ -22,14 +22,14 @@ public class ResourceNotFoundException extends TicketAppException {
      *  CODE so it cannot be confused with the inherited {@code code()} accessor. */
     public static final String ERROR_CODE = "RESOURCE_NOT_FOUND";
 
-    private final UUID resourceId;
+    private final long resourceId;
 
-    public ResourceNotFoundException(String resource, UUID resourceId) {
+    public ResourceNotFoundException(String resource, long resourceId) {
         super(ERROR_CODE, resource + " " + resourceId + " does not exist");
         this.resourceId = resourceId;
     }
 
-    public UUID resourceId() {
+    public long resourceId() {
         return resourceId;
     }
 }

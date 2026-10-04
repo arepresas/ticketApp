@@ -2,7 +2,7 @@ package com.ticketapp.domain;
 
 import java.time.Instant;
 import java.util.Locale;
-import java.util.UUID;
+
 
 /**
  * Master catalogue entry. The canonical "thing" a receipt line
@@ -21,14 +21,13 @@ import java.util.UUID;
  * the first time the normaliser sees the line, on ticket DONE.
  */
 public record Product(
-        UUID id,
+        long id,
         String name,
         String normalisedName,
         String unit,
         Instant createdAt
 ) {
     public Product {
-        if (id == null) throw new NullPointerException("id");
         if (name == null) throw new NullPointerException("name");
         if (normalisedName == null) {
             normalisedName = normalisedNameOf(name);
@@ -41,5 +40,14 @@ public record Product(
     public static String normalisedNameOf(String name) {
         if (name == null) throw new NullPointerException("name");
         return name.trim().toLowerCase(Locale.ROOT);
+    }
+    /**
+     * Attach the id assigned by the database on insert. Ids come from
+     * Postgres identity columns, so an entity leaves the domain with
+     * {@code id == 0} and gains its real id on the way back from
+     * {@code save()}. Only the adapter calls this.
+     */
+    public Product withId(long newId) {
+        return new Product(newId, name, normalisedName, unit, createdAt);
     }
 }

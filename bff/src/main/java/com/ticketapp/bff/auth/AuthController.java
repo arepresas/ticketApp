@@ -155,7 +155,7 @@ public class AuthController {
                 .issuer("ticketapp-bff")
                 .issuedAt(now)
                 .expiresAt(exp)
-                .subject(user.id().toString())
+                .subject(Long.toString(user.id()))
                 .id(jti.toString())
                 .build();
         JwtEncoderParameters params = JwtEncoderParameters.from(
@@ -169,7 +169,7 @@ public class AuthController {
 
     public record SessionResponse(String token, UserDto user) { }
 
-    public record UserDto(UUID id, String email, String name, String pictureUrl) { }
+    public record UserDto(long id, String email, String name, String pictureUrl) { }
 
     /** Internal: what {@code POST /api/auth/google} hands back to the SPA. */
     public record Issued(String token, UUID jti, Instant expiresAt) { }

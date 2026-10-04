@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * JDBC adapter for {@link TicketCatalogueRepository}.
@@ -65,7 +65,7 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
     }
 
     @Override
-    public Optional<TicketCatalogue> findByTicketId(UUID ticketId, UUID ownerId) {
+    public Optional<TicketCatalogue> findByTicketId(long ticketId, long ownerId) {
         Optional<Shop> shop = namedJdbc.query(
                         SHOP_SQL,
                         new MapSqlParameterSource()
@@ -98,7 +98,7 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
 
     private static Shop mapShop(java.sql.ResultSet rs) throws java.sql.SQLException {
         return new Shop(
-                rs.getObject("id", UUID.class),
+                rs.getLong("id"),
                 rs.getString("name"),
                 rs.getString("normalised_name"),
                 rs.getString("address_line"),

@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Outbound port for the {@link Price} per-ticket snapshot.
@@ -22,13 +22,13 @@ public interface PriceRepository {
      * Empty when no such row exists — callers mint a new one with
      * {@link #save(Price)}.
      */
-    Optional<Price> findByProductAndTicket(UUID productId, UUID ticketId, BigDecimal amount);
+    Optional<Price> findByProductAndTicket(long productId, long ticketId, BigDecimal amount);
 
     /**
      * Batch lookup keyed on the price id. Same single-round-trip
      * pattern as {@link ProductRepository#findAllByIds}.
      */
-    Map<UUID, Price> findAllByIds(Collection<UUID> ids);
+    Map<Long, Price> findAllByIds(Collection<Long> ids);
 
     /**
      * Insert (or refresh) a price row. The {@code (product_id,

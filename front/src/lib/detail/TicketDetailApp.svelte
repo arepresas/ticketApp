@@ -85,14 +85,14 @@
 		}
 	}
 
-	/** Parse `#ticket/<uuid>` out of the URL. Null when malformed. */
-	function parseTicketIdFromHash(): string | null {
+	/** Parse `#ticket/<id>` out of the URL. Null when malformed. */
+	function parseTicketIdFromHash(): number | null {
 		const h = window.location.hash;
-		const m = /^#?ticket\/([0-9a-fA-F-]{36})$/.exec(h);
-		return m ? m[1] : null;
+		const m = /^#?ticket\/(\d+)$/.exec(h);
+		return m ? Number(m[1]) : null;
 	}
 
-	let ticketId = $state<string | null>(parseTicketIdFromHash());
+	let ticketId = $state<number | null>(parseTicketIdFromHash());
 	let ticket = $state<CreatedTicket | null>(null);
 	let extraction = $state<TicketExtraction | null>(null);
 	// Validated read view. Populated only when `ticket.status === 'DONE'`
@@ -327,7 +327,7 @@
 	const isImagePreview = (ct: string | null): boolean => !!ct && ct.startsWith('image/');
 	const isPdfPreview = (ct: string | null): boolean => ct === 'application/pdf';
 
-	async function load(id: string): Promise<void> {
+	async function load(id: number): Promise<void> {
 		const token = readSessionToken();
 		if (!token) {
 			errorMessage = 'Session expired. Sign in again to view this ticket.';
@@ -817,7 +817,7 @@
 	 * entries past the new length would just sit there inert.
 	 */
 	let productSuggestions = $state<Record<number, ProductSummary[]>>({});
-	let matchedProductId = $state<Record<number, string | null>>({});
+	let matchedProductId = $state<Record<number, number | null>>({});
 
 	/** Per-line debounce timers so a fast typer doesn't fire one
 	 * search per keystroke. Keyed by row index. */
@@ -898,7 +898,7 @@
 	 * {@code "br"}; we want "Bread" to read as matched once the
 	 * user has typed enough characters to pin the canonical name.
 	 */
-	function findMatch(results: ProductSummary[], trimmed: string): string | null {
+	function findMatch(results: ProductSummary[], trimmed: string): number | null {
 		const needle = trimmed.toLowerCase();
 		for (const p of results) {
 			if (p.name.trim().toLowerCase() === needle) return p.id;
@@ -1057,7 +1057,7 @@
 	 */
 	$effect(() => {
 		const handler = (e: Event): void => {
-			const detail = (e as CustomEvent<{ id: string }>).detail;
+			const detail = (e as CustomEvent<{ id: number }>).detail;
 			if (detail?.id) {
 				ticketId = detail.id;
 				void load(detail.id);

@@ -123,7 +123,7 @@ class PendingTicketsIT {
     /** Resolve the logged-in user's id by looking up the stub
      * google-sub. After {@link #loginAndGetToken()} the user row
      * exists, so this never returns empty in a test. */
-    private UUID ownerId() {
+    private long ownerId() {
         return users.findByGoogleSub("google-sub-stub")
                 .orElseThrow(() -> new IllegalStateException(
                         "test setup: user row not created — call loginAndGetToken first"))
@@ -140,7 +140,7 @@ class PendingTicketsIT {
     @Test
     void returnsEmptyListWhenNoPendingTickets() {
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         // Seed only terminal rows for the owner — none should be returned.
         tickets.save(Ticket.open(owner, "done.pdf", "done",
                 "application/pdf", "done.pdf", new byte[]{1})
@@ -163,7 +163,7 @@ class PendingTicketsIT {
     @Test
     void returnsOwnersOpenInProgressAndOnErrorTickets() {
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         Ticket openOld = tickets.save(Ticket.open(owner, "old-open.pdf", "first",
                 "application/pdf", "old.pdf", new byte[]{1}));
         Ticket inAnalysis = tickets.save(Ticket.open(owner, "ai-working.pdf", "second",
@@ -228,7 +228,7 @@ class PendingTicketsIT {
         // pending tickets. The error_message travels in the response
         // so the operator can read why without opening detail.
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "still pending",
                 "application/pdf", "broken.pdf", new byte[]{1})
                 .markError("the AI provider returned 500: bad gateway"));
@@ -255,7 +255,7 @@ class PendingTicketsIT {
         // ticket in ON_ERROR. This pins both the mapper (column → domain)
         // and the controller mapper (domain → JSON → wire).
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "broken",
                 "application/pdf", "broken.pdf", new byte[]{1})
                 .markError("the AI provider returned 502: bad gateway"));
@@ -280,7 +280,7 @@ class PendingTicketsIT {
         // the dashboard no longer shows a stale failure reason after
         // the operator re-enqueues the ticket.
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         Ticket failed = tickets.save(Ticket.open(owner, "retry.pdf", "retry me",
                 "application/pdf", "retry.pdf", new byte[]{1})
                 .markError("the AI provider returned 500"));

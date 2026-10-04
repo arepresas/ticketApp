@@ -8,8 +8,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.sql.PreparedStatement;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * JDBC implementation of {@link PriceRepository}. Plain SQL, no ORM.
@@ -37,10 +37,11 @@ public class JdbcPriceRepository implements PriceRepository {
 
     private static final String UPSERT_SQL = """
             INSERT INTO prices
-                (id, product_id, ticket_id, amount, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (product_id, ticket_id, amount, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (product_id, ticket_id, amount) DO UPDATE
             SET updated_at = EXCLUDED.updated_at
+            RETURNING id
             """;
 
     private static final String FIND_SQL =
@@ -53,7 +54,7 @@ public class JdbcPriceRepository implements PriceRepository {
             "SELECT " + PRICE_COLS + " FROM prices WHERE id IN (:ids)";
 
     @Override
-    public Optional<Price> findByProductAndTicket(UUID productId, UUID ticketId, BigDecimal amount) {
+    public Optional<Price> findByProductAndTicket(long productId, long ticketId, BigDecimal amount) {
         var params = new MapSqlParameterSource()
                 .addValue("product", productId)
                 .addValue("ticket", ticketId)
@@ -63,42 +64,37 @@ public class JdbcPriceRepository implements PriceRepository {
     }
 
     @Override
-    public java.util.Map<UUID, Price> findAllByIds(java.util.Collection<UUID> ids) {
+    public java.util.Map<Long, Price> findAllByIds(java.util.Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) return java.util.Map.of();
         var rows = namedJdbc.query(
                 FIND_BY_IDS_SQL,
                 new MapSqlParameterSource("ids", ids),
                 (rs, n) -> mapPrice(rs));
-        var map = new java.util.HashMap<UUID, Price>();
+        var map = new java.util.HashMap<Long, Price>();
         for (var row : rows) map.put(row.id(), row);
         return map;
     }
 
     @Override
     public Price save(Price price) {
-        jdbc.update(con -> {
-            var ps = con.prepareStatement(UPSERT_SQL);
-            ps.setObject(1, price.id());
-            ps.setObject(2, price.productId());
-            ps.setObject(3, price.ticketId());
-            ps.setBigDecimal(4, price.amount());
-            var ts = java.sql.Timestamp.from(price.createdAt());
-            ps.setTimestamp(5, ts);
-            ps.setTimestamp(6, java.sql.Timestamp.from(price.updatedAt()));
-            return ps;
-        });
-        // Re-read by the match key: on conflict the database keeps the
-        // original id, so the argument's freshly minted UUID is not
-        // necessarily the stored one. Returning the stored row keeps
-        // line_tickets.price_id a valid foreign key.
-        return findByProductAndTicket(price.productId(), price.ticketId(), price.amount())
-                .orElse(price);
+        return jdbc.query(
+                con -> {
+                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                ps.setLong(1, price.productId());
+                ps.setLong(2, price.ticketId());
+                ps.setBigDecimal(3, price.amount());
+                var ts = java.sql.Timestamp.from(price.createdAt());
+                ps.setTimestamp(4, ts);
+                ps.setTimestamp(5, java.sql.Timestamp.from(price.updatedAt()));
+                    return ps;
+                },
+                (rs, n) -> price.withId(rs.getLong(1))).stream().findFirst().orElse(price);
     }
 
     private static Price mapPrice(java.sql.ResultSet rs) throws java.sql.SQLException {
-        UUID id = rs.getObject("id", UUID.class);
-        UUID productId = rs.getObject("product_id", UUID.class);
-        UUID ticketId = rs.getObject("ticket_id", UUID.class);
+        long id = rs.getLong("id");
+        long productId = rs.getLong("product_id");
+        long ticketId = rs.getLong("ticket_id");
         BigDecimal amount = rs.getBigDecimal("amount");
         var createdAtOdt = rs.getObject("created_at", java.time.OffsetDateTime.class);
         var updatedAtOdt = rs.getObject("updated_at", java.time.OffsetDateTime.class);

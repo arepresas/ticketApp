@@ -2,7 +2,7 @@ package com.ticketapp.bff.api.dto;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * Wire response for {@code GET /api/tickets/{id}/catalogue}.
@@ -22,7 +22,7 @@ import java.util.UUID;
  * rows here.
  */
 public record CatalogueResponse(
-        UUID shopId,
+        long shopId,
         String shopName,
         List<CatalogueLine> lines) {
 

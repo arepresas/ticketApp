@@ -57,7 +57,7 @@ const { listAllTicketsStub } = vi.hoisted(() => ({
 }));
 listAllTicketsStub.mockResolvedValue([
 		{
-			id: 't-stub-1',
+			id: 810,
 			title: 'Mercadona weekly',
 			description: '',
 			status: 'OPEN',
@@ -85,7 +85,7 @@ import Dashboard from './Dashboard.svelte';
 import { __setMockDelay } from '../../api/dashboard';
 
 const user: AuthUser = {
-	id: 'u-1',
+	id: 'sub-1',
 	email: 'ada@example.com',
 	name: 'Ada Lovelace',
 	picture: 'https://example.com/ada.png'
@@ -182,7 +182,7 @@ describe('Dashboard', () => {
 	});
 
 	it('falls back to the full name when there is no space to split on', async () => {
-		const single: AuthUser = { id: 'u-2', email: 'cher@example.com', name: 'Cher' };
+		const single: AuthUser = { id: 'sub-2', email: 'cher@example.com', name: 'Cher' };
 		const { getByText } = render(Dashboard, { user: single });
 		expect(getByText('Hi, Cher')).toBeTruthy();
 	});

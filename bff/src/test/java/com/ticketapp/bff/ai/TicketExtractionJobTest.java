@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
  */
 class TicketExtractionJobTest {
 
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final long OWNER = 4369L;
 
     private TicketExtractionQueue tickets;
     private TicketExtractionService service;
@@ -102,7 +102,7 @@ class TicketExtractionJobTest {
         // change to findOpenForExtraction that loosens the WHERE
         // doesn't silently start processing DONE/ON_ERROR tickets.
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Status.DONE, Instant.now(), Instant.now(),
+                nextId(), OWNER, "x", "", Status.DONE, Instant.now(), Instant.now(),
                 null, null, null, null, 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
@@ -151,7 +151,7 @@ class TicketExtractionJobTest {
     @Test
     void inProgressTicketsAreAlsoFilteredOut() {
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Status.IN_PROGRESS,
+                nextId(), OWNER, "x", "", Status.IN_PROGRESS,
                 Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
@@ -166,7 +166,7 @@ class TicketExtractionJobTest {
         // only so a failed ticket is never picked up automatically
         // (would loop forever on a broken receipt).
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Status.ON_ERROR,
+                nextId(), OWNER, "x", "", Status.ON_ERROR,
                 Instant.now(), Instant.now(), null, null, null,
                 "previous failure", 0, null, null, 0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
@@ -256,10 +256,10 @@ class TicketExtractionJobTest {
     // ---- helpers ---------------------------------------------------------
 
     private static Ticket openTicket() {
-        return openTicket(UUID.randomUUID());
+        return openTicket(nextId());
     }
 
-    private static Ticket openTicket(UUID id) {
+    private static Ticket openTicket(long id) {
         return new Ticket(id, OWNER, "title", "", Status.OPEN,
                 Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
     }
@@ -271,5 +271,13 @@ class TicketExtractionJobTest {
                 5,
                 2,
                 Duration.ofMinutes(10));
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -83,23 +83,21 @@ class ShopControllerIT {
         return resp.token();
     }
 
-    private UUID seedShop(String name, String addressLine, String city,
+    private long seedShop(String name, String addressLine, String city,
                           String country, String phone) {
-        UUID id = UUID.randomUUID();
-        jdbc.update("""
+        return jdbc.queryForObject("""
                 INSERT INTO shops
-                    (id, name, normalised_name, address_line, city, country, phone, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                id, name, name.toLowerCase(), addressLine, city, country, phone,
+                    (name, normalised_name, address_line, city, country, phone, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                RETURNING id""", Long.class,
+                name, name.toLowerCase(), addressLine, city, country, phone,
                 java.sql.Timestamp.from(Instant.now()));
-        return id;
     }
 
     @Test
     void getReturnsExistingShop() {
         String token = loginAndGetToken();
-        UUID id = seedShop("Mercadona", "Calle Mayor 1", "Madrid", "ES", "+34 911 22 33 44");
+        long id = seedShop("Mercadona", "Calle Mayor 1", "Madrid", "ES", "+34 911 22 33 44");
 
         web().get().uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
@@ -120,7 +118,7 @@ class ShopControllerIT {
     @Test
     void getReturns404WhenShopUnknown() {
         String token = loginAndGetToken();
-        web().get().uri("/api/shops/{id}", UUID.randomUUID())
+        web().get().uri("/api/shops/{id}", nextId())
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectStatus().isNotFound();
@@ -128,7 +126,7 @@ class ShopControllerIT {
 
     @Test
     void getRejectsUnauthenticated() {
-        UUID id = seedShop("Dia", null, null, null, null);
+        long id = seedShop("Dia", null, null, null, null);
         web().get().uri("/api/shops/{id}", id)
                 .exchange()
                 .expectStatus().isUnauthorized();
@@ -137,7 +135,7 @@ class ShopControllerIT {
     @Test
     void patchAppliesAllFieldsInOneCall() {
         String token = loginAndGetToken();
-        UUID id = seedShop("Carrefour", null, null, null, null);
+        long id = seedShop("Carrefour", null, null, null, null);
 
         web().patch().uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
@@ -167,7 +165,7 @@ class ShopControllerIT {
     @Test
     void patchAppliesOnlySuppliedFields() {
         String token = loginAndGetToken();
-        UUID id = seedShop("Lidl",
+        long id = seedShop("Lidl",
                 "Old Street 1", "Madrid", "ES", "+34 900 00 00 00");
 
         // Patch only phone — the other contact fields must stay
@@ -191,7 +189,7 @@ class ShopControllerIT {
     @Test
     void patchRejectsInvalidCountryCode() {
         String token = loginAndGetToken();
-        UUID id = seedShop("Lidl", null, null, null, null);
+        long id = seedShop("Lidl", null, null, null, null);
 
         web().patch().uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
@@ -204,7 +202,7 @@ class ShopControllerIT {
     @Test
     void patchRejectsEmptyBody() {
         String token = loginAndGetToken();
-        UUID id = seedShop("Lidl", null, null, null, null);
+        long id = seedShop("Lidl", null, null, null, null);
 
         web().patch().uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
@@ -217,7 +215,7 @@ class ShopControllerIT {
     @Test
     void patchReturns404WhenShopUnknown() {
         String token = loginAndGetToken();
-        web().patch().uri("/api/shops/{id}", UUID.randomUUID())
+        web().patch().uri("/api/shops/{id}", nextId())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("phone", "+34 900 00 00 00"))
@@ -227,7 +225,7 @@ class ShopControllerIT {
 
     @Test
     void patchRejectsUnauthenticated() {
-        UUID id = seedShop("Aldi", null, null, null, null);
+        long id = seedShop("Aldi", null, null, null, null);
         web().patch().uri("/api/shops/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("phone", "+34 900 00 00 00"))
@@ -242,7 +240,7 @@ class ShopControllerIT {
         // returned. Catches any SELECT/UPSERT drift between the
         // wire response and the persistence layer.
         String token = loginAndGetToken();
-        UUID id = seedShop("Consum", null, null, null, null);
+        long id = seedShop("Consum", null, null, null, null);
 
         web().patch().uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
@@ -268,5 +266,13 @@ class ShopControllerIT {
         assertThat(row.get("phone")).isEqualTo("+34 963 00 00 00");
         assertThat(row.get("tax_id")).isEqualTo("C76543210");
         assertThat(row.get("website")).isEqualTo("https://consum.es");
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

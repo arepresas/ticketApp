@@ -29,7 +29,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
+
 import java.util.stream.Collectors;
 
 /**
@@ -120,7 +120,7 @@ public class TicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<TicketResponse> get(@PathVariable UUID id) {
+    public ResponseEntity<TicketResponse> get(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
         // Owner-scoped: returns 404 when the ticket doesn't exist OR
         // belongs to a different user. Same response shape for both
@@ -148,7 +148,7 @@ public class TicketController {
      * different user.
      */
     @PatchMapping("/{id}/status")
-    public ResponseEntity<TicketResponse> changeStatus(@PathVariable UUID id,
+    public ResponseEntity<TicketResponse> changeStatus(@PathVariable long id,
                                                        @RequestBody ChangeStatusRequest changeReq) {
         AuthenticatedUser user = CurrentUser.get();
         Ticket updated = applicationService.changeStatus(id, user, changeReq.status());
@@ -170,7 +170,7 @@ public class TicketController {
      * <p>Owner-scoped: same 404 rule as the read paths.
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<TicketResponse> update(@PathVariable UUID id,
+    public ResponseEntity<TicketResponse> update(@PathVariable long id,
                                                  @RequestBody UpdateTicketRequest body) {
         // No null-body check: @RequestBody is required by default,
         // so Spring rejects a missing body before this runs.
@@ -193,7 +193,7 @@ public class TicketController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+    public ResponseEntity<Void> delete(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
         // Soft delete: flips the row to DELETED (history stays for
         // audit) and every read path treats it as missing from then
@@ -215,7 +215,7 @@ public class TicketController {
      * images vs PDFs.
      */
     @GetMapping("/{id}/file")
-    public ResponseEntity<byte[]> file(@PathVariable UUID id) {
+    public ResponseEntity<byte[]> file(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
         java.util.Optional<Ticket> ticketOpt = repository.findById(id, user.id());
         if (ticketOpt.isEmpty()) {

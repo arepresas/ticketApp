@@ -3,7 +3,7 @@ package com.ticketapp.bff.api.dto;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketSummary;
 
-import java.util.UUID;
+
 
 /**
  * Wire response for ticket reads. Excludes {@code fileData} so the bytes don't round-trip
@@ -28,8 +28,8 @@ import java.util.UUID;
  * single-ticket paths.
  */
 public record TicketResponse(
-        UUID id,
-        UUID ownerId,
+        long id,
+        long ownerId,
         String title,
         String description,
         Ticket.Status status,

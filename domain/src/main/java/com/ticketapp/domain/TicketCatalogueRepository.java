@@ -3,7 +3,7 @@ package com.ticketapp.domain;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Outbound port for the normalised catalogue view of a ticket: the
@@ -36,7 +36,7 @@ public interface TicketCatalogueRepository {
      *         caller answers 404 for all of them and must not leak
      *         which one it was.
      */
-    Optional<TicketCatalogue> findByTicketId(UUID ticketId, UUID ownerId);
+    Optional<TicketCatalogue> findByTicketId(long ticketId, long ownerId);
 
     /**
      * A validated ticket's catalogue: the shop it anchors to, and

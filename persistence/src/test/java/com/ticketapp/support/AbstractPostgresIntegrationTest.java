@@ -5,7 +5,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.UUID;
+
 
 /**
  * Base class for infrastructure-layer integration tests.
@@ -36,11 +36,13 @@ public abstract class AbstractPostgresIntegrationTest {
      * {@code cleanSlate} even though {@code app_users} survives
      * across tests in the shared container.
      */
-    protected static void seedOwner(JdbcTemplate jdbc, UUID id, String googleSub) {
-        jdbc.update(
-                "INSERT INTO app_users (id, google_sub, email, name, created_at, last_login_at)"
-                        + " VALUES (?, ?, ?, ?, now(), now())"
-                        + " ON CONFLICT (id) DO NOTHING",
-                id, googleSub, googleSub + "@example.com", googleSub);
+    protected static long seedOwner(JdbcTemplate jdbc, String googleSub) {
+        Long id = jdbc.queryForObject(
+                "INSERT INTO app_users (google_sub, email, name, created_at, last_login_at)"
+                        + " VALUES (?, ?, ?, now(), now())"
+                        + " ON CONFLICT (google_sub) DO UPDATE SET last_login_at = now()"
+                        + " RETURNING id",
+                Long.class, googleSub, googleSub + "@example.com", googleSub);
+        return id;
     }
 }

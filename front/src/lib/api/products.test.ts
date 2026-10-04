@@ -18,7 +18,7 @@ describe('searchProducts', () => {
 
 	it('passes name + Bearer token in the request', async () => {
 		const expected: ProductSummary[] = [
-			{ id: 'p-1', name: 'Bread', unit: null, label: 'Bread' }
+			{ id: 1, name: 'Bread', unit: null, label: 'Bread' }
 		];
 		const fetchSpy = vi
 			.spyOn(globalThis, 'fetch')
@@ -52,7 +52,7 @@ describe('searchProducts', () => {
 		// "no match" from "still loading".
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse([]));
 
-		const got = await searchProducts('tok', '   ');
+		const got = await searchProducts('tok', 'zzz');
 
 		expect(got).toEqual([]);
 	});
@@ -62,8 +62,8 @@ describe('searchProducts', () => {
 			mockResponse({ message: 'authentication required' }, { status: 403 })
 		);
 
-		await expect(searchProducts('tok', 'B')).rejects.toThrowError(ProductApiError);
-		await expect(searchProducts('tok', 'B')).rejects.toMatchObject({
+		await expect(searchProducts('tok', 'zzz')).rejects.toThrowError(ProductApiError);
+		await expect(searchProducts('tok', 'zzz')).rejects.toMatchObject({
 			name: 'ProductApiError',
 			status: 403
 		});
@@ -80,7 +80,7 @@ describe('searchProducts', () => {
 		};
 		window.addEventListener('auth:expired', handler);
 		try {
-			await expect(searchProducts('tok', 'B')).rejects.toThrowError(ProductApiError);
+			await expect(searchProducts('tok', 'zzz')).rejects.toThrowError(ProductApiError);
 		} finally {
 			window.removeEventListener('auth:expired', handler);
 		}
@@ -92,6 +92,6 @@ describe('searchProducts', () => {
 			mockResponse({ message: 'database unavailable' }, { status: 503 })
 		);
 
-		await expect(searchProducts('tok', 'B')).rejects.toThrowError(ProductApiError);
+		await expect(searchProducts('tok', 'zzz')).rejects.toThrowError(ProductApiError);
 	});
 });

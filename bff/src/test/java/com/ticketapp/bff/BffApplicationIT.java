@@ -103,7 +103,7 @@ class BffApplicationIT {
 
     /** After login, look up the persisted user id (UUID derived from
      * the google-sub in the upsert flow). */
-    private UUID ownerId() {
+    private long ownerId() {
         return users.findByGoogleSub("google-sub-stub")
                 .orElseThrow(() -> new IllegalStateException(
                         "test setup: user row not created — call loginAndGetToken first"))
@@ -138,7 +138,7 @@ class BffApplicationIT {
         // Seed directly through the repository — the upload path is covered
         // by TicketControllerIT. This test exercises GET/PATCH/DELETE only.
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         Ticket seeded = tickets.save(Ticket.open(owner, "smoke", "smoke test"));
 
         // GET
@@ -174,7 +174,7 @@ class BffApplicationIT {
     @Test
     void listReturnsAtLeastOneAfterSeed() {
         String token = loginAndGetToken();
-        UUID owner = ownerId();
+        long owner = ownerId();
         tickets.save(Ticket.open(owner, "list-seed", "x"));
 
         web().get().uri("/api/tickets")

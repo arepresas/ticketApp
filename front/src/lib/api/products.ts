@@ -23,7 +23,7 @@ export class ProductApiError extends Error {
  * recompute the match status when the user picks an entry.
  */
 export type ProductSummary = {
-	id: string;
+	id: number;
 	/** Display name as printed on past receipts. */
 	name: string;
 	/** Unit label ("kg", "L", "unit", ...). Null when the line had no unit. */

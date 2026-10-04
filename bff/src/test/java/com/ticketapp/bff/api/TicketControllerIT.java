@@ -266,7 +266,7 @@ class TicketControllerIT {
         assertThat(response.sizeBytes()).isPositive();
 
         // Verify the bytes round-tripped through the DB.
-        UUID owner = users.findByGoogleSub("google-sub-stub")
+        long owner = users.findByGoogleSub("google-sub-stub")
                 .orElseThrow(() -> new IllegalStateException(
                         "test setup: user row not created — call loginAndGetToken first"))
                 .id();
@@ -343,7 +343,7 @@ class TicketControllerIT {
         // 404 (not 403) pattern as the rest of the read paths so
         // we don't leak existence.
         String tokenA = loginAndGetToken();
-        UUID ownerA = users.findByGoogleSub("google-sub-stub").orElseThrow().id();
+        long ownerA = users.findByGoogleSub("google-sub-stub").orElseThrow().id();
         byte[] bytes = "%PDF-1.4\n%receipt\n%%EOF\n".getBytes();
         TicketResponse created = web().post().uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
@@ -450,7 +450,7 @@ class TicketControllerIT {
                         .issuer("ticketapp-bff")
                         .issuedAt(now)
                         .expiresAt(exp)
-                        .subject(user.id().toString())
+                        .subject(Long.toString(user.id()))
                         .id(jti.toString())
                         .build();
         return jwtEncoder.encode(
@@ -475,7 +475,7 @@ class TicketControllerIT {
      * so the PUT path has a row to update. Mirrors the JSONB shape
      * the persistence layer expects.
      */
-    private void seedExtraction(UUID ticketId, String merchant, String category,
+    private void seedExtraction(long ticketId, String merchant, String category,
                                 java.math.BigDecimal total, String currency) {
         jdbc.update("""
                 INSERT INTO ticket_extractions
@@ -808,7 +808,7 @@ class TicketControllerIT {
      * {@code merchant} parameter so tests can pin normalisation
      * dedup behaviour.
      */
-    private void seedExtractionWithProducts(UUID ticketId,
+    private void seedExtractionWithProducts(long ticketId,
                                             String merchant,
                                             java.util.List<String> productJsons) {
         String productsJson = "[" + String.join(",", productJsons) + "]";
@@ -1292,5 +1292,13 @@ class TicketControllerIT {
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
                 .expectStatus().isNotFound();
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -77,7 +77,7 @@ describe('GoogleLoginButton', () => {
     // fetch which we mock; the test only needs the resulting `state.user`
     // mutation to flip auth.isAuthenticated to true.
     const fakeUser: AuthUser = {
-      id: 'google-sub-1',
+      id: 'sub-1',
       email: 'alice@example.com',
       name: 'Alice',
       picture: 'https://example.com/a.png'

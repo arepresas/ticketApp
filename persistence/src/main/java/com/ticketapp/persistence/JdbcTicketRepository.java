@@ -83,14 +83,14 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
 
     private static final String INSERT_SQL = """
             INSERT INTO tickets
-                (id, owner_id, title, description, status, created_at, updated_at,
+                (owner_id, title, description, status, created_at, updated_at,
                  content_type, file_name, file_data, error_message, attempts, shop_id,
                  ocr_text, version)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     @Override
-    public Optional<Ticket> findById(UUID id, UUID ownerId) {
+    public Optional<Ticket> findById(long id, long ownerId) {
         // Single round-trip with all three predicates — the row is
         // invisible when any doesn't match. Soft-deleted tickets
         // behave as missing on every path (no separate "is
@@ -162,7 +162,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         int updated = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_SQL);
             bindTicket(ps, ticket, 1);
-            ps.setObject(14, ticket.id());
+            ps.setLong(14, ticket.id());
             ps.setLong(15, ticket.version());
             return ps;
         });
@@ -177,27 +177,22 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                     "ticket " + ticket.id() + " was modified concurrently"
                             + " (expected version " + ticket.version() + ")");
         }
-        // New row: the version always starts at 0 regardless of what
-        // the caller carries. ON CONFLICT DO NOTHING closes the
-        // check-then-act window between the EXISTS probe and this
-        // INSERT: a concurrent insert wins and this path surfaces
-        // OptimisticLock instead of a raw duplicate-key error. A row
-        // deleted between the caller's read and this write still
-        // re-inserts (indistinguishable from a create at this
-        // level — same as the old upsert); callers that must not
-        // resurrect should pre-check existence themselves.
-        int inserted = jdbc.update(con -> {
-            PreparedStatement ps = con.prepareStatement(INSERT_SQL + " ON CONFLICT (id) DO NOTHING");
-            ps.setObject(1, ticket.id());
-            bindTicket(ps, ticket, 2);
-            ps.setLong(15, 0);
-            return ps;
-        });
-        if (inserted == 0) {
-            throw new OptimisticLockException(ticket.id(),
-                    "ticket " + ticket.id() + " was inserted concurrently");
-        }
-        return ticket.withVersion(0);
+        // New row: the id comes from the identity column and the
+        // version always starts at 0 regardless of what the caller
+        // carries, so bind neither. RETURNING gives us the assigned id
+        // so the caller gets the persisted entity back.
+        return jdbc.query(
+                con -> {
+                    PreparedStatement ps = con.prepareStatement(INSERT_SQL + " RETURNING id");
+                    bindTicket(ps, ticket, 1);
+                    ps.setLong(14, 0);
+                    return ps;
+                },
+                (rs, n) -> ticket.withId(rs.getLong(1)).withVersion(0))
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new OptimisticLockException(ticket.id(),
+                        "ticket insert returned no id"));
     }
 
     /**
@@ -207,7 +202,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * because their positions differ per statement.
      */
     private static void bindTicket(PreparedStatement ps, Ticket ticket, int base) throws SQLException {
-            ps.setObject(base, ticket.ownerId());
+            ps.setLong(base, ticket.ownerId());
             ps.setString(base + 1, ticket.title());
             ps.setString(base + 2, ticket.description());
             ps.setString(base + 3, ticket.status().name());
@@ -225,7 +220,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
             bindBytesOrNull(ps, base + 8, ticket.fileData(), Types.BINARY);
             bindStringOrNull(ps, base + 9, ticket.errorMessage(), Types.VARCHAR);
             ps.setInt(base + 10, ticket.attempts());
-            bindObjectOrNull(ps, base + 11, ticket.shopId(), Types.OTHER);
+            bindObjectOrNull(ps, base + 11, ticket.shopId(), Types.BIGINT);
             bindStringOrNull(ps, base + 12, ticket.ocrText(), Types.LONGVARCHAR);
     }
 
@@ -268,7 +263,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
     }
 
     @Override
-    public boolean deleteById(UUID id, UUID ownerId) {
+    public boolean deleteById(long id, long ownerId) {
         // Soft delete: flip to DELETED, keep the row (and its
         // extraction/catalogue history) for audit. Already-deleted
         // rows report false so a repeated DELETE reads as 404.
@@ -280,8 +275,8 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
     }
 
     @Override
-    public List<Ticket> findByStatusIn(Set<Ticket.Status> statuses, UUID ownerId) {
-        if (statuses == null || statuses.isEmpty() || ownerId == null) {
+    public List<Ticket> findByStatusIn(Set<Ticket.Status> statuses, long ownerId) {
+        if (statuses == null || statuses.isEmpty()) {
             return List.of();
         }
         // NamedParameterJdbcTemplate expands the IN-list safely — never
@@ -299,8 +294,8 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
     }
 
     @Override
-    public List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, UUID ownerId) {
-        if (statuses == null || statuses.isEmpty() || ownerId == null) {
+    public List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, long ownerId) {
+        if (statuses == null || statuses.isEmpty()) {
             return List.of();
         }
         String sql = SELECT_PREFIX + SUMMARY_COLS
@@ -311,8 +306,8 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 .addValue("owner", ownerId)
                 .addValue("statuses", statuses.stream().map(Enum::name).toList());
         return namedJdbc.query(sql, params, (rs, n) -> new TicketSummary(
-                rs.getObject("id", UUID.class),
-                rs.getObject("owner_id", UUID.class),
+                rs.getLong("id"),
+                rs.getLong("owner_id"),
                 rs.getString("title"),
                 rs.getString("description"),
                 Ticket.Status.valueOf(rs.getString("status")),
@@ -323,7 +318,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 rs.getObject("size_bytes", Long.class),
                 rs.getString("error_message"),
                 rs.getInt("attempts"),
-                rs.getObject("shop_id", UUID.class)));
+                nullableShopId(rs)));
     }
 
     /**
@@ -335,7 +330,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * <p>Lives here (not on the extraction repository) because it
      * writes the {@code tickets} aggregate.
      */
-    public void recordAttempt(UUID ticketId) {
+    public void recordAttempt(long ticketId) {
         jdbc.update("UPDATE tickets SET last_extraction_attempt_at = ? WHERE id = ?",
                 OffsetDateTime.ofInstant(java.time.Instant.now(), ZoneOffset.UTC),
                 ticketId);
@@ -344,5 +339,17 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
     /** Convenience for callers needing the current instant in UTC. */
     public static Instant nowUtc() {
         return Instant.now();
+    }
+
+    /**
+     * {@code shop_id} is a nullable FK, and
+     * {@link java.sql.ResultSet#getLong(String)} collapses SQL NULL
+     * to {@code 0} — a real shop id, so an un-normalised ticket would
+     * come back pointing at a shop that does not exist. Read the
+     * wrapper and keep the null.
+     */
+    private static Long nullableShopId(java.sql.ResultSet rs) throws java.sql.SQLException {
+        long value = rs.getLong("shop_id");
+        return rs.wasNull() ? null : value;
     }
 }

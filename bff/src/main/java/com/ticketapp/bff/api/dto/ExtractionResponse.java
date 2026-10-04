@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * Wire response for {@code GET /api/tickets/{id}/extraction}.
@@ -22,7 +22,7 @@ import java.util.UUID;
  * kept server-side for audit / debugging.</p>
  */
 public record ExtractionResponse(
-        UUID ticketId,
+        long ticketId,
         String merchant,
         LocalDate purchaseDate,
         String category,

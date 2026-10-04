@@ -19,13 +19,13 @@ class TicketTest {
     /** Fixed owner for all tests in this class. The UUID value is
      * arbitrary — Ticket equality/identity is id-based, so each
      * test that needs a specific owner can use its own. */
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID OTHER_OWNER = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final long OWNER = 1111L;
+    private static final long OTHER_OWNER = 2222L;
 
     @Test
     void openCreatesTicketWithOpenStatus() {
         Ticket t = Ticket.open(OWNER, "Bug", "Login broken");
-        assertNotNull(t.id());
+        assertEquals(0L, t.id(), "an unsaved ticket has no id yet");
         assertEquals(OWNER, t.ownerId());
         assertEquals("Bug", t.title());
         assertEquals("Login broken", t.description());
@@ -108,32 +108,14 @@ class TicketTest {
         assertFalse(failed.updatedAt().isBefore(created));
     }
 
-    @Test
-    void constructorRejectsNullId() {
-        Instant now = Instant.now();
-        NullPointerException ex = assertThrows(NullPointerException.class,
-                () -> new Ticket(
-                        null, OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null, null, 0));
-        assertEquals("id", ex.getMessage());
-    }
 
-    @Test
-    void constructorRejectsNullOwnerId() {
-        Instant now = Instant.now();
-        NullPointerException ex = assertThrows(NullPointerException.class,
-                () -> new Ticket(
-                        UUID.randomUUID(), null, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null, null, 0));
-        assertEquals("ownerId", ex.getMessage());
-    }
 
     @Test
     void constructorRejectsNullTitle() {
         Instant now = Instant.now();
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, null, "", Ticket.Status.OPEN, now, now,
+                        nextId(), OWNER, null, "", Ticket.Status.OPEN, now, now,
                         null, null, null, null, 0, null, null, 0));
         assertEquals("title", ex.getMessage());
     }
@@ -143,7 +125,7 @@ class TicketTest {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, "x", "", null, now, now,
+                        nextId(), OWNER, "x", "", null, now, now,
                         null, null, null, null, 0, null, null, 0));
     }
 
@@ -152,7 +134,7 @@ class TicketTest {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
+                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
                         null, null, null, null, 0, null, null, 0));
     }
 
@@ -161,7 +143,7 @@ class TicketTest {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
+                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
                         null, null, null, null, 0, null, null, 0));
     }
 
@@ -171,7 +153,7 @@ class TicketTest {
         // an accidentally-empty message never sneaks into the DB row.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
+                nextId(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
                 null, null, null, "   ", 0, null, null, 0);
 
         assertNull(t.errorMessage());
@@ -185,7 +167,7 @@ class TicketTest {
         // signal regardless of what the provider returned.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
                 null, null, null, null, 0, null, "   ", 0);
 
         assertNull(t.ocrText());
@@ -199,7 +181,7 @@ class TicketTest {
         // could otherwise persist -1 through the UPSERT).
         assertThrows(IllegalArgumentException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
                         null, null, null, null, -1, null, null, 0));
     }
 
@@ -212,7 +194,7 @@ class TicketTest {
         // one.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
                 null, null, null, null, 0, null, null, 0);
 
         assertNull(t.shopId());
@@ -246,7 +228,7 @@ class TicketTest {
         // Two tickets with identical content (including the random
         // id, which equals() uses) must produce equal hashCodes.
         // Build the instances manually so the id is fixed.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Instant created = Instant.parse("2026-07-05T17:00:00Z");
         Ticket a = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
                 null, null, null, "msg", 0, null, null, 0);
@@ -316,7 +298,7 @@ class TicketTest {
         // to identify the tenant.
         Ticket t = Ticket.open(OWNER, "x", "");
 
-        assertTrue(t.toString().contains(OWNER.toString()),
+        assertTrue(t.toString().contains(Long.toString(OWNER)),
                 "expected ownerId in toString: " + t);
     }
 
@@ -373,7 +355,7 @@ class TicketTest {
         // so a partial update can't accidentally reset status or
         // error state.
         Ticket t = Ticket.open(OWNER, "x", "").markError("previous failure");
-        UUID shop = UUID.randomUUID();
+        long shop = nextId();
         Ticket anchored = t.withShopId(shop);
 
         assertEquals(shop, anchored.shopId());
@@ -392,7 +374,7 @@ class TicketTest {
         // with null. The setter must accept it without throwing —
         // a null shopId is just "no shop row" and the catalogue()
         // endpoint already short-circuits on null to a 404.
-        Ticket anchored = Ticket.open(OWNER, "x", "").withShopId(UUID.randomUUID());
+        Ticket anchored = Ticket.open(OWNER, "x", "").withShopId(nextId());
         Ticket cleared = anchored.withShopId(null);
 
         assertNull(cleared.shopId());
@@ -408,7 +390,7 @@ class TicketTest {
         Instant now = Instant.now();
         assertThrows(IllegalArgumentException.class,
                 () -> new Ticket(
-                        UUID.randomUUID(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
+                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
                         null, null, null, null, 0, null, null, -1));
     }
 
@@ -433,5 +415,13 @@ class TicketTest {
                 "expected file size, not contents: " + rendered);
         assertTrue(rendered.contains("5 chars"),
                 "expected ocr size, not contents: " + rendered);
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

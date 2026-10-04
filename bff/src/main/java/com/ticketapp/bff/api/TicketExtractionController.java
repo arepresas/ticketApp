@@ -26,7 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * REST surface for the AI-extracted structured payload of a ticket.
@@ -55,7 +55,7 @@ public class TicketExtractionController {
      * ON_ERROR).
      */
     @GetMapping("/{id}/extraction")
-    public ResponseEntity<ExtractionResponse> extraction(@PathVariable UUID id) {
+    public ResponseEntity<ExtractionResponse> extraction(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
         // First gate on the ticket itself — refuses cross-tenant
         // access without leaking existence (returns 404 either way).
@@ -91,7 +91,7 @@ public class TicketExtractionController {
      * <p>Owner-scoped: same 404 rule as the read paths.
      */
     @PutMapping("/{id}/extraction")
-    public ResponseEntity<ExtractionResponse> replaceExtraction(@PathVariable UUID id,
+    public ResponseEntity<ExtractionResponse> replaceExtraction(@PathVariable long id,
                                                                 @RequestBody UpdateExtractionRequest body) {
         // No null-body check: @RequestBody is required by default,
         // so Spring rejects a missing body before this runs.

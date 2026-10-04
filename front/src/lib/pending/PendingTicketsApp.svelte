@@ -160,7 +160,7 @@
 	 * return here — the popstate listener in `lib/navigation.ts`
 	 * re-applies the `is-pending` body class.
 	 */
-	function openDetail(id: string): void {
+	function openDetail(id: number): void {
 		navigate({ kind: 'detail', ticketId: id });
 	}
 

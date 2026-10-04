@@ -27,13 +27,13 @@ public interface SessionRepository {
     Optional<AuthenticatedUser> findActiveUserByJti(UUID jti);
 
     /** Returns the live sessions for a user (not revoked, not expired). */
-    java.util.List<Session> findActiveByUser(UUID userId);
+    java.util.List<Session> findActiveByUser(long userId);
 
     /** Mark a single session revoked. Idempotent. */
     void revoke(UUID jti);
 
     record Session(UUID jti,
-                   UUID userId,
+                   long userId,
                    Instant issuedAt,
                    Instant expiresAt,
                    Instant revokedAt) { }

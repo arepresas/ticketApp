@@ -7,7 +7,7 @@
   let error = $state<string | null>(null);
 
   type Ticket = {
-    id: string;
+    id: number;
     title: string;
     description: string;
     status: 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED';

@@ -2,7 +2,7 @@ package com.ticketapp.domain;
 
 import java.time.Instant;
 import java.util.Locale;
-import java.util.UUID;
+
 
 /**
  * Master merchant registry. The extraction payload carries the
@@ -35,7 +35,7 @@ import java.util.UUID;
  * to validate per-country formats in the domain.
  */
 public record Shop(
-        UUID id,
+        long id,
         String name,
         String normalisedName,
         String addressLine,
@@ -48,7 +48,6 @@ public record Shop(
         Instant createdAt
 ) {
     public Shop {
-        if (id == null) throw new NullPointerException("id");
         if (name == null) throw new NullPointerException("name");
         if (normalisedName == null) {
             normalisedName = normalisedNameOf(name);
@@ -63,7 +62,7 @@ public record Shop(
      * info yet (initial seeding by the normaliser, hand-built
      * fixtures). Leaves the contact fields {@code null}.
      */
-    public Shop(UUID id, String name, String normalisedName, Instant createdAt) {
+    public Shop(long id, String name, String normalisedName, Instant createdAt) {
         this(id, name, normalisedName, null, null, null, null, null, null, null, createdAt);
     }
 
@@ -95,5 +94,14 @@ public record Shop(
                 taxId       != null ? taxId       : this.taxId,
                 website     != null ? website     : this.website,
                 createdAt);
+    }
+    /**
+     * Attach the id assigned by the database on insert. Ids come from
+     * Postgres identity columns, so an entity leaves the domain with
+     * {@code id == 0} and gains its real id on the way back from
+     * {@code save()}. Only the adapter calls this.
+     */
+    public Shop withId(long newId) {
+        return new Shop(newId, name, normalisedName, addressLine, postalCode, city, country, phone, taxId, website, createdAt);
     }
 }

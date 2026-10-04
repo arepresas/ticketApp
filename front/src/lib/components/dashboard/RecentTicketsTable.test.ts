@@ -7,7 +7,7 @@ import type { CreatedTicket } from '../../api/tickets';
 // vi.hoisted runs before the vi.mock factory sees the closure.
 const { listAllTicketsStub, retryTicketStub } = vi.hoisted(() => ({
 	listAllTicketsStub: vi.fn<() => Promise<CreatedTicket[]>>(),
-	retryTicketStub: vi.fn<(token: string, id: string) => Promise<CreatedTicket>>()
+	retryTicketStub: vi.fn<(token: string, id: number) => Promise<CreatedTicket>>()
 }));
 
 vi.mock('../../api/tickets', async () => {
@@ -17,7 +17,7 @@ vi.mock('../../api/tickets', async () => {
 	return {
 		...actual,
 		listAllTickets: (...args: unknown[]) => listAllTicketsStub(...(args as [])),
-		retryTicket: (token: string, id: string) => retryTicketStub(token, id)
+		retryTicket: (token: string, id: number) => retryTicketStub(token, id)
 	};
 });
 
@@ -25,7 +25,7 @@ import RecentTicketsTable from './RecentTicketsTable.svelte';
 
 const sample: CreatedTicket[] = [
 	{
-		id: 't-001',
+		id: 1,
 		title: 'Mercadona weekly',
 		description: 'Saturday shop',
 		status: 'DONE',
@@ -39,7 +39,7 @@ const sample: CreatedTicket[] = [
 		ocrText: 'MERCADONA\n...'
 	},
 	{
-		id: 't-002',
+		id: 2,
 		title: 'Lidl express',
 		description: '',
 		status: 'OPEN',
@@ -53,7 +53,7 @@ const sample: CreatedTicket[] = [
 		ocrText: null
 	},
 	{
-		id: 't-003',
+		id: 3,
 		title: 'Cancelled receipt',
 		description: 'Mistake',
 		status: 'CANCELLED',
@@ -67,7 +67,7 @@ const sample: CreatedTicket[] = [
 		ocrText: null
 	},
 	{
-		id: 't-004',
+		id: 4,
 		title: 'Failed extraction',
 		description: 'AI provider 502',
 		status: 'ON_ERROR',
@@ -99,7 +99,7 @@ describe('RecentTicketsTable', () => {
 		// and the errorMessage cleared, mirroring the BFF's
 		// withStatus(OPEN) side effect.
 		retryTicketStub.mockReset();
-		retryTicketStub.mockImplementation(async (_token: string, id: string) => {
+		retryTicketStub.mockImplementation(async (_token: string, id: number) => {
 			const row = sample.find((t) => t.id === id);
 			if (!row) throw new Error(`unknown ticket id ${id} in retry stub`);
 			return { ...row, status: 'OPEN', errorMessage: null };

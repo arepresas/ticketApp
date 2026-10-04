@@ -15,7 +15,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // DOM coverage to Playwright.
 const { mockAuth } = vi.hoisted(() => ({
 	mockAuth: {
-		user: null as { id: string; email: string; name: string } | null,
+		user: null as { id: number; email: string; name: string } | null,
 		status: 'idle' as 'idle' | 'loading' | 'authenticated' | 'error',
 		isAuthenticated: false,
 		error: null as string | null
@@ -55,7 +55,7 @@ describe('NewTicketApp', () => {
 	});
 
 	it('mocked auth store can flip to authenticated', () => {
-		mockAuth.user = { id: 'u-1', email: 'ada@example.com', name: 'Ada Lovelace' };
+		mockAuth.user = { id: 1, email: 'ada@example.com', name: 'Ada Lovelace' };
 		mockAuth.isAuthenticated = true;
 		mockAuth.status = 'authenticated';
 		expect(mockAuth.isAuthenticated).toBe(true);

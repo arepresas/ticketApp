@@ -64,11 +64,11 @@ public class JwtToAuthenticatedUserConverter
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        UUID userId = parseUuidClaim(jwt, "sub", "user");
+        long userId = parseLongClaim(jwt, "sub", "user");
         UUID jti = parseUuidClaim(jwt, CLAIM_JTI, "session");
 
         AuthenticatedUser user = sessions.findActiveUserByJti(jti)
-                .filter(u -> u.id().equals(userId))
+                .filter(u -> u.id() == userId)
                 .orElseThrow(() -> {
                     log.warn("JWT rejected: no live session {} for user {}", jti, userId);
                     return new InvalidBearerTokenException(
@@ -81,6 +81,19 @@ public class JwtToAuthenticatedUserConverter
         // Stamp `authenticatedAt` for downstream audit log lines —
         // not part of the security contract, just a convenience.
         return new BearerTokenAuthentication(jwt, authorities, user, jti);
+    }
+
+    /** {@code sub} carries the numeric app_users id. */
+    private static long parseLongClaim(Jwt jwt, String name, String what) {
+        String raw = jwt.getClaimAsString(name);
+        if (raw == null) {
+            throw new InvalidBearerTokenException("missing " + what + " id claim");
+        }
+        try {
+            return Long.parseLong(raw);
+        } catch (NumberFormatException e) {
+            throw new InvalidBearerTokenException(what + " id claim is not numeric");
+        }
     }
 
     private static UUID parseUuidClaim(Jwt jwt, String name, String what) {
@@ -132,7 +145,7 @@ public class JwtToAuthenticatedUserConverter
 
         @Override
         public String getName() {
-            return principal.id().toString();
+            return Long.toString(principal.id());
         }
 
         public UUID jti() {

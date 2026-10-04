@@ -17,7 +17,7 @@
 --     production code paths already do.
 --   * No backfill row in this migration. Pre-V9 rows were created
 --     without an owner; if any exist, the sentinel default takes
---     over (UUID 00000000-0000-0000-0000-000000000000) and the
+--     over (0 / a sentinel id) and the
 --     corresponding user record (if it ever exists) would silently
 --     own them. In practice the project has no production data at
 --     this point.
@@ -26,8 +26,8 @@
 --     owner_id + status and would otherwise full-scan the table.
 
 ALTER TABLE tickets
-    ADD COLUMN owner_id UUID NOT NULL
-    DEFAULT '00000000-0000-0000-0000-000000000000';
+    ADD COLUMN owner_id BIGINT NOT NULL
+    DEFAULT 0;
 
 ALTER TABLE tickets
     ALTER COLUMN owner_id DROP DEFAULT;

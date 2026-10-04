@@ -26,7 +26,7 @@ class LineTicketTest {
         // Discount line: €3 store credit on a ticket whose cart
         // contained the product at full price.
         LineTicket lt = new LineTicket(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                nextId(), nextId(), nextId(), nextId(),
                 new BigDecimal("1"), new BigDecimal("-3.00"),
                 Instant.now(), Instant.now());
         assertEquals(new BigDecimal("-3.00"), lt.lineTotal());
@@ -36,7 +36,7 @@ class LineTicketTest {
     void constructorRejectsZeroQuantity() {
         assertThrows(IllegalArgumentException.class,
                 () -> new LineTicket(
-                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                        nextId(), nextId(), nextId(), nextId(),
                         BigDecimal.ZERO, BigDecimal.ONE,
                         Instant.now(), Instant.now()));
     }
@@ -45,37 +45,35 @@ class LineTicketTest {
     void constructorRejectsNegativeQuantity() {
         assertThrows(IllegalArgumentException.class,
                 () -> new LineTicket(
-                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                        nextId(), nextId(), nextId(), nextId(),
                         new BigDecimal("-1"), BigDecimal.ONE,
                         Instant.now(), Instant.now()));
     }
 
     @Test
-    void constructorRejectsNullReferencesAndNumericFields() {
-        // All three FK targets + quantity + lineTotal are required.
-        // Letting any of them be null would let the JDBC layer pass
-        // it through and crash on the FK constraint downstream;
-        // catching it at the domain boundary keeps the failure
-        // local. shopId no longer lives here (V13 refactor moved it
-        // to Ticket) — the line carries ticketId + productId + priceId.
+    void constructorRejectsNullQuantityAndLineTotal() {
+        // quantity + lineTotal are required. Letting either be null
+        // would let the JDBC layer pass it through and crash on the
+        // NOT NULL constraint downstream; catching it at the domain
+        // boundary keeps the failure local. The FK targets are
+        // primitives now, so "null reference" cannot be expressed.
         Instant now = Instant.now();
-        UUID id = UUID.randomUUID();
-        UUID t = UUID.randomUUID();
-        UUID p = UUID.randomUUID();
-        UUID pr = UUID.randomUUID();
+        long t = nextId();
+        long p = nextId();
+        long pr = nextId();
         BigDecimal one = BigDecimal.ONE;
 
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(null, t, p, pr, one, one, now, now));
+                () -> new LineTicket(nextId(), t, p, pr, null, one, now, now));
         assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, null, p, pr, one, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, null, pr, one, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, p, null, one, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, p, pr, null, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(id, t, p, pr, one, null, now, now));
+                () -> new LineTicket(nextId(), t, p, pr, one, null, now, now));
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.UUID;
+
 
 /**
  * REST surface for the shop master catalogue.
@@ -58,7 +58,7 @@ public class ShopController {
      * a tenant boundary.
      */
     @GetMapping("/{id}")
-    public ResponseEntity<ShopResponse> get(@PathVariable UUID id) {
+    public ResponseEntity<ShopResponse> get(@PathVariable long id) {
         // Touch the security context so an unauthenticated caller
         // gets a 401 from the resource-server filter rather than a
         // 404 from this method. Belt-and-braces; the filter should
@@ -79,7 +79,7 @@ public class ShopController {
      * normalisation. The user typed it, we trust it.
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<ShopResponse> patch(@PathVariable UUID id,
+    public ResponseEntity<ShopResponse> patch(@PathVariable long id,
                                               @RequestBody(required = false) UpdateShopRequest body) {
         // CurrentUser.get() throws 401 by itself, so there is no
         // null case to guard here.

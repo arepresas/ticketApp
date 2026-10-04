@@ -21,7 +21,7 @@
   ],
   "recentTickets": [
     {
-      "id": "t-1042",
+      "id": 1042,
       "title": "Cena con cliente",
       "category": "food",
       "date": "2026-05-28",
@@ -29,7 +29,7 @@
       "status": "open"
     },
     {
-      "id": "t-1041",
+      "id": 1041,
       "title": "Vuelo Madrid–Berlin",
       "category": "transport",
       "date": "2026-05-22",
@@ -37,7 +37,7 @@
       "status": "closed"
     },
     {
-      "id": "t-1040",
+      "id": 1040,
       "title": "Hotel 3 noches",
       "category": "lodging",
       "date": "2026-05-19",
@@ -45,7 +45,7 @@
       "status": "open"
     },
     {
-      "id": "t-1039",
+      "id": 1039,
       "title": "Taxi aeropuerto",
       "category": "transport",
       "date": "2026-05-15",
@@ -53,7 +53,7 @@
       "status": "closed"
     },
     {
-      "id": "t-1038",
+      "id": 1038,
       "title": "Comida equipo",
       "category": "food",
       "date": "2026-05-12",
