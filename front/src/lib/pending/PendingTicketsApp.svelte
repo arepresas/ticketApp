@@ -48,6 +48,7 @@
 		type TicketStatus
 	} from '../api/tickets';
 	import { navigate } from '../navigation';
+	import { formatDateTime as sharedFormatDateTime } from '../utils/date';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -113,14 +114,7 @@
 	}
 
 	function formatDate(iso: string): string {
-		try {
-			return new Intl.DateTimeFormat(undefined, {
-				dateStyle: 'medium',
-				timeStyle: 'short'
-			}).format(new Date(iso));
-		} catch {
-			return iso;
-		}
+		return sharedFormatDateTime(iso);
 	}
 
 	function isImage(contentType: string | null): boolean {

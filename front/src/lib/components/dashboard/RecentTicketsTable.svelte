@@ -36,6 +36,7 @@
 		type TicketStatus
 	} from '../../api/tickets';
 	import { navigate } from '../../navigation';
+	import { formatDate as sharedFmtDate, formatDateTime as sharedFmtDateTime } from '../../utils/date';
 
 	type Props = {
 		/**
@@ -48,6 +49,9 @@
 	};
 
 	let { registerLoad }: Props = $props();
+
+	const dateFmt = { format: sharedFmtDate };
+	const dtFmt = { format: sharedFmtDateTime };
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -114,12 +118,6 @@
 		DELETED:
 			'bg-zinc-500/10 text-zinc-700 ring-1 ring-inset ring-zinc-500/20 dark:text-zinc-300'
 	};
-
-	const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
-	const dtFmt = new Intl.DateTimeFormat(undefined, {
-		dateStyle: 'medium',
-		timeStyle: 'short'
-	});
 
 	function formatSize(bytes: number | null): string {
 		if (bytes == null || bytes <= 0) return '—';
