@@ -71,6 +71,7 @@
 	} from '../api/tickets';
 	import { searchProducts, type ProductSummary } from '../api/products';
 	import { navigateBack } from '../navigation';
+	import { formatDate as sharedFmtDate, formatDateTime as sharedFmtDateTime } from '../utils/date';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
 
@@ -305,24 +306,9 @@
 		}
 	};
 
-	const fmtDate = (iso: string): string => {
-		try {
-			return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	};
+	const fmtDate = (iso: string): string => sharedFmtDate(iso);
 
-	const fmtDateTime = (iso: string): string => {
-		try {
-			return new Intl.DateTimeFormat(undefined, {
-				dateStyle: 'medium',
-				timeStyle: 'short'
-			}).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	};
+	const fmtDateTime = (iso: string): string => sharedFmtDateTime(iso);
 
 	const isImagePreview = (ct: string | null): boolean => !!ct && ct.startsWith('image/');
 	const isPdfPreview = (ct: string | null): boolean => ct === 'application/pdf';
