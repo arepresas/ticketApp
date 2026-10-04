@@ -25,6 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 
@@ -95,68 +96,26 @@ public class TicketExtractionController {
                                                                 @RequestBody UpdateExtractionRequest body) {
         // No null-body check: @RequestBody is required by default,
         // so Spring rejects a missing body before this runs.
-        if (body.merchant() == null || body.merchant().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "merchant must not be blank");
-        }
-        if (body.purchaseDate() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purchaseDate is required");
-        }
-        if (body.totalAmount() == null || body.totalAmount().signum() < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "totalAmount must be >= 0");
-        }
-        if (body.currency() == null || !body.currency().matches("[A-Za-z]{3}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "currency must be an ISO 4217 code (3 letters)");
-        }
-        // ISO codes are uppercase by convention (the AI pipeline
-        // emits them that way); normalise so "eur" and "EUR"
-        // collapse to one value instead of two catalogue variants.
-        String currency = body.currency().toUpperCase(java.util.Locale.ROOT);
-        List<ProductLineDto> productDtos = body.products() == null
-                ? List.of()
-                : body.products();
-        for (int i = 0; i < productDtos.size(); i++) {
-            ProductLineDto p = productDtos.get(i);
-            if (p == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "] must not be null");
-            }
-            // Null prices coerce to ZERO below (not rejected): the
-            // detail screen models partially-typed rows as null and
-            // renders them as 0.00 (see front's computedLineTotal),
-            // so persisting 0 mirrors what the user saw. A missing
-            // price is genuinely "free/unknown", never a negative
-            // discount — discounts arrive as explicit negatives.
-            if (p.name() == null || p.name().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "].name must not be blank");
-            }
-            if (p.quantity() == null || p.quantity().signum() <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "].quantity must be > 0");
-            }
-        }
+        String currency = validateScalars(body);
+        List<ProductLineDto> productDtos = validateProducts(body.products());
 
         AuthenticatedUser user = CurrentUser.get();
-        Optional<Ticket> ticketOpt = repository.findById(id, user.id());
-        if (ticketOpt.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
+        repository.findById(id, user.id())
+                // First gate on the ticket itself — refuses cross-tenant
+                // access without leaking existence (returns 404 either way).
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         // Refuse silently when no extraction exists yet — let the
         // AI finish first, then edit. The detail screen is
         // already aligned: it disables the edit affordance while
         // extraction is null.
-        Optional<TicketExtraction> existing =
-                extractions.findByTicketId(id, user.id());
-        if (existing.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-        TicketExtraction current = existing.get();
+        TicketExtraction current = extractions.findByTicketId(id, user.id())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
         List<TicketExtraction.ProductLine> domainProducts = productDtos.stream()
                 .map(p -> new TicketExtraction.ProductLine(
                         p.name(), p.quantity(), p.unit(),
-                        p.pricePerUnit() == null ? BigDecimal.ZERO : p.pricePerUnit(),
-                        p.lineTotal() == null ? BigDecimal.ZERO : p.lineTotal()))
+                        zeroIfNull(p.pricePerUnit()),
+                        zeroIfNull(p.lineTotal())))
                 .toList();
         TicketExtraction updated = new TicketExtraction(
                 current.ticketId(),
@@ -180,5 +139,68 @@ public class TicketExtractionController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         return ResponseEntity.ok(ExtractionResponse.of(updated));
+    }
+
+    /**
+     * Validates the scalar (non-line) fields of the edit payload and
+     * returns the normalised currency. Split out so the endpoint reads
+     * as validate → load → replace instead of a wall of guards.
+     */
+    private static String validateScalars(UpdateExtractionRequest body) {
+        if (body.merchant() == null || body.merchant().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "merchant must not be blank");
+        }
+        if (body.purchaseDate() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "purchaseDate is required");
+        }
+        if (body.totalAmount() == null || body.totalAmount().signum() < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "totalAmount must be >= 0");
+        }
+        if (body.currency() == null || !body.currency().matches("[A-Za-z]{3}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "currency must be an ISO 4217 code (3 letters)");
+        }
+        // ISO codes are uppercase by convention (the AI pipeline
+        // emits them that way); normalise so "eur" and "EUR"
+        // collapse to one value instead of two catalogue variants.
+        return body.currency().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Validates the product lines and normalises a null list to empty.
+     * Prices are deliberately not checked here — see
+     * {@link #zeroIfNull(BigDecimal)} for why a null price is
+     * accepted rather than rejected.
+     */
+    private static List<ProductLineDto> validateProducts(List<ProductLineDto> products) {
+        List<ProductLineDto> productDtos = products == null ? List.of() : products;
+        for (int i = 0; i < productDtos.size(); i++) {
+            ProductLineDto p = productDtos.get(i);
+            if (p == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "] must not be null");
+            }
+            if (p.name() == null || p.name().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].name must not be blank");
+            }
+            if (p.quantity() == null || p.quantity().signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "products[" + i + "].quantity must be > 0");
+            }
+        }
+        return productDtos;
+    }
+
+    /**
+     * Null prices coerce to ZERO (not rejected): the detail screen
+     * models partially-typed rows as null and renders them as 0.00
+     * (see front's computedLineTotal), so persisting 0 mirrors what
+     * the user saw. A missing price is genuinely "free/unknown",
+     * never a negative discount — discounts arrive as explicit
+     * negatives.
+     */
+    private static BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 }

@@ -77,11 +77,10 @@ class ProductControllerIT {
     }
 
     private long seedProduct(String name, String unit) {
-        long id = jdbc.queryForObject("""
+        return jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
                 VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
-        return id;
     }
 
     @Test
@@ -206,8 +205,4 @@ class ProductControllerIT {
     /** Sequential stand-in for the former UUID test ids. */
     private static final java.util.concurrent.atomic.AtomicLong IDS =
             new java.util.concurrent.atomic.AtomicLong(1L);
-
-    private static long nextId() {
-        return IDS.incrementAndGet();
-    }
 }

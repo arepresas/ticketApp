@@ -42,11 +42,10 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     private long seedProduct(String name, String unit) {
-        long id = jdbc.queryForObject("""
+        return jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
                 VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
-        return id;
     }
 
     @Test

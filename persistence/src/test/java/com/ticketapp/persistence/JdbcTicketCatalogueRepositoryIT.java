@@ -36,9 +36,9 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
     JdbcTemplate jdbc;
 
     /** Seeded in {@link #cleanSlate()}; app_users.id is an identity column. */
-    private long OWNER;
+    private long owner;
     /** Seeded in {@link #cleanSlate()}; app_users.id is an identity column. */
-    private long OTHER;
+    private long other;
 
     @BeforeEach
     void cleanSlate() {
@@ -54,8 +54,8 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     private void seedOwner() {
-        OWNER = seedOwner(jdbc, "owner-it");
-        OTHER = seedOwner(jdbc, "other-owner-it");
+        owner = seedOwner(jdbc, "owner-it");
+        other = seedOwner(jdbc, "other-owner-it");
     }
 
     /** A shop, a product, a price and one line wired to a ticket. */
@@ -83,9 +83,9 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void returnsShopAndLinesInReceiptOrder() {
-        long ticketId = seedNormalisedTicket(OWNER);
+        long ticketId = seedNormalisedTicket(owner);
 
-        TicketCatalogue got = repository.findByTicketId(ticketId, OWNER).orElseThrow();
+        TicketCatalogue got = repository.findByTicketId(ticketId, owner).orElseThrow();
 
         assertThat(got.shop().normalisedName()).isEqualTo("it-shop");
         assertThat(got.lines()).hasSize(1);
@@ -95,16 +95,16 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void anotherOwnerSeesNothing() {
-        long ticketId = seedNormalisedTicket(OWNER);
+        long ticketId = seedNormalisedTicket(owner);
 
         // Not an exception, not someone else's data: the same empty
         // answer as a ticket that does not exist.
-        assertThat(repository.findByTicketId(ticketId, OTHER)).isEmpty();
+        assertThat(repository.findByTicketId(ticketId, other)).isEmpty();
     }
 
     @Test
     void unknownTicketIsEmpty() {
-        assertThat(repository.findByTicketId(nextId(), OWNER)).isEmpty();
+        assertThat(repository.findByTicketId(nextId(), owner)).isEmpty();
     }
 
     @Test
@@ -113,19 +113,19 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
         // missing ticket: this port replaced a controller that used
         // to pre-read the ticket, so the status filter has to live
         // here or a deleted ticket keeps serving its catalogue.
-        long ticketId = seedNormalisedTicket(OWNER);
+        long ticketId = seedNormalisedTicket(owner);
         jdbc.update("UPDATE tickets SET status = 'DELETED' WHERE id = ?", ticketId);
 
-        assertThat(repository.findByTicketId(ticketId, OWNER)).isEmpty();
+        assertThat(repository.findByTicketId(ticketId, owner)).isEmpty();
     }
 
     @Test
     void ticketWithoutShopIsEmpty() {
         long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, status, created_at, updated_at)
-                VALUES (?, 't', 'OPEN', now(), now()) RETURNING id""", Long.class, OWNER);
+                VALUES (?, 't', 'OPEN', now(), now()) RETURNING id""", Long.class, owner);
 
-        assertThat(repository.findByTicketId(ticketId, OWNER)).isEmpty();
+        assertThat(repository.findByTicketId(ticketId, owner)).isEmpty();
     }
 
     @Test
@@ -136,9 +136,9 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
         long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, status, shop_id,
                                      created_at, updated_at)
-                VALUES (?, 't', 'DONE', ?, now(), now()) RETURNING id""", Long.class, OWNER, shopId);
+                VALUES (?, 't', 'DONE', ?, now(), now()) RETURNING id""", Long.class, owner, shopId);
 
-        assertThat(repository.findByTicketId(ticketId, OWNER)).isEmpty();
+        assertThat(repository.findByTicketId(ticketId, owner)).isEmpty();
     }
 
     /** Sequential stand-in for the former UUID test ids. */

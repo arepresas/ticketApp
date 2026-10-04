@@ -6,6 +6,7 @@ import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
 import com.ticketapp.domain.ai.ReceiptExtractor;
 import com.ticketapp.openai.autoconfigure.OpenAiProperties;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,53 +47,7 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
     @Override
     public ReceiptExtraction extract(ReceiptExtractionRequest request)
             throws ReceiptExtractionException {
-        OpenAiApiClient.ReceiptInput input;
-        if (request.isPdf()) {
-            // PDF preprocessing is a provider concern: the provider's
-            // chat-completions endpoint doesn't accept PDFs natively
-            // (ADR 0006 D3). Future implementations with native PDF
-            // support would skip this step.
-            String text;
-            try {
-                text = pdfExtractor.extract(request.content());
-            } catch (java.io.IOException ioe) {
-                throw new ReceiptExtractionException(0, false,
-                        "PDF text extraction failed: " + ioe.getMessage(), ioe);
-            }
-            if (text.isBlank()) {
-                // Scanned / image-only PDF: no selectable text. The
-                // upstream API rejects raw PDF bytes in image_url
-                // (HTTP 400: "media type 'application/pdf' not
-                // supported") so we can't just forward the original
-                // bytes — the PDF has to be rasterized to PNG first.
-                // 200 DPI is high enough to keep small print
-                // legible; the resulting PNG is sent through the
-                // same image_url branch as a normal photo upload.
-                log.warn("PDF text extraction returned empty for {} bytes — "
-                        + "rasterizing first page as PNG", request.content().length);
-                byte[] pngBytes;
-                try {
-                    pngBytes = pdfExtractor.rasterizeFirstPageAsPng(request.content());
-                } catch (java.io.IOException ioe) {
-                    throw new ReceiptExtractionException(0, false,
-                            "PDF rasterization failed: " + ioe.getMessage(), ioe);
-                }
-                if (pngBytes == null) {
-                    // Either empty bytes (caught at the call site
-                    // above) or zero-page document — both surface as
-                    // the same "nothing to extract" hard failure.
-                    throw new ReceiptExtractionException(0, false,
-                            "PDF has no pages to rasterize");
-                }
-                input = OpenAiApiClient.ReceiptInput.image(
-                        properties.model(), pngBytes, "image/png");
-            } else {
-                input = OpenAiApiClient.ReceiptInput.pdfText(properties.model(), text);
-            }
-        } else {
-            input = OpenAiApiClient.ReceiptInput.image(properties.model(),
-                    request.content(), request.contentType());
-        }
+        OpenAiApiClient.ReceiptInput input = toInput(request);
 
         final String raw;
         try {
@@ -105,7 +60,7 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
                     isRetriableStatus(mae.statusCode()),
                     "the extraction failed: " + mae.getMessage(),
                     safeMessageFor(mae.statusCode()), mae);
-        } catch (java.io.IOException ioe) {
+        } catch (IOException ioe) {
             throw new ReceiptExtractionException(0, true,
                     "the extraction failed: " + ioe.getMessage(),
                     "the AI provider could not be reached", ioe);
@@ -132,11 +87,67 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
     }
 
     /**
-     * Timeouts, rate limits and server errors are worth another
-     * attempt; a client error is not (the same request would fail
-     * again). Unknown statuses are treated as permanent so a
-     * surprise does not turn into a retry storm.
+     * Turns the request payload into the provider-agnostic input the
+     * chat-completions endpoint accepts. Split out of {@link #extract}
+     * so the orchestration method stays a linear read of the failure
+     * contract instead of a nest of preprocessing branches.
      */
+    private OpenAiApiClient.ReceiptInput toInput(ReceiptExtractionRequest request)
+            throws ReceiptExtractionException {
+        if (!request.isPdf()) {
+            return OpenAiApiClient.ReceiptInput.image(properties.model(),
+                    request.content(), request.contentType());
+        }
+
+        // PDF preprocessing is a provider concern: the provider's
+        // chat-completions endpoint doesn't accept PDFs natively
+        // (ADR 0006 D3). Future implementations with native PDF
+        // support would skip this step.
+        String text = extractPdfText(request.content());
+        if (!text.isBlank()) {
+            return OpenAiApiClient.ReceiptInput.pdfText(properties.model(), text);
+        }
+
+        // Scanned / image-only PDF: no selectable text. The upstream
+        // API rejects raw PDF bytes in image_url (HTTP 400: "media type
+        // 'application/pdf' not supported") so we can't just forward
+        // the original bytes — the PDF has to be rasterized to PNG
+        // first. 200 DPI is high enough to keep small print legible;
+        // the resulting PNG is sent through the same image_url branch
+        // as a normal photo upload.
+        log.warn("PDF text extraction returned empty for {} bytes — "
+                + "rasterizing first page as PNG", request.content().length);
+        byte[] pngBytes = rasterizeFirstPage(request.content());
+        return OpenAiApiClient.ReceiptInput.image(properties.model(), pngBytes, "image/png");
+    }
+
+    private String extractPdfText(byte[] content) throws ReceiptExtractionException {
+        try {
+            return pdfExtractor.extract(content);
+        } catch (IOException ioe) {
+            throw new ReceiptExtractionException(0, false,
+                    "PDF text extraction failed: " + ioe.getMessage(), ioe);
+        }
+    }
+
+    private byte[] rasterizeFirstPage(byte[] content) throws ReceiptExtractionException {
+        byte[] pngBytes;
+        try {
+            pngBytes = pdfExtractor.rasterizeFirstPageAsPng(content);
+        } catch (IOException ioe) {
+            throw new ReceiptExtractionException(0, false,
+                    "PDF rasterization failed: " + ioe.getMessage(), ioe);
+        }
+        if (pngBytes == null) {
+            // Either empty bytes (caught at the call site
+            // above) or zero-page document — both surface as
+            // the same "nothing to extract" hard failure.
+            throw new ReceiptExtractionException(0, false,
+                    "PDF has no pages to rasterize");
+        }
+        return pngBytes;
+    }
+
     /**
      * Client-facing text for a provider status. A category, never the
      * provider's own output: the orchestrator persists this on the
@@ -159,6 +170,12 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
         return "the AI provider rejected the extraction (status " + status + ")";
     }
 
+    /**
+     * Timeouts, rate limits and server errors are worth another
+     * attempt; a client error is not (the same request would fail
+     * again). Unknown statuses are treated as permanent so a
+     * surprise does not turn into a retry storm.
+     */
     private static boolean isRetriableStatus(int status) {
         return status == 429 || (status >= 500 && status <= 599);
     }

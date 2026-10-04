@@ -50,13 +50,22 @@ public class JdbcProductRepository implements ProductRepository {
             RETURNING id
             """;
 
+    /**
+     * Shared {@code SELECT} head. Every read path below needs the same
+     * projection and table, so the prefix is stated once and the
+     * per-query {@code WHERE}/{@code ORDER BY} clauses are appended —
+     * changing the projection then cannot leave one query behind.
+     */
+    private static final String SELECT_PRODUCTS =
+            "SELECT " + PRODUCT_COLS + " FROM products ";
+
     private static final String FIND_BY_NAME_SQL =
-            "SELECT " + PRODUCT_COLS + " FROM products " +
+            SELECT_PRODUCTS +
             "WHERE normalised_name = :name " +
             "AND COALESCE(unit, '') = COALESCE(:unit, '')";
 
     private static final String FIND_BY_IDS_SQL =
-            "SELECT " + PRODUCT_COLS + " FROM products WHERE id IN (:ids)";
+            SELECT_PRODUCTS + "WHERE id IN (:ids)";
 
     /**
      * Prefix lookup against {@code normalised_name}. Uses {@code ILIKE}
@@ -66,7 +75,7 @@ public class JdbcProductRepository implements ProductRepository {
      * name keep results stable for the SPA's autocomplete.
      */
     private static final String SEARCH_BY_NAME_SQL =
-            "SELECT " + PRODUCT_COLS + " FROM products " +
+            SELECT_PRODUCTS +
             "WHERE normalised_name ILIKE :prefix ESCAPE '\\' " +
             "ORDER BY normalised_name ASC " +
             "LIMIT :limit";

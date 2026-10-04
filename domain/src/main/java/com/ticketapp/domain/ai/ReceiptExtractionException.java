@@ -64,12 +64,7 @@ public class ReceiptExtractionException extends TicketAppException {
      */
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, String safeMessage) {
-        super(ERROR_CODE, message);
-        this.statusCode = statusCode;
-        this.retryable = retryable;
-        this.safeMessage = safeMessage == null || safeMessage.isBlank()
-                ? GENERIC_SAFE_MESSAGE
-                : safeMessage;
+        this(statusCode, retryable, message, safeMessage, null);
     }
 
     /**
@@ -85,23 +80,27 @@ public class ReceiptExtractionException extends TicketAppException {
 
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, Throwable cause) {
-        // Source-compat overload: the previous public signature was
-        // (int, boolean, String, Throwable). Code that still passes
-        // a `message` falls through to the GENERIC_SAFE_MESSAGE so
-        // no caller can accidentally leak provider text through an
-        // old call site. The diagnostic `message` is kept on the
-        // super-class for log-side debugging but never reaches
-        // safeMessage().
+        // Convenience overload for adapters that have no status-aware
+        // category to offer: the `message` it accepts is the
+        // diagnostic, which is never persisted or sent to clients, so
+        // it must NOT be reused as the safe message. Callers fall
+        // through to GENERIC_SAFE_MESSAGE rather than leaking
+        // provider text through an old call site.
         this(statusCode, retryable, message, GENERIC_SAFE_MESSAGE, cause);
     }
 
     /**
-     * @deprecated prefer the overload that takes an explicit
-     * {@code safeMessage}. The four-argument form is kept so the old
-     * call sites still compile; the {@code message} it accepts is
-     * the diagnostic, which is never persisted or sent to clients.
+     * Canonical constructor: every other overload funnels here. Takes
+     * the full contract — provider status, the retry decision, the
+     * diagnostic {@code message}, the client-facing {@code safeMessage},
+     * and an optional {@code cause}.
+     *
+     * <p>The five-argument form is NOT legacy: an adapter that knows
+     * both a provider status and a client-safe category must be able to
+     * attach the original cause as well, and that is exactly what
+     * {@code OpenAiReceiptExtractor} does for every failed provider
+     * call.
      */
-    @Deprecated
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, String safeMessage,
                                       Throwable cause) {
