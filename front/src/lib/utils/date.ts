@@ -31,7 +31,13 @@ const dtFmt = new Intl.DateTimeFormat(LOCALE, {
 	timeStyle: 'short'
 });
 
-function toDate(value: Date | string | number): Date {
+/**
+ * Anything a caller might hold a timestamp in: the ISO-8601 string the
+ * backend sends, an already-parsed {@link Date}, or epoch millis.
+ */
+type DateLike = Date | string | number;
+
+function toDate(value: DateLike): Date {
 	if (value instanceof Date) return value;
 	return new Date(value);
 }
@@ -43,7 +49,7 @@ function toDate(value: Date | string | number): Date {
  * dashboard should degrade, not crash, on a malformed timestamp
  * from the backend.
  */
-export function formatDate(value: Date | string | number): string {
+export function formatDate(value: DateLike): string {
 	try {
 		return dateFmt.format(toDate(value));
 	} catch {
@@ -53,8 +59,9 @@ export function formatDate(value: Date | string | number): string {
 
 /**
  * Render a timestamp day-first with the time, e.g. "21 Mar 2026, 14:07".
+ * Same fallback as {@link formatDate}.
  */
-export function formatDateTime(value: Date | string | number): string {
+export function formatDateTime(value: DateLike): string {
 	try {
 		return dtFmt.format(toDate(value));
 	} catch {
