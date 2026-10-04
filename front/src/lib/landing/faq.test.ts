@@ -5,7 +5,7 @@ import Faq from './Faq.svelte';
 describe('Faq', () => {
 	it('renders 5 details elements', () => {
 		const { container } = render(Faq);
-		expect(container.querySelectorAll('details').length).toBe(5);
+		expect(container.querySelectorAll('details')).toHaveLength(5);
 	});
 
 	it('opens the first question by default', () => {

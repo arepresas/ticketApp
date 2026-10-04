@@ -174,24 +174,12 @@ public class TicketApplicationService {
                     Ticket target = t;
                     if (status == Ticket.Status.DONE
                             && extractions.findByTicketId(id, user.id()).isEmpty()) {
-                        // If the ticket has no extraction row yet
-                        // (typical for ON_ERROR retries, or any
-                        // ticket that landed in DONE before the
-                        // scheduler could pick it up), trigger the
-                        // AI pipeline synchronously (`t` is still
-                        // current — nothing wrote between the two
-                        // reads, so no re-read needed here).
-                        // processTicket sets the status to IN_PROGRESS
-                        // at start, marks ON_ERROR on failure, and
-                        // leaves the row ready for the normaliser on
-                        // success. Its boolean drives the branch: a
-                        // concurrent scheduler tick may have written
-                        // the row meanwhile (its success is as good
-                        // as ours — the catalogue exists either way),
-                        // so on failure we still re-check the table
-                        // before giving up. We re-read the ticket
-                        // afterwards so the response reflects whatever
-                        // status the pipeline actually landed on.
+                        // No extraction row yet (an ON_ERROR retry, or a ticket that
+                        // reached DONE before the scheduler got to it):
+                        // run the AI pipeline synchronously. `t` is still
+                        // current — nothing wrote between the two reads.
+                        // See the Javadoc for why the boolean and the
+                        // re-read below are both required.
                         boolean extracted = extractionService.processTicket(t);
                         target = tickets.findById(id, user.id()).orElse(t);
                         if (!extracted

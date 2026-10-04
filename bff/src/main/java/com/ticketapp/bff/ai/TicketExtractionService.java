@@ -77,6 +77,43 @@ import java.util.List;
 public class TicketExtractionService {
 
     /**
+     * Segment 2 of the extraction pipeline: commit the extraction row
+     * and the IN_PROGRESS flip in one transaction, so a reader never
+     * sees an extraction without its status flip (or vice versa).
+     *
+     * <p>Explicit save of the flipped copy (not just chained on the next
+     * op) because the controller's PATCH /status path may immediately
+     * overwrite this with DONE; we want the audit log to show the
+     * intermediate state regardless. Built off {@code marked} so the
+     * bumped attempts counter survives the transition.
+     *
+     * <p>The lost-race branch lives here rather than at the call site
+     * so the orchestration flow has no nested {@code try}: the caller
+     * only has to decide whether to keep going.
+     *
+     * @return {@code true} when the segment committed; {@code false}
+     *         when the row moved mid-flight and has been recovered
+     */
+    private boolean commitExtractionOrRecover(long id, Ticket marked,
+                                              TicketExtraction persisted) {
+        try {
+            tx.executeWithoutResult(status -> {
+                ticketExtractionRepository.save(persisted);
+                ticketRepository.save(marked.withStatus(Status.IN_PROGRESS));
+            });
+            return true;
+        } catch (OptimisticLockException e) {
+            // The row moved while the provider call was in flight
+            // (user action). The segment never committed, so nothing
+            // was persisted — recover instead of leaving the
+            // segment-1 IN_ANALYSIS behind.
+            skippedCounter.increment();
+            recoverStaleAnalysis(id, marked);
+            return false;
+        }
+    }
+
+    /**
      * Recover a segment-1 IN_ANALYSIS orphaned by a lost segment-2
      * race. If the winner moved the ticket on, their state stands
      * and there is nothing to do. If it is still IN_ANALYSIS (a
@@ -269,24 +306,8 @@ public class TicketExtractionService {
             // Segment 2 — short transaction: the extraction row and the
             // IN_PROGRESS flip land in one commit, so a reader never
             // sees an extraction without its status flip (or vice
-            // versa). Explicit save of the flipped copy (not just
-            // chained on the next op) because the controller's
-            // PATCH /status path may immediately overwrite this with
-            // DONE; we want the audit log to show the intermediate
-            // state regardless. Built off `marked` so the bumped
-            // attempts counter survives the transition.
-            try {
-                tx.executeWithoutResult(status -> {
-                    ticketExtractionRepository.save(persisted);
-                    ticketRepository.save(marked.withStatus(Status.IN_PROGRESS));
-                });
-            } catch (OptimisticLockException e) {
-                // The row moved while the provider call was in
-                // flight (user action). The segment never committed,
-                // so nothing was persisted — recover instead of
-                // leaving the segment-1 IN_ANALYSIS behind.
-                skippedCounter.increment();
-                recoverStaleAnalysis(id, marked);
+            // versa).
+            if (!commitExtractionOrRecover(id, marked, persisted)) {
                 return false;
             }
             log.info("Extracted ticket {} → merchant='{}' total={} {}",

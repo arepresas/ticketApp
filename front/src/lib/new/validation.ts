@@ -53,23 +53,25 @@ export type FileDecision =
  * offending file before resubmitting.
  */
 export async function validateFiles(files: File[]): Promise<FileDecision[]> {
-	const decisions: FileDecision[] = [];
-	for (const file of files) {
-		if (!isAcceptedFile(file)) {
-			decisions.push({ file, status: 'rejected', reason: 'Only images and PDFs are accepted.' });
-			continue;
-		}
-		const tooBig = fileSizeError(file);
-		if (tooBig) {
-			decisions.push({ file, status: 'rejected', reason: tooBig });
-			continue;
-		}
-		try {
-			const bytes = new Uint8Array(await file.arrayBuffer());
-			decisions.push({ file, status: 'accepted', bytes });
-		} catch {
-			decisions.push({ file, status: 'rejected', reason: 'Could not read the file. Try again.' });
-		}
+	// Promise.all keeps the per-file decisions in submission order, so
+	// the error chips line up with the file list the user sees. The
+	// reads are independent, so they run concurrently instead of
+	// stalling the queue on one slow disk read at a time.
+	return Promise.all(files.map(validateOneFile));
+}
+
+async function validateOneFile(file: File): Promise<FileDecision> {
+	if (!isAcceptedFile(file)) {
+		return { file, status: 'rejected', reason: 'Only images and PDFs are accepted.' };
 	}
-	return decisions;
+	const tooBig = fileSizeError(file);
+	if (tooBig) {
+		return { file, status: 'rejected', reason: tooBig };
+	}
+	try {
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		return { file, status: 'accepted', bytes };
+	} catch {
+		return { file, status: 'rejected', reason: 'Could not read the file. Try again.' };
+	}
 }

@@ -327,8 +327,4 @@ class TicketOwnershipIT {
     /** Sequential stand-in for the former UUID test ids. */
     private static final java.util.concurrent.atomic.AtomicLong IDS =
             new java.util.concurrent.atomic.AtomicLong(1L);
-
-    private static long nextId() {
-        return IDS.incrementAndGet();
-    }
 }
