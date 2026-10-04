@@ -13,16 +13,39 @@ import type { AuthUser } from '../../auth/types';
 
 // `vi.hoisted` runs before `vi.mock` factories — needed because the mock
 // factory below closes over `fetchSpy` but the spy itself is declared later.
+// Typed as the real client type on purpose: a bare `as const` object
+// has no compile-time relationship to the wire contract, so a renamed or
+// retyped field would pass here and only fail in the browser.
+type DashboardResponse = Awaited<ReturnType<typeof fetchDashboard>>;
+
 const { fetchSpy } = vi.hoisted(() => ({
-	fetchSpy: vi.fn(async () => {
-		// Default impl delegates to the real (mocked-data) implementation.
-		// Individual tests can override with `mockRejectedValueOnce` etc.
-		const real = await vi.importActual<typeof import('../../api/dashboard')>(
-			'../../api/dashboard'
-		);
-		return real.fetchDashboard();
-	})
+	fetchSpy: vi.fn(async (_token: string): Promise<unknown> => DASHBOARD_PAYLOAD)
 }));
+
+// Kept inline (rather than importing the deleted mock JSON) and typed
+// against the client, so removing or retyping a response field breaks
+// this file at compile time.
+const DASHBOARD_PAYLOAD = {
+	kpis: {
+		totalTickets: 42,
+		openTickets: 7,
+		extractedTicketsInCurrency: 30,
+		totalSpent: 3187.5,
+		avgTicketValue: 75.89,
+		currency: 'EUR'
+	},
+	ticketsPerMonth: [
+		{ month: '2026-03', count: 8 },
+		{ month: '2026-04', count: 9 },
+		{ month: '2026-05', count: 10 }
+	],
+	spendByCategory: [
+		{ category: 'transport', amount: 845 },
+		{ category: 'food', amount: 1120.5 },
+		{ category: 'lodging', amount: 920 },
+		{ category: 'other', amount: 302 }
+	]
+} satisfies DashboardResponse;
 
 // Chart components: stub them so jsdom doesn't need a real canvas. Each stub
 // exposes a data-testid so tests can assert presence without coupling to the
@@ -35,8 +58,8 @@ vi.mock('./SpendByCategoryChart.svelte', () => ({
 }));
 
 // Wrap the real fetchDashboard with our counted spy so we can assert call
-// counts without breaking the resolved mock data. importActual preserves the
-// real module's exports (types + __setMockDelay).
+// counts without depending on the network. importActual preserves the real
+// module's other exports (the error class and types).
 vi.mock('../../api/dashboard', async () => {
 	const actual = await vi.importActual<typeof import('../../api/dashboard')>(
 		'../../api/dashboard'
@@ -82,7 +105,7 @@ vi.mock('../../api/tickets', async () => {
 
 // Now safe to import — the spy wrapper is already in the mocked module.
 import Dashboard from './Dashboard.svelte';
-import { __setMockDelay } from '../../api/dashboard';
+import { fetchDashboard } from '../../api/dashboard';
 
 const user: AuthUser = {
 	id: 'sub-1',
@@ -93,10 +116,8 @@ const user: AuthUser = {
 
 describe('Dashboard', () => {
 	beforeEach(() => {
-		// Zero delay by default — tests opt back into a delay for the
-		// loading-state assertion.
-		__setMockDelay(0);
-		fetchSpy.mockClear();
+		fetchSpy.mockReset();
+		fetchSpy.mockResolvedValue(DASHBOARD_PAYLOAD);
 		listAllTicketsStub.mockClear();
 		// Seed sessionStorage with a fake JWT so the self-fetching
 		// table component can resolve its token lookup. The mock above
@@ -112,7 +133,6 @@ describe('Dashboard', () => {
 	afterEach(() => {
 		cleanup();
 		vi.restoreAllMocks();
-		__setMockDelay(0);
 		try {
 			window.sessionStorage.clear();
 		} catch {
@@ -121,7 +141,8 @@ describe('Dashboard', () => {
 	});
 
 	it('renders the loading skeleton initially while the fetch is pending', async () => {
-		__setMockDelay(80);
+		// Hold the promise open so the loading branch stays on screen.
+		fetchSpy.mockImplementation(() => new Promise(() => {}));
 
 		const { container } = render(Dashboard, { user });
 
@@ -142,8 +163,50 @@ describe('Dashboard', () => {
 		});
 
 		// The hint on the open-tickets card proves the hint prop wired
-		// through AND that the data resolved (count is dynamic from the mock).
+		// through AND that the data resolved.
 		expect(getByText('7 open')).toBeTruthy();
+	});
+
+	// Regression guard. KpiCard used to decide money-vs-count by
+	// sniffing the label with /spent|ticket|value/i, so the two count
+	// cards rendered as "€42.00" and "€7.00". Counts must stay counts.
+	it('renders count cards without a currency symbol and money cards with one', async () => {
+		const { container } = render(Dashboard, { user });
+
+		// Wait for a value that only exists once loaded — "Total spent"
+		// is also in the loading skeleton, so it proves nothing.
+		await waitFor(() => {
+			expect(container.textContent).toContain('€3,187.50');
+		});
+
+		const text = container.textContent ?? '';
+		expect(text).toContain('42');
+		expect(text).toContain('7');
+		// Money cards carry the € symbol; the counts must not.
+		expect(text).toContain('€3,187.50');
+		expect(text).toContain('€75.89');
+		expect(text).not.toContain('€42');
+		expect(text).not.toContain('€7.00');
+	});
+
+	it('shows an error instead of firing a request when there is no session', async () => {
+		try {
+			window.sessionStorage.clear();
+		} catch {
+			/* sessionStorage may be disabled */
+		}
+
+		const { getByText } = render(Dashboard, { user });
+
+		await waitFor(() => {
+			expect(getByText('Not signed in.')).toBeTruthy();
+		});
+		// No token means no request anywhere: the dashboard endpoint
+		// would answer 401 and trip auth:expired for a user who was
+		// never logged in, and the self-fetching table would do the
+		// same on its own account.
+		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(listAllTicketsStub).not.toHaveBeenCalled();
 	});
 
 	it('renders the all-tickets table headers and a row from the mocked fetch', async () => {

@@ -1,102 +1,176 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import {
-	USE_MOCK,
-	__setMockDelay,
-	fetchDashboard,
-	type Dashboard,
-	type SpendByCategory,
-	type TicketsPerMonth
-} from './dashboard';
+/**
+ * Tests for the dashboard HTTP client.
+ *
+ * The module used to serve a mock JSON payload behind a `USE_MOCK`
+ * flag; it now calls `GET /api/dashboard`. These tests mock `fetch`
+ * directly and assert the three things the dashboard depends on:
+ * the Authorization header is sent, the JSON contract is passed
+ * through untouched, and a 401 bubbles the `auth:expired` event so
+ * the session host can clear the stale token.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Default mock delay the service ships with. Re-applied after every test via
-// `afterEach` so a `__setMockDelay(0)` call cannot leak across the suite.
-const DEFAULT_MOCK_DELAY_MS = 300;
+import { fetchDashboard, DashboardApiError, type Dashboard } from './dashboard';
 
-describe('lib/api/dashboard', () => {
+const payload: Dashboard = {
+	kpis: {
+		totalTickets: 42,
+		openTickets: 7,
+		extractedTicketsInCurrency: 30,
+		totalSpent: 3187.5,
+		avgTicketValue: 75.89,
+		currency: 'EUR'
+	},
+	ticketsPerMonth: [
+		{ month: '2026-04', count: 9 },
+		{ month: '2026-05', count: 10 }
+	],
+	spendByCategory: [
+		{ category: 'transport', amount: 845 },
+		{ category: 'food', amount: 1120.5 },
+		{ category: 'lodging', amount: 920 },
+		{ category: 'other', amount: 302 }
+	]
+};
+
+const jsonResponse = (body: unknown, status = 200): Response =>
+	({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
+
+describe('fetchDashboard', () => {
+	const fetchSpy = vi.fn();
+
+	beforeEach(() => {
+		fetchSpy.mockReset();
+		vi.stubGlobal('fetch', fetchSpy);
+	});
+
 	afterEach(() => {
-		// Reset to the documented default so neighbouring tests see a clean
-		// 300ms baseline regardless of what the previous test set.
-		__setMockDelay(DEFAULT_MOCK_DELAY_MS);
+		vi.unstubAllGlobals();
 	});
 
-	describe('USE_MOCK flag', () => {
-		it('is exported and currently true', () => {
-			expect(USE_MOCK).toBe(true);
-		});
+	it('requests the dashboard endpoint with the session token', async () => {
+		fetchSpy.mockResolvedValue(jsonResponse(payload));
+
+		await fetchDashboard('jwt-123');
+
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+		const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe('/api/dashboard');
+		expect(init.method).toBe('GET');
+		expect((init.headers as Record<string, string>).authorization).toBe('Bearer jwt-123');
 	});
 
-	describe('fetchDashboard delay', () => {
-		it('waits roughly the default 300ms before resolving', async () => {
-			// Make sure we start from the default — paranoia for test ordering.
-			__setMockDelay(DEFAULT_MOCK_DELAY_MS);
+	it('passes the payload through unchanged', async () => {
+		fetchSpy.mockResolvedValue(jsonResponse(payload));
 
-			const start = performance.now();
-			await fetchDashboard();
-			const elapsed = performance.now() - start;
+		const result = await fetchDashboard('jwt-123');
 
-			// Lower bound guards against a regression that drops the delay
-			// entirely (e.g. someone wires the real fetch and the promise
-			// resolves in <1ms). Upper bound leaves room for CI jitter.
-			expect(elapsed).toBeGreaterThanOrEqual(250);
-			expect(elapsed).toBeLessThan(500);
-		});
-
-		it('honours __setMockDelay(0) and resolves without blocking', async () => {
-			__setMockDelay(0);
-
-			// Snapshot the identity immediately. If the implementation ever
-			// returns the bare value (not a Promise), this test will catch it
-			// — `await` would still work, but `Promise.resolve(value).then`
-			// style code in the consumer would break.
-			const promise = fetchDashboard();
-			expect(promise).toBeInstanceOf(Promise);
-
-			const result = await promise;
-			expect(result).toBeDefined();
-		});
+		expect(result).toEqual(payload);
+		expect(result.kpis.currency).toBe('EUR');
 	});
 
-	describe('fetchDashboard payload shape', () => {
-		it('resolves with the documented Dashboard shape', async () => {
-			__setMockDelay(0);
+	it('throws a DashboardApiError carrying the status on a non-2xx response', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 500,
+			text: async () => 'boom'
+		} as Response);
 
-			const result = await fetchDashboard();
+		// Both the type and the status: asserting only the type would
+		// pass with an omitted or wrong status.
+		const error = await fetchDashboard('jwt-123').catch((e: unknown) => e);
 
-			// Collection sizes — these are the contract the UI depends on for
-			// KPI cards, the 6-month chart and the category breakdown.
-			expect(result.ticketsPerMonth).toHaveLength(6);
-			expect(result.spendByCategory).toHaveLength(4);
-			expect(result.recentTickets).toHaveLength(5);
+		expect(error).toBeInstanceOf(DashboardApiError);
+		expect((error as DashboardApiError).status).toBe(500);
+	});
 
-			// One nested-field confidence check. If the JSON drifts, this
-			// fails loudly rather than silently rendering `undefined`.
-			expect(result.kpis.totalTickets).toBe(42);
-			expect(result.kpis.totalSpentEur).toBe(3187.5);
-		});
+	it('bubbles auth:expired on 401 so the session host clears the token', async () => {
+		const listener = vi.fn();
+		globalThis.addEventListener('auth:expired', listener);
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 401,
+			text: async () => '{"message":"expired"}'
+		} as Response);
 
-		it('exposes internally consistent aggregates (catches JSON drift)', async () => {
-			__setMockDelay(0);
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow(DashboardApiError);
 
-			const result: Dashboard = await fetchDashboard();
+		expect(listener).toHaveBeenCalledTimes(1);
+		globalThis.removeEventListener('auth:expired', listener);
+	});
 
-			// spendByCategory.amountEur must sum to kpis.totalSpentEur.
-			// Floating-point comparison with a tiny epsilon — `toBe` would
-			// fail on e.g. 0.1 + 0.2 rounding.
-			const spendTotal = result.spendByCategory.reduce(
-				(sum: number, row: SpendByCategory) => sum + row.amountEur,
-				0
-			);
-			expect(Math.abs(spendTotal - result.kpis.totalSpentEur)).toBeLessThan(0.01);
+	// A 403 means "authenticated but not allowed". Treating it as an
+	// expired session clears a valid token, which is how a permission
+	// edge turns into a logout loop. Only 401 expires the session.
+	it.each([400, 403, 404, 429, 503])(
+		'does not bubble auth:expired on %i',
+		async (status) => {
+			const listener = vi.fn();
+			globalThis.addEventListener('auth:expired', listener);
+			fetchSpy.mockResolvedValue({
+				ok: false,
+				status,
+				text: async () => 'nope'
+			} as Response);
 
-			// ticketsPerMonth.count must sum to kpis.totalTickets.
-			// Counts are integers, so a round-trip through Math.round is safe
-			// and signals intent: we're comparing an integer aggregate, not a
-			// continuous one.
-			const ticketsTotal = result.ticketsPerMonth.reduce(
-				(sum: number, row: TicketsPerMonth) => sum + row.count,
-				0
-			);
-			expect(Math.round(ticketsTotal)).toBe(result.kpis.totalTickets);
-		});
+			await expect(fetchDashboard('jwt-123')).rejects.toThrow(DashboardApiError);
+
+			expect(listener).not.toHaveBeenCalled();
+			globalThis.removeEventListener('auth:expired', listener);
+		}
+	);
+
+	// The BFF answers RFC 7807 ProblemDetail, whose user-facing field is
+	// `detail`. Reading only the legacy `message` meant every real API
+	// failure fell through to the raw body.
+	it('reads the user-facing detail out of an RFC 7807 ProblemDetail', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 400,
+			text: async () =>
+				JSON.stringify({
+					type: 'about:blank',
+					title: 'Bad Request',
+					status: 400,
+					detail: 'merchant must not be blank'
+				})
+		} as Response);
+
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow('merchant must not be blank');
+	});
+
+	it('falls back to the ProblemDetail title when detail is absent', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 409,
+			text: async () => JSON.stringify({ title: 'Conflict', status: 409 })
+		} as Response);
+
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow('Conflict');
+	});
+
+	it('still reads a legacy message field', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 400,
+			text: async () => JSON.stringify({ message: 'nope' })
+		} as Response);
+
+		await expect(fetchDashboard('jwt-123')).rejects.toThrow('nope');
+	});
+
+	// An intermediary's HTML error page must not become the message a
+	// user reads, nor leak internal text if backend sanitisation slips.
+	it('never surfaces a non-JSON body verbatim', async () => {
+		fetchSpy.mockResolvedValue({
+			ok: false,
+			status: 502,
+			text: async () => '<html>bad gateway</html>'
+		} as Response);
+
+		const error = await fetchDashboard('jwt-123').catch((e: unknown) => e);
+
+		expect((error as Error).message).toBe('Request failed with 502');
+		expect((error as Error).message).not.toContain('html');
 	});
 });
