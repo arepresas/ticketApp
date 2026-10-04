@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * Structured data extracted from a ticket receipt by the AI extraction
@@ -28,7 +28,7 @@ import java.util.UUID;
  * the column never falls back to NULL.
  */
 public record TicketExtraction(
-        UUID ticketId,
+        long ticketId,
         String merchant,
         LocalDate purchaseDate,
         String category,
@@ -42,7 +42,6 @@ public record TicketExtraction(
 ) {
 
     public TicketExtraction {
-        if (ticketId == null) throw new NullPointerException("ticketId");
         if (merchant == null || merchant.isBlank()) {
             throw new IllegalArgumentException("merchant must not be blank");
         }
@@ -76,7 +75,7 @@ public record TicketExtraction(
      * Maps the missing field to {@code null}, which is what the
      * orchestrator does for every write today.
      */
-    public TicketExtraction(UUID ticketId,
+    public TicketExtraction(long ticketId,
                             String merchant,
                             LocalDate purchaseDate,
                             String category,

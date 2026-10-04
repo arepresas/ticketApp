@@ -47,7 +47,7 @@ export type SpendByCategory = {
 };
 
 export type RecentTicket = {
-  id: string;
+  id: number;
   title: string;
   category: TicketCategory;
   /** ISO date, YYYY-MM-DD. */

@@ -79,7 +79,7 @@ import static org.mockito.Mockito.when;
 class TicketExtractionServiceTest {
 
     private static final String MODEL = "gpt-4o-mini";
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final long OWNER = 4369L;
 
     private TicketRepository tickets;
     private TicketExtractionRepository extractions;
@@ -104,13 +104,13 @@ class TicketExtractionServiceTest {
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
-    private static Ticket sampleTicket(UUID id) {
+    private static Ticket sampleTicket(long id) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
                 "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
     }
 
-    private static Ticket sampleTicket(UUID id, byte[] bytes) {
+    private static Ticket sampleTicket(long id, byte[] bytes) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
                 "image/png", "r.png", bytes, null, 0, null, null, 0);
@@ -123,7 +123,7 @@ class TicketExtractionServiceTest {
         // success (the "AI is done, awaiting your validation"
         // state). The dashboard badge colour flips from sky to
         // amber when the second save lands.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -164,7 +164,7 @@ class TicketExtractionServiceTest {
         assertThat(saved.model()).isEqualTo(MODEL);
         assertThat(saved.rawResponse()).isEqualTo("{\"merchant\":\"Mercadona\"}");
         // No revert to OPEN on the success path.
-        verify(tickets, never()).save(argThat(t -> t.status() == Status.OPEN && t.id().equals(id)));
+        verify(tickets, never()).save(argThat(t -> t.status() == Status.OPEN && t.id() == id));
     }
 
     @Test
@@ -177,7 +177,7 @@ class TicketExtractionServiceTest {
         // transaction, so during the whole AI round-trip other readers
         // still saw OPEN — the dashboard badge never showed "In
         // analysis" while the AI worked.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -201,7 +201,7 @@ class TicketExtractionServiceTest {
         // The orchestrator refreshes the ticket via owner-scoped
         // findById(id, ownerId) before writing ON_ERROR so a
         // concurrent delete can't resurrect a stale copy.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -242,7 +242,7 @@ class TicketExtractionServiceTest {
         String hostile = "provider 401 for https://internal.acme/v1"
                 + " model=acme-secret-v2 key=sk-live-abcdef123456"
                 + System.lineSeparator() + "{\"note\":\"x\"}".repeat(200);
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -276,7 +276,7 @@ class TicketExtractionServiceTest {
         // <think> dump) cannot bloat the row. The persisted message
         // must end with the truncation marker so operators reading
         // the dashboard know they are not seeing the full text.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -302,7 +302,7 @@ class TicketExtractionServiceTest {
 
     @Test
     void alreadyExtractedTicketsAreSkipped() throws Exception {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id, new byte[]{1});
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
                 new TicketExtraction(id, "X", LocalDate.now(), null,
@@ -318,7 +318,7 @@ class TicketExtractionServiceTest {
 
     @Test
     void ticketBytesAndContentTypeAreForwardedToThePort() throws Exception {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         byte[] bytes = new byte[]{1, 2, 3, 4};
         Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
@@ -349,7 +349,7 @@ class TicketExtractionServiceTest {
         // extraction-row insert failed. With the new contract the
         // ticket lands in ON_ERROR so the scheduler does not pick it
         // up on the next tick and loop on the same broken write.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id, new byte[]{1});
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -376,7 +376,7 @@ class TicketExtractionServiceTest {
         // The refresh lookup returns empty (concurrent delete) — the
         // orchestrator must not throw, the cron tick just skips the
         // missing ticket and resumes on the next one.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty()); // race: gone
@@ -402,7 +402,7 @@ class TicketExtractionServiceTest {
         // outcome. Counter starts at 0 on the fixture, so the
         // persisted save should carry attempts == 1 on the first
         // (IN_ANALYSIS) save.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
@@ -438,7 +438,7 @@ class TicketExtractionServiceTest {
         // answer, otherwise the mock returns the original (attempts=0)
         // and the test would assert a value that only exists in
         // production.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         // Mutable holder so the save() answer can publish the bumped
@@ -469,7 +469,7 @@ class TicketExtractionServiceTest {
 
     @Test
     void transientFailureIsRetriedThenSucceeds() throws Exception {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -491,7 +491,7 @@ class TicketExtractionServiceTest {
 
     @Test
     void clientErrorFailsFastWithoutRetry() throws Exception {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -509,7 +509,7 @@ class TicketExtractionServiceTest {
 
     @Test
     void persistentTransientFailureGivesUpAfterConfiguredAttempts() throws Exception {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -530,7 +530,7 @@ class TicketExtractionServiceTest {
         // Another writer won the race before segment 1 committed.
         // The service must not call the provider and must not mark
         // error — the winner owns the row.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenThrow(new OptimisticLockException(id, "boom"));
@@ -547,7 +547,7 @@ class TicketExtractionServiceTest {
         // The row moved on while the provider call was in flight
         // (user validated/cancelled meanwhile). The recovery re-read
         // sees a non-IN_ANALYSIS status and leaves the winner alone.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         Ticket done = sampleTicket(id).withStatus(Status.DONE);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
@@ -574,7 +574,7 @@ class TicketExtractionServiceTest {
         // or concurrent run that never came back). Recovery lands it
         // on ON_ERROR with a visible message instead of leaving it
         // stuck where the OPEN-only cron never looks.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = sampleTicket(id);
         Ticket staleAnalysis = sampleTicket(id).withStatus(Status.IN_ANALYSIS);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
@@ -600,5 +600,13 @@ class TicketExtractionServiceTest {
 
     private void verifyNoExtractorCall() throws Exception {
         verify(receiptExtractor, never()).extract(any());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -40,18 +40,16 @@ class ShopTest {
 
     @Test
     void constructorAutoFillsNormalisedNameAndCreatedAt() {
-        Shop s = new Shop(UUID.randomUUID(), "Carrefour", null, null);
+        Shop s = new Shop(nextId(), "Carrefour", null, null);
         assertEquals("carrefour", s.normalisedName());
         assertNotNull(s.createdAt());
     }
 
     @Test
-    void constructorRejectsNullIdAndName() {
+    void constructorRejectsNullName() {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
-                () -> new Shop(null, "x", "x", now));
-        assertThrows(NullPointerException.class,
-                () -> new Shop(UUID.randomUUID(), null, null, now));
+                () -> new Shop(nextId(), null, null, now));
     }
 
     @Test
@@ -60,8 +58,8 @@ class ShopTest {
         // {@code id}, not by name. The match key lives in the
         // repository's UNIQUE index, not in the record's equals.
         Instant now = Instant.now();
-        Shop a = new Shop(UUID.randomUUID(), "Lidl", "lidl", now);
-        Shop b = new Shop(UUID.randomUUID(), "Lidl", "lidl", now);
+        Shop a = new Shop(nextId(), "Lidl", "lidl", now);
+        Shop b = new Shop(nextId(), "Lidl", "lidl", now);
         assertNotEquals(a, b);
     }
 
@@ -70,7 +68,7 @@ class ShopTest {
         // The compact constructor leaves every contact field null
         // when not supplied — that's the "no info yet" signal that
         // the dashboard renders as "—" rather than " ".
-        Shop s = new Shop(UUID.randomUUID(), "Dia", "dia", Instant.now());
+        Shop s = new Shop(nextId(), "Dia", "dia", Instant.now());
         assertNull(s.addressLine());
         assertNull(s.postalCode());
         assertNull(s.city());
@@ -84,7 +82,7 @@ class ShopTest {
     void withContactAppliesNonNullFieldsAndKeepsOthers() {
         Instant now = Instant.now();
         Shop original = new Shop(
-                UUID.randomUUID(), "Mercadona", "mercadona",
+                nextId(), "Mercadona", "mercadona",
                 "Calle Mayor 1", "28013", "Madrid", "ES",
                 "+34 911 22 33 44", "A12345678", "https://mercadona.es",
                 now);
@@ -113,7 +111,7 @@ class ShopTest {
     void withContactReplacesAllFieldsWhenAllProvided() {
         Instant now = Instant.now();
         Shop original = new Shop(
-                UUID.randomUUID(), "Dia", "dia",
+                nextId(), "Dia", "dia",
                 "Old Street 1", "08001", "Barcelona", "ES",
                 "+34 930 00 00 00", "B12345678", "https://dia.es",
                 now);
@@ -129,5 +127,13 @@ class ShopTest {
         assertEquals("+34 931 00 00 00", patched.phone());
         assertEquals("B87654321", patched.taxId());
         assertEquals("https://dia.com", patched.website());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

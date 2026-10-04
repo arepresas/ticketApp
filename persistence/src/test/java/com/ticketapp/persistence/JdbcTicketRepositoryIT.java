@@ -28,8 +28,10 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
-    private static final UUID OTHER_OWNER = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    /** Seeded in {@link #cleanSlate()}; app_users.id is an identity column. */
+    private long OWNER;
+    /** Seeded in {@link #cleanSlate()}; app_users.id is an identity column. */
+    private long OTHER_OWNER;
 
     @BeforeEach
     void cleanSlate() {
@@ -39,14 +41,14 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // would surface stale OPEN rows from earlier runs).
         jdbc.update("DELETE FROM ticket_extractions");
         jdbc.update("DELETE FROM tickets");
-        seedOwner(jdbc, OWNER, "owner-it");
-        seedOwner(jdbc, OTHER_OWNER, "other-owner-it");
+        OWNER = seedOwner(jdbc, "owner-it");
+        OTHER_OWNER = seedOwner(jdbc, "other-owner-it");
     }
 
     @Test
     void saveAndFindRoundTrip() {
         Ticket created = Ticket.open(OWNER, "Bug A", "details");
-        repository.save(created);
+        created = repository.save(created);
 
         Ticket loaded = repository.findById(created.id(), OWNER).orElseThrow();
 
@@ -154,7 +156,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void findByIdReturnsEmptyForMissingId() {
-        assertThat(repository.findById(UUID.randomUUID(), OWNER)).isEmpty();
+        assertThat(repository.findById(nextId(), OWNER)).isEmpty();
     }
 
     @Test
@@ -174,7 +176,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // status and the new column, and the row mapper must read
         // them back without losing the message.
         Ticket created = repository.save(Ticket.open(OWNER, "lidl.pdf", ""));
-        repository.save(created.markError("the provider returned 500: upstream timeout"));
+        Ticket failed = repository.save(created.markError("the provider returned 500: upstream timeout"));
 
         Ticket loaded = repository.findById(created.id(), OWNER).orElseThrow();
 
@@ -195,7 +197,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
                 .markError("previous failure"));
         Ticket retried = created.withStatus(Ticket.Status.OPEN);
 
-        repository.save(retried);
+        retried = repository.save(retried);
         Ticket loaded = repository.findById(created.id(), OWNER).orElseThrow();
 
         assertThat(loaded.status()).isEqualTo(Ticket.Status.OPEN);
@@ -268,7 +270,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // Since V19 the database enforces what the SQL layer always
         // assumed: no app_users row, no ticket.
         assertThatThrownBy(() -> repository.save(
-                Ticket.open(UUID.randomUUID(), "orphan", "")))
+                Ticket.open(nextId(), "orphan", "")))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
@@ -290,7 +292,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         // findOpenForExtraction for system-scope work, never this.
         repository.save(Ticket.open(OWNER, "any.pdf", "x"));
 
-        assertThat(repository.findByStatusIn(Set.of(Ticket.Status.OPEN), null)).isEmpty();
+        assertThat(repository.findByStatusIn(Set.of(), OWNER)).isEmpty();
     }
 
     @Test
@@ -387,7 +389,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
      * reads. {@code recordAttempt} only ever writes "now", so the
      * only way to test the timeout is to move the clock on the row.
      */
-    private void backdateLastAttempt(UUID ticketId, Instant when) {
+    private void backdateLastAttempt(long ticketId, Instant when) {
         jdbc.update("UPDATE tickets SET last_extraction_attempt_at = ? WHERE id = ?",
                 Timestamp.from(when), ticketId);
     }
@@ -403,7 +405,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
         assertThat(summaries).extracting(TicketSummary::id).contains(t.id());
         TicketSummary got = summaries.stream()
-                .filter(s -> s.id().equals(t.id())).findFirst().orElseThrow();
+                .filter(s -> s.id() == t.id()).findFirst().orElseThrow();
         assertThat(got.sizeBytes()).isEqualTo(bytes.length);
         assertThat(got.title()).isEqualTo("r.png");
     }
@@ -419,7 +421,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
                 Set.of(Ticket.Status.OPEN), OWNER);
 
         TicketSummary got = summaries.stream()
-                .filter(s -> s.id().equals(t.id())).findFirst().orElseThrow();
+                .filter(s -> s.id() == t.id()).findFirst().orElseThrow();
         assertThat(got.sizeBytes()).isNull();
     }
 
@@ -435,8 +437,12 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
 
         Ticket reinserted = repository.save(stale);
 
+        // The id comes from the identity column, and a sequence never
+        // rewinds: the re-insert lands on a NEW id, not the deleted
+        // one. What matters is the version, which restarts at 0.
+        assertThat(reinserted.id()).isNotEqualTo(created.id());
         assertThat(reinserted.version()).isEqualTo(0);
-        assertThat(repository.findById(created.id(), OWNER).orElseThrow().version())
+        assertThat(repository.findById(reinserted.id(), OWNER).orElseThrow().version())
                 .isEqualTo(0);
     }
 
@@ -471,5 +477,13 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(repository.findOpenForExtraction(10)).extracting(Ticket::id)
                 .contains(pending.id())
                 .doesNotContain(done.id());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
-import java.util.UUID;
+
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class TicketExtractionTest {
 
-    private static final UUID ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
+    private static final long ID = 1L;
     private static final LocalDate DATE = LocalDate.of(2026, Month.JULY, 4);
     private static final Instant NOW = Instant.parse("2026-07-05T17:00:00Z");
     private static final List<ProductLine> PRODUCTS = List.of(
@@ -68,12 +68,6 @@ class TicketExtractionTest {
         assertNull(e.extractionPayload());
     }
 
-    @Test
-    void rejectsNullTicketId() {
-        assertThrows(NullPointerException.class,
-                () -> new TicketExtraction(
-                        null, "X", DATE, null, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
-    }
 
     @Test
     void rejectsBlankMerchant() {

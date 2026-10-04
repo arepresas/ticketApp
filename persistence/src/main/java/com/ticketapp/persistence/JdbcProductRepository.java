@@ -7,10 +7,11 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * JDBC implementation of {@link ProductRepository}. Plain SQL, no ORM.
@@ -42,10 +43,11 @@ public class JdbcProductRepository implements ProductRepository {
      */
     private static final String UPSERT_SQL = """
             INSERT INTO products
-                (id, name, normalised_name, unit, created_at)
-            VALUES (?, ?, ?, ?, ?)
+                (name, normalised_name, unit, created_at)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT (normalised_name, COALESCE(unit, '')) DO UPDATE
             SET name = EXCLUDED.name
+            RETURNING id
             """;
 
     private static final String FIND_BY_NAME_SQL =
@@ -79,14 +81,14 @@ public class JdbcProductRepository implements ProductRepository {
     }
 
     @Override
-    public java.util.Map<UUID, Product> findAllByIds(java.util.Collection<UUID> ids) {
+    public java.util.Map<Long, Product> findAllByIds(java.util.Collection<Long> ids) {
         if (ids == null || ids.isEmpty()) return java.util.Map.of();
         var rows = namedJdbc.query(
                 FIND_BY_IDS_SQL,
                 new MapSqlParameterSource("ids", ids),
-                (rs, n) -> java.util.Map.entry(rs.getObject("id", UUID.class), mapProduct(rs)));
+                (rs, n) -> java.util.Map.entry(rs.getLong("id"), mapProduct(rs)));
         // Map.entry isn't supported by collectors; convert here.
-        var map = new java.util.HashMap<UUID, Product>();
+        var map = new java.util.HashMap<Long, Product>();
         for (var row : rows) map.put(row.getKey(), row.getValue());
         return map;
     }
@@ -112,27 +114,21 @@ public class JdbcProductRepository implements ProductRepository {
 
     @Override
     public Product save(Product product) {
-        jdbc.update(con -> {
-            var ps = con.prepareStatement(UPSERT_SQL);
-            ps.setObject(1, product.id());
-            ps.setString(2, product.name());
-            ps.setString(3, product.normalisedName());
-            if (product.unit() == null) ps.setNull(4, Types.VARCHAR);
-            else ps.setString(4, product.unit());
-            ps.setObject(5, java.sql.Timestamp.from(product.createdAt()));
-            return ps;
-        });
-        // Re-read by the match key instead of returning the argument.
-        // On conflict the database keeps the ORIGINAL id, so handing
-        // back the caller's freshly minted UUID would write a
-        // dangling id into line_tickets.product_id. Re-reading makes
-        // the returned row the row that is actually stored.
-        return findByNormalisedName(product.normalisedName(), product.unit())
-                .orElse(product);
+        return jdbc.query(
+                con -> {
+                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                ps.setString(1, product.name());
+                ps.setString(2, product.normalisedName());
+                if (product.unit() == null) ps.setNull(3, Types.VARCHAR);
+                else ps.setString(3, product.unit());
+                ps.setObject(4, java.sql.Timestamp.from(product.createdAt()));
+                    return ps;
+                },
+                (rs, n) -> product.withId(rs.getLong(1))).stream().findFirst().orElse(product);
     }
 
     private static Product mapProduct(java.sql.ResultSet rs) throws java.sql.SQLException {
-        UUID id = rs.getObject("id", UUID.class);
+        long id = rs.getLong("id");
         String name = rs.getString("name");
         String normalised = rs.getString("normalised_name");
         String unit = rs.getString("unit"); // nullable

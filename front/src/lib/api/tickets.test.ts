@@ -14,7 +14,7 @@ import {
 } from '../api/tickets';
 
 const sampleCreated: CreatedTicket = {
-	id: '8a3d4f12-7c0e-4f6a-9d2b-1e8c4f12abcd',
+	id: 1,
 	title: 'receipt.pdf',
 	description: 'Lunch at Mercadona',
 	status: 'OPEN',
@@ -170,7 +170,7 @@ describe('getTicket', () => {
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			mockResponse({ message: 'not found' }, { status: 404, ok: false })
 		);
-		await expect(getTicket('tok', 'nope')).rejects.toMatchObject({
+		await expect(getTicket('tok', 9999)).rejects.toMatchObject({
 			name: 'TicketApiError',
 			status: 404
 		});
@@ -283,7 +283,7 @@ describe('updateTicketStatus', () => {
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			mockResponse({ message: 'not found' }, { status: 404, ok: false })
 		);
-		await expect(updateTicketStatus('tok', 'nope', 'DONE')).rejects.toMatchObject({
+		await expect(updateTicketStatus('tok',  9999, 'DONE')).rejects.toMatchObject({
 			name: 'TicketApiError',
 			status: 404
 		});
@@ -313,7 +313,7 @@ describe('deleteTicket', () => {
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
 			mockResponse({ message: 'not found' }, { status: 404, ok: false })
 		);
-		await expect(deleteTicket('tok', 'nope')).rejects.toMatchObject({
+		await expect(deleteTicket('tok', 9999)).rejects.toMatchObject({
 			name: 'TicketApiError',
 			status: 404
 		});

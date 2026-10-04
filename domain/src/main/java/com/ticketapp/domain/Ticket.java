@@ -2,7 +2,7 @@ package com.ticketapp.domain;
 
 import java.time.Instant;
 import java.util.Arrays;
-import java.util.UUID;
+
 
 /**
  * Pure domain entity. No framework annotations, no persistence concerns.
@@ -19,8 +19,8 @@ import java.util.UUID;
  * explicit silences the rule and makes the intent obvious to readers.
  */
 public record Ticket(
-        UUID id,
-        UUID ownerId,
+        long id,
+        long ownerId,
         String title,
         String description,
         Status status,
@@ -31,14 +31,12 @@ public record Ticket(
         byte[] fileData,
         String errorMessage,
         int attempts,
-        UUID shopId,
+        Long shopId,
         String ocrText,
         long version
 ) {
 
     public Ticket {
-        if (id == null) throw new NullPointerException("id");
-        if (ownerId == null) throw new NullPointerException("ownerId");
         if (title == null) throw new NullPointerException("title");
         if (description == null) description = "";
         if (status == null) throw new NullPointerException("status");
@@ -66,7 +64,7 @@ public record Ticket(
      * Build a ticket without an attached file. Kept for backward
      * compatibility with callers (tests, fixtures) that don't upload.
      */
-    public static Ticket open(UUID ownerId, String title, String description) {
+    public static Ticket open(long ownerId, String title, String description) {
         return open(ownerId, title, description, null, null, null);
     }
 
@@ -75,14 +73,14 @@ public record Ticket(
      * is preserved as-is — callers decide whether to use the upload's
      * original filename or a user-typed title.
      */
-    public static Ticket open(UUID ownerId,
+    public static Ticket open(long ownerId,
                               String title,
                               String description,
                               String contentType,
                               String fileName,
                               byte[] fileData) {
         Instant now = Instant.now();
-        return new Ticket(UUID.randomUUID(), ownerId, title, description, Status.OPEN,
+        return new Ticket(0L, ownerId, title, description, Status.OPEN,
                 now, now, contentType, fileName, fileData, null, 0, null, null, 0);
     }
 
@@ -187,7 +185,7 @@ public record Ticket(
      * redundant FK of its own. Bumps {@code updatedAt} so the
      * dashboard's sort picks up the change.
      */
-    public Ticket withShopId(UUID newShopId) {
+    public Ticket withShopId(Long newShopId) {
         return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
                 contentType, fileName, fileData, errorMessage, attempts, newShopId, ocrText, version);
     }
@@ -316,5 +314,15 @@ public record Ticket(
      */
     public enum Status {
         OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR, DONE, CANCELLED, DELETED
+    }
+
+    /**
+     * Attach the id assigned by the database on insert. Ids come from
+     * a Postgres identity column, so a ticket leaves the domain with
+     * {@code id == 0} and gains its real id on the way back from
+     * {@code save()}. Only the adapter calls this.
+     */
+    public Ticket withId(long newId) {
+        return new Ticket(newId, ownerId, title, description, status, createdAt, updatedAt, contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
     }
 }

@@ -24,7 +24,7 @@
  *   (empty)         → dashboard (when authenticated) / landing
  *   #pending        → pending tickets list
  *   #new            → new-ticket upload
- *   #ticket/<uuid>  → per-ticket detail
+ *   #ticket/<id>    → per-ticket detail
  *
  * `setupHistoryBridge()` is idempotent and must be called once on
  * app boot (from `host.ts`). It installs the popstate listener and
@@ -37,9 +37,9 @@ export type Route =
 	| { kind: 'dashboard' }
 	| { kind: 'pending' }
 	| { kind: 'new' }
-	| { kind: 'detail'; ticketId: string };
+	| { kind: 'detail'; ticketId: number };
 
-const TICKET_HASH_RE = /^#?ticket\/([0-9a-fA-F-]{36})$/;
+const TICKET_HASH_RE = /^#?ticket\/(\d+)$/;
 
 function readHash(): string {
 	return window.location.hash;
@@ -56,7 +56,7 @@ export function parseRoute(): Route {
 	if (h === '#pending') return { kind: 'pending' };
 	if (h === '#new') return { kind: 'new' };
 	const m = TICKET_HASH_RE.exec(h);
-	if (m) return { kind: 'detail', ticketId: m[1] };
+	if (m) return { kind: 'detail', ticketId: Number(m[1]) };
 	return { kind: 'dashboard' };
 }
 

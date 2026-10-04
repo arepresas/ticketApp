@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
-import java.util.UUID;
+
 
 @Repository
 @RequiredArgsConstructor
@@ -27,7 +27,7 @@ public class JdbcUserRepository implements UserRepository {
 
     /** Package-visible for reuse by {@link JdbcSessionRepository}'s join query. */
     static final RowMapper<AuthenticatedUser> MAPPER = (rs, rowNum) -> new AuthenticatedUser(
-            (UUID) rs.getObject("id"),
+            rs.getLong("id"),
             rs.getString("google_sub"),
             rs.getString("email"),
             rs.getString("name"),
@@ -55,7 +55,7 @@ public class JdbcUserRepository implements UserRepository {
     }
 
     @Override
-    public Optional<AuthenticatedUser> findById(UUID id) {
+    public Optional<AuthenticatedUser> findById(long id) {
         try {
             return Optional.ofNullable(jdbc.queryForObject(
                     "SELECT " + COLS + " FROM app_users WHERE id = ?",
@@ -77,15 +77,14 @@ public class JdbcUserRepository implements UserRepository {
                                               String name,
                                               String pictureUrl) {
         Instant now = Instant.now();
-        UUID id = UUID.randomUUID();
 
+        // The identity column assigns the id, so nothing to bind here.
         int inserted = jdbc.update(
                 """
-                INSERT INTO app_users (id, google_sub, email, name, picture_url, created_at, last_login_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO app_users (google_sub, email, name, picture_url, created_at, last_login_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT (google_sub) DO NOTHING
                 """,
-                id,
                 googleSub,
                 email,
                 name,

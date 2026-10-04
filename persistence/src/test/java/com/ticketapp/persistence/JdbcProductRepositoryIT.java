@@ -41,12 +41,10 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         jdbc.update("DELETE FROM products");
     }
 
-    private UUID seedProduct(String name, String unit) {
-        UUID id = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO products (id, name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """, id, name, name.trim().toLowerCase(), unit,
+    private long seedProduct(String name, String unit) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO products (name, normalised_name, unit, created_at)
+                VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
         return id;
     }
@@ -152,10 +150,10 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // UUID would hand the caller a dangling id to write into
         // line_tickets.product_id.
         Product first = repository.save(
-                new Product(UUID.randomUUID(), "Bread", "bread", "kg", Instant.now()));
+                new Product(nextId(), "Bread", "bread", "kg", Instant.now()));
 
         Product second = repository.save(
-                new Product(UUID.randomUUID(), "bread", "bread", "kg", Instant.now()));
+                new Product(nextId(), "bread", "bread", "kg", Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
     }
@@ -163,9 +161,9 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     @Test
     void saveDistinguishesTheSameNameWithADifferentUnit() {
         Product noUnit = repository.save(
-                new Product(UUID.randomUUID(), "Bread", "bread", null, Instant.now()));
+                new Product(nextId(), "Bread", "bread", null, Instant.now()));
         Product withUnit = repository.save(
-                new Product(UUID.randomUUID(), "Bread", "bread", "kg", Instant.now()));
+                new Product(nextId(), "Bread", "bread", "kg", Instant.now()));
 
         assertThat(withUnit.id()).isNotEqualTo(noUnit.id());
     }
@@ -176,11 +174,19 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // re-read must apply the same normalisation or it would miss
         // the row it just wrote and fall back to the argument.
         Product first = repository.save(
-                new Product(UUID.randomUUID(), "Banana", "banana", null, Instant.now()));
+                new Product(nextId(), "Banana", "banana", null, Instant.now()));
 
         Product second = repository.save(
-                new Product(UUID.randomUUID(), "banana", "banana", null, Instant.now()));
+                new Product(nextId(), "banana", "banana", null, Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

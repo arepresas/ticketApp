@@ -29,7 +29,7 @@ export class TicketApiError extends Error {
 export type TicketStatus = 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED' | 'DELETED';
 
 export type CreatedTicket = {
-	id: string;
+	id: number;
 	title: string;
 	description: string;
 	status: TicketStatus;
@@ -200,7 +200,7 @@ export type ExtractedProductLine = {
  * data, and the raw text is verbose (multi-KB on long Lidl receipts).
  */
 export type TicketExtraction = {
-	ticketId: string;
+	ticketId: number;
 	merchant: string;
 	purchaseDate: string;
 	category: string | null;
@@ -217,7 +217,7 @@ export type TicketExtraction = {
  * or cross-tenant tickets; the caller decides whether to render a
  * "ticket not found" UI or simply navigate back to the list.
  */
-export const getTicket = async (token: string, id: string): Promise<CreatedTicket> => {
+export const getTicket = async (token: string, id: number): Promise<CreatedTicket> => {
 	const res = await fetch(`${API_BASE}/${id}`, {
 		method: 'GET',
 		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
@@ -241,7 +241,7 @@ export const getTicket = async (token: string, id: string): Promise<CreatedTicke
  */
 export const getTicketExtraction = async (
 	token: string,
-	id: string
+	id: number
 ): Promise<TicketExtraction | null> => {
 	const res = await fetch(`${API_BASE}/${id}/extraction`, {
 		method: 'GET',
@@ -271,7 +271,7 @@ export const getTicketExtraction = async (
  */
 export const getTicketFile = async (
 	token: string,
-	id: string
+	id: number
 ): Promise<{ url: string; contentType: string | null }> => {
 	const res = await fetch(`${API_BASE}/${id}/file`, {
 		method: 'GET',
@@ -297,7 +297,7 @@ export const getTicketFile = async (
  */
 export const updateTicketStatus = async (
 	token: string,
-	id: string,
+	id: number,
 	status: TicketStatus
 ): Promise<CreatedTicket> => {
 	const res = await fetch(`${API_BASE}/${id}/status`, {
@@ -332,7 +332,7 @@ export const updateTicketStatus = async (
  *          cleared). The caller typically refetches the list to reflect
  *          the orchestrator's later attempt outcome.
  */
-export const retryTicket = async (token: string, id: string): Promise<CreatedTicket> => {
+export const retryTicket = async (token: string, id: number): Promise<CreatedTicket> => {
 	return updateTicketStatus(token, id, 'OPEN');
 };
 
@@ -344,7 +344,7 @@ export const retryTicket = async (token: string, id: string): Promise<CreatedTic
  * Throws {@link TicketApiError} on 4xx / 5xx; 404 when the ticket
  * doesn't exist, belongs to another user, or is already deleted.
  */
-export const deleteTicket = async (token: string, id: string): Promise<void> => {
+export const deleteTicket = async (token: string, id: number): Promise<void> => {
 	const res = await fetch(`${API_BASE}/${id}`, {
 		method: 'DELETE',
 		headers: {
@@ -380,7 +380,7 @@ export type TicketMetadataPatch = {
  */
 export const updateTicketMetadata = async (
 	token: string,
-	id: string,
+	id: number,
 	patch: TicketMetadataPatch
 ): Promise<CreatedTicket> => {
 	const res = await fetch(`${API_BASE}/${id}`, {
@@ -429,7 +429,7 @@ export type EditableExtraction = {
  */
 export const replaceTicketExtraction = async (
 	token: string,
-	id: string,
+	id: number,
 	next: EditableExtraction
 ): Promise<TicketExtraction> => {
 	const res = await fetch(`${API_BASE}/${id}/extraction`, {
@@ -465,14 +465,14 @@ export type CatalogueLine = {
 };
 
 export type TicketCatalogue = {
-	shopId: string;
+	shopId: number;
 	shopName: string;
 	lines: CatalogueLine[];
 };
 
 export const getTicketCatalogue = async (
 	token: string,
-	id: string
+	id: number
 ): Promise<TicketCatalogue | null> => {
 	const res = await fetch(`${API_BASE}/${id}/catalogue`, {
 		method: 'GET',

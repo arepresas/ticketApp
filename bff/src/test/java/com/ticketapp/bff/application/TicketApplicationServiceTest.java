@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
  */
 class TicketApplicationServiceTest {
 
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final long OWNER = 4369L;
 
     private TicketRepository tickets;
     private TicketExtractionRepository extractions;
@@ -61,7 +61,7 @@ class TicketApplicationServiceTest {
                 Instant.now(), Instant.now());
     }
 
-    private static Ticket openTicket(UUID id) {
+    private static Ticket openTicket(long id) {
         return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
                 Instant.now(), Instant.now(),
                 "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
@@ -69,7 +69,7 @@ class TicketApplicationServiceTest {
 
     @Test
     void changeStatusToDoneWithoutExtractionTriggersPipeline() {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
@@ -89,7 +89,7 @@ class TicketApplicationServiceTest {
 
     @Test
     void normaliserFailureDoesNotRollBackStatusFlip() {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
@@ -113,7 +113,7 @@ class TicketApplicationServiceTest {
         // failed. The branch is keyed on the requested target status,
         // not on an actual transition, so a second DONE re-runs the
         // normaliser (idempotently) instead of being a no-op.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket done = openTicket(id).withStatus(Status.DONE);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
@@ -129,7 +129,7 @@ class TicketApplicationServiceTest {
 
     @Test
     void changeStatusOnMissingTicketIs404() {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.changeStatus(id, user, Status.DONE))
@@ -146,7 +146,7 @@ class TicketApplicationServiceTest {
         // re-read sees the ON_ERROR row processTicket persisted and
         // the service returns it instead of flipping to DONE with
         // an empty catalogue.
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = openTicket(id);
         Ticket failed = open.markError("the AI provider returned 500");
         when(tickets.findById(id, OWNER))
@@ -165,7 +165,7 @@ class TicketApplicationServiceTest {
 
     @Test
     void changeStatusToCancelledSkipsPipelineAndNormaliser() {
-        UUID id = UUID.randomUUID();
+        long id = nextId();
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -175,5 +175,13 @@ class TicketApplicationServiceTest {
         assertThat(result.status()).isEqualTo(Status.CANCELLED);
         verify(extractionService, never()).processTicket(any());
         verify(normaliser, never()).normaliseOnDone(any());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

@@ -1,6 +1,6 @@
 package com.ticketapp.domain.exceptions;
 
-import java.util.UUID;
+
 
 /**
  * Thrown when a guarded write loses a read-modify-write race: the
@@ -13,17 +13,17 @@ import java.util.UUID;
  */
 public class OptimisticLockException extends TicketAppException {
 
-    private final UUID ticketId;
+    private final long ticketId;
 
     /** Stable code callers and logs switch on. */
     public static final String ERROR_CODE = "TICKET_MODIFIED_CONCURRENTLY";
 
-    public OptimisticLockException(UUID ticketId, String message) {
+    public OptimisticLockException(long ticketId, String message) {
         super(ERROR_CODE, message);
         this.ticketId = ticketId;
     }
 
-    public UUID ticketId() {
+    public long ticketId() {
         return ticketId;
     }
 }

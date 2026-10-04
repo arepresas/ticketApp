@@ -7,9 +7,10 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * JDBC implementation of {@link ShopRepository}. Plain SQL, no ORM.
@@ -54,10 +55,10 @@ public class JdbcShopRepository implements ShopRepository {
      */
     private static final String UPSERT_SQL = """
             INSERT INTO shops
-                (id, name, normalised_name,
+                (name, normalised_name,
                  address_line, postal_code, city, country, phone, tax_id, website,
                  created_at)
-            VALUES (?, ?, ?,
+            VALUES (?, ?,
                     ?, ?, ?, ?, ?, ?, ?,
                     ?)
             ON CONFLICT (normalised_name) DO UPDATE
@@ -69,6 +70,7 @@ public class JdbcShopRepository implements ShopRepository {
                 phone        = COALESCE(EXCLUDED.phone,        shops.phone),
                 tax_id       = COALESCE(EXCLUDED.tax_id,       shops.tax_id),
                 website      = COALESCE(EXCLUDED.website,      shops.website)
+            RETURNING id
             """;
 
     private static final String FIND_BY_NAME_SQL =
@@ -87,7 +89,7 @@ public class JdbcShopRepository implements ShopRepository {
     }
 
     @Override
-    public Optional<Shop> findById(UUID id) {
+    public Optional<Shop> findById(long id) {
         var rows = namedJdbc.query(
                 FIND_BY_ID_SQL,
                 new MapSqlParameterSource("id", id),
@@ -97,30 +99,26 @@ public class JdbcShopRepository implements ShopRepository {
 
     @Override
     public Shop save(Shop shop) {
-        jdbc.update(con -> {
-            var ps = con.prepareStatement(UPSERT_SQL);
-            ps.setObject(1, shop.id());
-            ps.setString(2, shop.name());
-            ps.setString(3, shop.normalisedName());
-            ps.setString(4, shop.addressLine());
-            ps.setString(5, shop.postalCode());
-            ps.setString(6, shop.city());
-            ps.setString(7, shop.country());
-            ps.setString(8, shop.phone());
-            ps.setString(9, shop.taxId());
-            ps.setString(10, shop.website());
-            ps.setObject(11, java.sql.Timestamp.from(shop.createdAt()));
-            return ps;
-        });
-        // Re-read by the match key: on conflict the database keeps the
-        // original id, so the argument's freshly minted UUID is not
-        // necessarily the stored one. Returning the stored row keeps
-        // tickets.shop_id a valid foreign key.
-        return findByNormalisedName(shop.normalisedName()).orElse(shop);
+        return jdbc.query(
+                con -> {
+                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                ps.setString(1, shop.name());
+                ps.setString(2, shop.normalisedName());
+                ps.setString(3, shop.addressLine());
+                ps.setString(4, shop.postalCode());
+                ps.setString(5, shop.city());
+                ps.setString(6, shop.country());
+                ps.setString(7, shop.phone());
+                ps.setString(8, shop.taxId());
+                ps.setString(9, shop.website());
+                ps.setObject(10, java.sql.Timestamp.from(shop.createdAt()));
+                    return ps;
+                },
+                (rs, n) -> shop.withId(rs.getLong(1))).stream().findFirst().orElse(shop);
     }
 
     private static Shop mapShop(java.sql.ResultSet rs) throws java.sql.SQLException {
-        UUID id = rs.getObject("id", UUID.class);
+        long id = rs.getLong("id");
         String name = rs.getString("name");
         String normalised = rs.getString("normalised_name");
         String addressLine = rs.getString("address_line");

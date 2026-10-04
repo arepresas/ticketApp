@@ -1,7 +1,7 @@
 package com.ticketapp.domain;
 
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Outbound port for the {@link Shop} master registry. The shop is
@@ -14,7 +14,7 @@ public interface ShopRepository {
 
     Optional<Shop> findByNormalisedName(String normalisedName);
 
-    Optional<Shop> findById(UUID id);
+    Optional<Shop> findById(long id);
 
     /**
      * Insert or update a shop row, keyed on the normalised merchant

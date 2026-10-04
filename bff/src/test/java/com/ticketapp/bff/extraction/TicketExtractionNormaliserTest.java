@@ -88,10 +88,9 @@ class TicketExtractionNormaliserTest {
      * port stub and the fixture ticket agree: the normaliser passes
      * {@code ticket.ownerId()} to the extraction repository.
      */
-    private static final UUID OWNER =
-            UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final long OWNER = 4369L;
 
-    private static Ticket sampleTicket(UUID id) {
+    private static Ticket sampleTicket(long id) {
         return new Ticket(
                 id,
                 OWNER,
@@ -117,7 +116,7 @@ class TicketExtractionNormaliserTest {
      * that column). Anything the normaliser can read about the shop
      * has to come from the reply.
      */
-    private TicketExtraction extraction(UUID ticketId, String merchant,
+    private TicketExtraction extraction(long ticketId, String merchant,
                                         String rawReply, List<ProductLine> lines) {
         return new TicketExtraction(
                 ticketId,
@@ -144,7 +143,7 @@ class TicketExtractionNormaliserTest {
         // model that could not read the header). The shop row is
         // created with every contact field null — the user fills them
         // via PATCH later.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
                         "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
@@ -174,7 +173,7 @@ class TicketExtractionNormaliserTest {
         // and the normaliser reads it from there. The UPSERT's
         // COALESCE preserves any richer info a later manual PATCH
         // wrote.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         String rawReply = """
                 {
                   "merchant": "Mercadona",
@@ -215,7 +214,7 @@ class TicketExtractionNormaliserTest {
         // read — the normaliser looks at "shop" only. This
         // protects against silent regressions if the prompt is
         // refactored without a coordinated test update.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         String rawReply = """
                 {
                   "merchant": {
@@ -240,7 +239,7 @@ class TicketExtractionNormaliserTest {
         // Provider emits only some fields. The absent ones stay
         // null and the upsert's COALESCE preserves any value a
         // later manual PATCH wrote.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         String rawReply = """
                 {"shop": {"city": "Madrid", "country": "ES"}}
                 """;
@@ -269,7 +268,7 @@ class TicketExtractionNormaliserTest {
         // the parser is defensive and returns all-null contact
         // info, leaving the rest of the normalisation (lines) to
         // proceed normally.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         String rawReply = """
                 {"purchase_date": "2026-07-04", "total_amount": 3.50}
                 """;
@@ -293,7 +292,7 @@ class TicketExtractionNormaliserTest {
         // revision emits invalid JSON) must not abort the
         // normalisation — the lines are the important part.
         // The shop row is still created, just without contact info.
-        UUID ticketId = UUID.randomUUID();
+        long ticketId = nextId();
         when(extractions.findByTicketId(ticketId, OWNER))
                 .thenReturn(Optional.of(extraction(ticketId, "Consum",
                         "{not valid json", List.of(sampleLine()))));
@@ -314,8 +313,8 @@ class TicketExtractionNormaliserTest {
         // info on the existing row is preserved by the COALESCE
         // in the upsert; the normaliser doesn't need to pass it
         // through.
-        UUID ticketId = UUID.randomUUID();
-        Shop existing = new Shop(UUID.randomUUID(), "Mercadona", "mercadona",
+        long ticketId = nextId();
+        Shop existing = new Shop(nextId(), "Mercadona", "mercadona",
                 "Calle Mayor 1", "28013", "Madrid", "ES",
                 "+34 911 22 33 44", "A12345678", "https://mercadona.es",
                 Instant.parse("2026-01-01T00:00:00Z"));
@@ -347,8 +346,8 @@ class TicketExtractionNormaliserTest {
         // must persist the resolved id onto the ticket itself so
         // the controller's catalogue() read can join through the
         // ticket rather than through the (now shopless) line row.
-        UUID ticketId = UUID.randomUUID();
-        Shop created = new Shop(UUID.randomUUID(), "Consum", "consum",
+        long ticketId = nextId();
+        Shop created = new Shop(nextId(), "Consum", "consum",
                 null, null, null, null, null, null, null,
                 Instant.parse("2026-07-04T10:00:00Z"));
         when(extractions.findByTicketId(ticketId, OWNER))
@@ -366,5 +365,13 @@ class TicketExtractionNormaliserTest {
         ArgumentCaptor<Ticket> savedTicket = ArgumentCaptor.forClass(Ticket.class);
         verify(tickets).save(savedTicket.capture());
         assertThat(savedTicket.getValue().shopId()).isEqualTo(created.id());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

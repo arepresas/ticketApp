@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_last_extraction_attempt_at
     ON tickets (last_extraction_attempt_at);
 
 CREATE TABLE IF NOT EXISTS ticket_extractions (
-    ticket_id     UUID         PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
+    ticket_id     BIGINT         PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
     merchant      VARCHAR(255) NOT NULL,
     purchase_date DATE         NOT NULL,
     category      VARCHAR(64),

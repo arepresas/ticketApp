@@ -76,12 +76,10 @@ class ProductControllerIT {
         return resp.token();
     }
 
-    private UUID seedProduct(String name, String unit) {
-        UUID id = UUID.randomUUID();
-        jdbc.update("""
-                INSERT INTO products (id, name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                """, id, name, name.trim().toLowerCase(), unit,
+    private long seedProduct(String name, String unit) {
+        long id = jdbc.queryForObject("""
+                INSERT INTO products (name, normalised_name, unit, created_at)
+                VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
         return id;
     }
@@ -89,8 +87,8 @@ class ProductControllerIT {
     @Test
     void searchReturnsMatchingProducts() {
         String token = loginAndGetToken();
-        UUID breadId = seedProduct("Bread", null);
-        UUID bananaId = seedProduct("Banana", null);
+        long breadId = seedProduct("Bread", null);
+        long bananaId = seedProduct("Banana", null);
         seedProduct("Milk", null);
 
         List<ProductSearchResponse> body = web()
@@ -203,5 +201,13 @@ class ProductControllerIT {
         web().get().uri(uri -> uri.path("/api/products/search").queryParam("name", "B").build())
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

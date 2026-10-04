@@ -1,7 +1,7 @@
 package com.ticketapp.domain.identity;
 
 import java.time.Instant;
-import java.util.UUID;
+
 
 /**
  * Domain-level representation of an authenticated user.
@@ -10,7 +10,7 @@ import java.util.UUID;
  * is currently ticket-focused and does not need to know how users sign in.
  */
 public record AuthenticatedUser(
-        UUID id,
+        long id,
         String googleSub,
         String email,
         String name,

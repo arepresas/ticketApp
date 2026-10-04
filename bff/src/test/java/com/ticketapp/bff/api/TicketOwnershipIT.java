@@ -147,7 +147,7 @@ class TicketOwnershipIT {
                 .issuer("ticketapp-bff")
                 .issuedAt(now)
                 .expiresAt(exp)
-                .subject(user.id().toString())
+                .subject(Long.toString(user.id()))
                 .id(jti.toString())
                 .build();
         Jwt jwt = jwtEncoder.encode(JwtEncoderParameters.from(
@@ -155,7 +155,7 @@ class TicketOwnershipIT {
         return jwt.getTokenValue();
     }
 
-    private Ticket seedTicket(java.util.UUID ownerId, String title) {
+    private Ticket seedTicket(long ownerId, String title) {
         return tickets.save(Ticket.open(ownerId, title, "test",
                 "application/pdf", title + ".pdf", new byte[]{1, 2, 3}));
     }
@@ -322,5 +322,13 @@ class TicketOwnershipIT {
         List<Ticket> open = extractionQueue.findOpenForExtraction(10);
         assertThat(open).extracting(Ticket::id)
                 .contains(aOpen.id(), bOpen.id());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

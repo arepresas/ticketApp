@@ -22,7 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * Orchestrates the AI extraction pipeline for one ticket (ADR 0006
@@ -89,7 +89,7 @@ public class TicketExtractionService {
      * race against this mark and skips — the ticket converges to a
      * visible ON_ERROR rather than a silent stuck row.
      */
-    private void recoverStaleAnalysis(UUID id, Ticket marked) {
+    private void recoverStaleAnalysis(long id, Ticket marked) {
         try {
             tx.executeWithoutResult(status ->
                     ticketRepository.findById(id, marked.ownerId()).ifPresent(current -> {
@@ -202,7 +202,7 @@ public class TicketExtractionService {
      * failure reason attached).
      */
     public boolean processTicket(Ticket ticket) {
-        UUID id = ticket.id();
+        long id = ticket.id();
 
         if (ticketExtractionRepository.findByTicketId(id, ticket.ownerId()).isPresent()) {
             log.warn("Ticket {} already has an extraction; skipping", id);

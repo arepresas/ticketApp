@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
+
 
 /**
  * REST surface for the normalised catalogue view of a ticket.
@@ -49,7 +49,7 @@ public class TicketCatalogueController {
      * than three different 404s in this method.
      */
     @GetMapping("/{id}/catalogue")
-    public ResponseEntity<CatalogueResponse> catalogue(@PathVariable UUID id) {
+    public ResponseEntity<CatalogueResponse> catalogue(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
         return catalogue.findByTicketId(id, user.id())
                 .map(c -> ResponseEntity.ok(CatalogueResponse.of(c)))

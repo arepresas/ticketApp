@@ -21,8 +21,8 @@ public class JdbcSessionRepository implements SessionRepository {
     private final JdbcTemplate jdbc;
 
     private static final RowMapper<Session> MAPPER = (rs, rowNum) -> new Session(
-            (UUID) rs.getObject("jti"),
-            (UUID) rs.getObject("user_id"),
+            rs.getObject("jti", UUID.class),
+            rs.getLong("user_id"),
             toInstant(rs, "issued_at"),
             toInstant(rs, "expires_at"),
             toInstant(rs, "revoked_at")
@@ -79,7 +79,7 @@ public class JdbcSessionRepository implements SessionRepository {
     }
 
     @Override
-    public List<Session> findActiveByUser(UUID userId) {
+    public List<Session> findActiveByUser(long userId) {
         return jdbc.query(
                 """
                 SELECT jti, user_id, issued_at, expires_at, revoked_at

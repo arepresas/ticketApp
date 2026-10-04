@@ -9,7 +9,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 // Playwright.
 const { mockAuth } = vi.hoisted(() => ({
 	mockAuth: {
-		user: null as { id: string; email: string; name: string } | null,
+		user: null as { id: number; email: string; name: string } | null,
 		status: 'idle' as 'idle' | 'loading' | 'authenticated' | 'error',
 		isAuthenticated: false,
 		error: null as string | null
@@ -47,7 +47,7 @@ vi.mock('../api/tickets.ts', () => ({
 import TicketDetailApp from './TicketDetailApp.svelte';
 
 const SAMPLE_TICKET = {
-	id: '8a3d4f12-7c0e-4f6a-9d2b-1e8c4f12abcd',
+	id: 1,
 	title: 'receipt.pdf',
 	description: 'Lunch at Mercadona',
 	status: 'OPEN',

@@ -7,9 +7,9 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * JDBC implementation of {@link LineTicketRepository}. Plain SQL, no ORM.
@@ -40,14 +40,15 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
 
     private static final String UPSERT_SQL = """
             INSERT INTO line_tickets
-                (id, ticket_id, product_id, price_id,
+                (ticket_id, product_id, price_id,
                  quantity, line_total, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (ticket_id, product_id) DO UPDATE
             SET price_id = EXCLUDED.price_id,
                 quantity = EXCLUDED.quantity,
                 line_total = EXCLUDED.line_total,
                 updated_at = EXCLUDED.updated_at
+            RETURNING id
             """;
 
     private static final String FIND_SQL =
@@ -55,7 +56,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             "WHERE l.ticket_id = :ticket AND l.product_id = :product";
 
     @Override
-    public Optional<LineTicket> findByTicketAndProduct(UUID ticketId, UUID productId) {
+    public Optional<LineTicket> findByTicketAndProduct(long ticketId, long productId) {
         var params = new MapSqlParameterSource()
                 .addValue("ticket", ticketId)
                 .addValue("product", productId);
@@ -78,7 +79,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             " ORDER BY l.created_at ASC, l.id ASC";
 
     @Override
-    public List<LineTicket> findByTicketId(UUID ticketId, UUID ownerId) {
+    public List<LineTicket> findByTicketId(long ticketId, long ownerId) {
         return namedJdbc.query(
                 FIND_BY_TICKET_SQL,
                 new MapSqlParameterSource()
@@ -89,26 +90,26 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
 
     @Override
     public LineTicket save(LineTicket line) {
-        jdbc.update(con -> {
-            var ps = con.prepareStatement(UPSERT_SQL);
-            ps.setObject(1, line.id());
-            ps.setObject(2, line.ticketId());
-            ps.setObject(3, line.productId());
-            ps.setObject(4, line.priceId());
-            ps.setBigDecimal(5, line.quantity());
-            ps.setBigDecimal(6, line.lineTotal());
-            ps.setTimestamp(7, java.sql.Timestamp.from(line.createdAt()));
-            ps.setTimestamp(8, java.sql.Timestamp.from(line.updatedAt()));
-            return ps;
-        });
-        return line;
+return jdbc.query(
+                con -> {
+                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                ps.setLong(1, line.ticketId());
+                ps.setLong(2, line.productId());
+                ps.setLong(3, line.priceId());
+                ps.setBigDecimal(4, line.quantity());
+                ps.setBigDecimal(5, line.lineTotal());
+                ps.setTimestamp(6, java.sql.Timestamp.from(line.createdAt()));
+                ps.setTimestamp(7, java.sql.Timestamp.from(line.updatedAt()));
+                    return ps;
+                },
+                (rs, n) -> line.withId(rs.getLong(1))).stream().findFirst().orElse(line);
     }
 
     private static LineTicket mapLine(java.sql.ResultSet rs) throws java.sql.SQLException {
-        UUID id = rs.getObject("id", UUID.class);
-        UUID ticketId = rs.getObject("ticket_id", UUID.class);
-        UUID productId = rs.getObject("product_id", UUID.class);
-        UUID priceId = rs.getObject("price_id", UUID.class);
+        long id = rs.getLong("id");
+        long ticketId = rs.getLong("ticket_id");
+        long productId = rs.getLong("product_id");
+        long priceId = rs.getLong("price_id");
         var quantity = rs.getBigDecimal("quantity");
         var lineTotal = rs.getBigDecimal("line_total");
         var createdAtOdt = rs.getObject("created_at", java.time.OffsetDateTime.class);

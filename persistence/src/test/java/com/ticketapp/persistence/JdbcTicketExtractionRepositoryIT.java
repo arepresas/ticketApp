@@ -19,7 +19,7 @@ import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
+
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
 
-    private static final UUID OWNER = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private long owner;
 
     @Autowired
     TicketRepository tickets;
@@ -50,12 +50,12 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     void cleanSlate() {
         jdbc.update("DELETE FROM ticket_extractions");
         jdbc.update("DELETE FROM tickets");
-        seedOwner(jdbc, OWNER, "owner-it");
+        owner = seedOwner(jdbc, "owner-it");
     }
 
     @Test
     void saveAndFindRoundTripsProductsJsonb() {
-        Ticket t = tickets.save(Ticket.open(OWNER, "r.png", "receipt"));
+        Ticket t = tickets.save(Ticket.open(owner, "r.png", "receipt"));
         TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
                 List.of(
                         new ProductLine("Tomatoes", new BigDecimal("1.200"), "kg",
@@ -65,7 +65,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
 
         extractions.save(ext);
 
-        Optional<TicketExtraction> loaded = extractions.findByTicketId(t.id(), OWNER);
+        Optional<TicketExtraction> loaded = extractions.findByTicketId(t.id(), owner);
         assertThat(loaded).isPresent();
         TicketExtraction got = loaded.get();
         assertThat(got.merchant()).isEqualTo("Mercadona");
@@ -85,14 +85,14 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // for the same ticket_id is a no-op, not a PK violation.
         // The pre-check in the orchestrator stays the fast path;
         // this is the safety net for the race window.
-        Ticket t = tickets.save(Ticket.open(OWNER, "r.png", "r"));
+        Ticket t = tickets.save(Ticket.open(owner, "r.png", "r"));
         TicketExtraction ext = sample(t.id(), "Mercadona",
                 LocalDate.of(2026, Month.JULY, 4), List.of());
 
         extractions.save(ext);
         extractions.save(ext);
 
-        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
+        assertThat(extractions.findByTicketId(t.id(), owner)).isPresent();
         Integer rows = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?",
                 Integer.class, t.id());
@@ -105,19 +105,19 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // the ON DELETE CASCADE never fires through the app path and
         // the extraction stays queryable for audit. (Physical removal
         // only happens through user-erase cascades.)
-        Ticket t = tickets.save(Ticket.open(OWNER, "c.png", "z"));
+        Ticket t = tickets.save(Ticket.open(owner, "c.png", "z"));
         extractions.save(sample(t.id(), "X", LocalDate.of(2026, Month.JANUARY, 1), List.of()));
-        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
+        assertThat(extractions.findByTicketId(t.id(), owner)).isPresent();
 
-        boolean removed = tickets.deleteById(t.id(), OWNER);
+        boolean removed = tickets.deleteById(t.id(), owner);
         assertThat(removed).isTrue();
         // The ticket disappears from every read (status DELETED is
         // filtered out) while the extraction row survives for audit.
         // The read stays owner-scoped, so "survives" never means
         // "visible to another user" — and no endpoint reaches it,
         // because every controller gates on findById first.
-        assertThat(tickets.findById(t.id(), OWNER)).isEmpty();
-        assertThat(extractions.findByTicketId(t.id(), OWNER)).isPresent();
+        assertThat(tickets.findById(t.id(), owner)).isEmpty();
+        assertThat(extractions.findByTicketId(t.id(), owner)).isPresent();
     }
 
     @Test
@@ -125,9 +125,9 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // Executes the shipped migration rather than a copy of its
         // SQL: the file is read from the classpath and run, so a
         // widened predicate or a renamed file fails here.
-        Ticket legacy = tickets.save(Ticket.open(OWNER, "legacy", ""));
+        Ticket legacy = tickets.save(Ticket.open(owner, "legacy", ""));
         extractions.save(withModel(legacy.id(), "minimax-M3"));
-        Ticket modern = tickets.save(Ticket.open(OWNER, "modern", ""));
+        Ticket modern = tickets.save(Ticket.open(owner, "modern", ""));
         extractions.save(withModel(modern.id(), "gpt-4o-mini"));
 
         runMigration("V21__neutralise_legacy_model_names.sql");
@@ -142,7 +142,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // The audit trail reads this column; a NULL would blow up
         // ExtractionResponse instead of degrading. Uses the legacy id
         // so the row is actually rewritten.
-        Ticket t = tickets.save(Ticket.open(OWNER, "any", ""));
+        Ticket t = tickets.save(Ticket.open(owner, "any", ""));
         extractions.save(withModel(t.id(), "MiniMax-M3"));
 
         runMigration("V21__neutralise_legacy_model_names.sql");
@@ -193,20 +193,20 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
                 .isEqualTo(lastOrder);
     }
 
-    private String modelOf(java.util.UUID ticketId) {
+    private String modelOf(long ticketId) {
         return jdbc.queryForObject(
                 "SELECT model FROM ticket_extractions WHERE ticket_id = ?",
                 String.class, ticketId);
     }
 
-    private static TicketExtraction withModel(java.util.UUID ticketId, String model) {
+    private static TicketExtraction withModel(long ticketId, String model) {
         return new TicketExtraction(ticketId, "M",
                 LocalDate.of(2026, Month.JANUARY, 1), "food", List.of(),
                 new BigDecimal("26.18"), "EUR", model, Instant.now(),
                 "{\"choices\":[]}");
     }
 
-    private static TicketExtraction sample(UUID id, String merchant, LocalDate date,
+    private static TicketExtraction sample(long id, String merchant, LocalDate date,
                                            List<ProductLine> products) {
         return new TicketExtraction(id, merchant, date, "food", products,
                 new BigDecimal("26.18"), "EUR", "gpt-4o-mini", Instant.now(),

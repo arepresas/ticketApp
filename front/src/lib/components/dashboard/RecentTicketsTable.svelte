@@ -69,7 +69,7 @@
 	// Per-ticket id currently being retried. Drives the disabled state
 	// on the row-level Retry button so a double-click doesn't fire two
 	// PATCHes. Cleared in the finally block of `handleRetry`.
-	let retryingId = $state<string | null>(null);
+	let retryingId = $state<number | null>(null);
 	// Last retry error surfaced at the table level (not the per-ticket
 	// fetch error). Distinct from `errorMessage` so the banner that
 	// shows "load failed" and "retry failed" don't fight for the same
@@ -164,7 +164,7 @@
 		}
 	}
 
-	function openDetail(id: string): void {
+	function openDetail(id: number): void {
 		navigate({ kind: 'detail', ticketId: id });
 	}
 
@@ -175,7 +175,7 @@
 	// separate so the call site reads as intent. The refetch after
 	// the PATCH lands picks up the OPEN status immediately; the next
 	// cron tick will then flip it to IN_PROGRESS / DONE / ON_ERROR.
-	async function handleRetry(id: string, ev: MouseEvent): Promise<void> {
+	async function handleRetry(id: number, ev: MouseEvent): Promise<void> {
 		// The row's onclick navigates to the detail view; stop the
 		// event from bubbling so clicking Retry doesn't also fire a
 		// detail navigation. The dedicated button is the only path

@@ -2,7 +2,7 @@ package com.ticketapp.bff.api.dto;
 
 import com.ticketapp.domain.Product;
 
-import java.util.UUID;
+
 
 /**
  * Wire shape for the autocomplete payload. Trims the columns
@@ -15,7 +15,7 @@ import java.util.UUID;
  * concern.
  */
 public record ProductSearchResponse(
-        UUID id,
+        long id,
         String name,
         String unit,
         String label) {

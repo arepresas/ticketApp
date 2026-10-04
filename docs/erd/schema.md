@@ -20,7 +20,7 @@ erDiagram
     prices  ||--o{ line_tickets : "unit price of"
 
     app_users {
-        UUID id PK
+        BIGINT id PK "identity"
         VARCHAR google_sub
         VARCHAR email
         VARCHAR name
@@ -31,14 +31,14 @@ erDiagram
 
     auth_sessions {
         UUID jti PK
-        UUID user_id FK
+        BIGINT user_id FK
         TIMESTAMPTZ issued_at
         TIMESTAMPTZ expires_at
         TIMESTAMPTZ revoked_at
     }
 
     tickets {
-        UUID id PK
+        BIGINT id PK "identity"
         VARCHAR title
         TEXT description
         VARCHAR status
@@ -47,13 +47,13 @@ erDiagram
         BYTEA file_data
         TIMESTAMPTZ last_extraction_attempt_at
         TEXT error_message
-        UUID owner_id
+        BIGINT owner_id
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
 
     ticket_extractions {
-        UUID ticket_id PK
+        BIGINT ticket_id PK
         VARCHAR merchant
         DATE purchase_date
         VARCHAR category
@@ -67,7 +67,7 @@ erDiagram
     }
 
     shops {
-        UUID id PK
+        BIGINT id PK "identity"
         VARCHAR name
         VARCHAR normalised_name
         VARCHAR address_line
@@ -81,7 +81,7 @@ erDiagram
     }
 
     products {
-        UUID id PK
+        BIGINT id PK "identity"
         VARCHAR name
         VARCHAR normalised_name
         VARCHAR unit
@@ -89,19 +89,19 @@ erDiagram
     }
 
     prices {
-        UUID id PK
-        UUID product_id FK
-        UUID ticket_id FK
+        BIGINT id PK "identity"
+        BIGINT product_id FK
+        BIGINT ticket_id FK
         NUMERIC amount
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
     }
 
     line_tickets {
-        UUID id PK
-        UUID ticket_id FK
-        UUID product_id FK
-        UUID price_id FK
+        BIGINT id PK "identity"
+        BIGINT ticket_id FK
+        BIGINT product_id FK
+        BIGINT price_id FK
         NUMERIC quantity
         NUMERIC line_total
         TIMESTAMPTZ created_at
@@ -136,10 +136,13 @@ Constraints, defaults, and nullability that the diagram can't safely express inl
 - `content_type`, `file_name`, `file_data` — nullable (added in V3; pre-V3 rows have NULLs).
 - `last_extraction_attempt_at` — nullable; populated by the scheduler on every tick (success or failure).
 - `error_message` — nullable; populated when extraction fails and the ticket transitions to `ON_ERROR`. Cleared via `PATCH /api/tickets/{id}/status` to `OPEN` or `CANCELLED`.
-- `owner_id` — `UUID NOT NULL` FK to `app_users.id` (`fk_tickets_owner_id`,
+- `owner_id` — `BIGINT NOT NULL` FK to `app_users.id` (`fk_tickets_owner_id`,
   ON DELETE CASCADE, added in V19).
 - `shop_id` — nullable FK to `shops.id`, stamped by the normaliser on the DONE
   transition (V13). The per-line `shop_id` it replaced is gone.
+- `auth_sessions.jti` — stays `UUID` even though every entity id moved to
+  `BIGINT`: it identifies a JWT, not a row we own, and the value comes from
+  `UUID.randomUUID()` at mint time. `auth_sessions.user_id` is a `BIGINT` FK.
 - `version` — `BIGINT NOT NULL DEFAULT 0` (V16), the optimistic-lock counter.
 - `attempts` — `INTEGER NOT NULL DEFAULT 0` (V12), extraction attempts used.
 

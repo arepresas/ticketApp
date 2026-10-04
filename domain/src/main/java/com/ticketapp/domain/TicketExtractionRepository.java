@@ -1,7 +1,7 @@
 package com.ticketapp.domain;
 
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Outbound port for {@link TicketExtraction} persistence. Defined by
@@ -16,7 +16,7 @@ public interface TicketExtractionRepository {
      * has never been processed (or has been deleted — the FK is
      * {@code ON DELETE CASCADE}).
      */
-    Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId);
+    Optional<TicketExtraction> findByTicketId(long ticketId, long ownerId);
 
     /**
      * Persist a new extraction. The primary key is the ticket id;

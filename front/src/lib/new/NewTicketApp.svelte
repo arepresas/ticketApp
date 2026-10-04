@@ -85,7 +85,7 @@
 		// row is 'uploading'.
 		status: 'idle' | 'uploading' | 'done' | 'error';
 		// Server-assigned id, populated on success.
-		createdId?: string;
+		createdId?: number;
 		// OCR transcription returned by the BFF on upload (see the
 		// backend's DocumentTextExtractor + TicketResponse.ocrText).
 		// Empty for failed OCR / metadata-only rows; the preview row

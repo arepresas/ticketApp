@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.Set;
-import java.util.UUID;
+
 
 /**
  * Application service for ticket write flows that span more than one
@@ -165,7 +165,7 @@ public class TicketApplicationService {
      * the dashboard does not expose a button for it; the only normal
      * caller is the scheduler.
      */
-    public Ticket changeStatus(UUID id, AuthenticatedUser user, Ticket.Status status) {
+    public Ticket changeStatus(long id, AuthenticatedUser user, Ticket.Status status) {
         if (status == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
         }

@@ -81,7 +81,7 @@ public class TicketExtractionNormaliser {
 
     @Transactional
     public void normaliseOnDone(Ticket ticket) {
-        UUID ticketId = ticket.id();
+        long ticketId = ticket.id();
         TicketExtraction extraction = extractions
                 .findByTicketId(ticketId, ticket.ownerId()).orElse(null);
         if (extraction == null) {
@@ -136,7 +136,7 @@ public class TicketExtractionNormaliser {
             if (price.created()) persistedPrices++;
 
             LineTicket lineTicket = lineTickets.save(new LineTicket(
-                    UUID.randomUUID(),
+                    0L,
                     ticketId,
                     product.value().id(),
                     price.value().id(),
@@ -163,7 +163,7 @@ public class TicketExtractionNormaliser {
         }
         String normalised = Shop.normalisedNameOf(merchantName);
         return resolve(shops.findByNormalisedName(normalised), () -> shops.save(new Shop(
-                        UUID.randomUUID(),
+                        0L,
                         merchantName,
                         normalised,
                         contact.addressLine(),
@@ -269,17 +269,17 @@ public class TicketExtractionNormaliser {
     private Resolved<Product> resolveProduct(String name, String unit, Instant now) {
         String normalised = Product.normalisedNameOf(name);
         return resolve(products.findByNormalisedName(normalised, unit), () -> products.save(new Product(
-                UUID.randomUUID(),
+                0L,
                 name,
                 normalised,
                 unit,
                 now)));
     }
 
-    private Resolved<Price> resolvePrice(UUID productId, UUID ticketId, BigDecimal amount, Instant now) {
+    private Resolved<Price> resolvePrice(long productId, long ticketId, BigDecimal amount, Instant now) {
         return resolve(prices.findByProductAndTicket(productId, ticketId, amount),
                 () -> prices.save(new Price(
-                        UUID.randomUUID(),
+                        0L,
                         productId,
                         ticketId,
                         amount,

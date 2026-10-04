@@ -45,7 +45,7 @@
 --   * No FK constraint rename on the new column — the
 --     implicit name tickets_shop_id_fkey is fine.
 ALTER TABLE tickets
-    ADD COLUMN shop_id UUID REFERENCES shops(id) ON DELETE RESTRICT;
+    ADD COLUMN shop_id BIGINT REFERENCES shops(id) ON DELETE RESTRICT;
 
 -- Drop the line_tickets FK and the index BEFORE the column
 -- itself — the FK name (Postgres convention: <table>_<col>_fkey)

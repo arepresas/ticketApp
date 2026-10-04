@@ -27,7 +27,7 @@ class ProductTest {
 
     @Test
     void constructorAutoFillsNormalisedNameAndCreatedAt() {
-        Product p = new Product(UUID.randomUUID(), "Olive Oil", null, "L", null);
+        Product p = new Product(nextId(), "Olive Oil", null, "L", null);
         assertEquals("olive oil", p.normalisedName());
         assertEquals("L", p.unit());
         assertNotNull(p.createdAt());
@@ -37,16 +37,22 @@ class ProductTest {
     void constructorAcceptsNullUnit() {
         // Receipts frequently omit the unit for items like "Bread"
         // — null unit is a valid value, not a bug.
-        Product p = new Product(UUID.randomUUID(), "Bread", "bread", null, Instant.now());
+        Product p = new Product(nextId(), "Bread", "bread", null, Instant.now());
         assertEquals(null, p.unit());
     }
 
     @Test
-    void constructorRejectsNullIdAndName() {
+    void constructorRejectsNullName() {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
-                () -> new Product(null, "x", "x", "kg", now));
-        assertThrows(NullPointerException.class,
-                () -> new Product(UUID.randomUUID(), null, null, "kg", now));
+                () -> new Product(nextId(), null, null, "kg", now));
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

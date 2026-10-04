@@ -15,7 +15,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * JDBC implementation of {@link TicketExtractionRepository}. Plain SQL,
@@ -71,7 +71,7 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     }
 
     @Override
-    public Optional<TicketExtraction> findByTicketId(UUID ticketId, UUID ownerId) {
+    public Optional<TicketExtraction> findByTicketId(long ticketId, long ownerId) {
         List<TicketExtraction> rows = jdbc.query(
                 "SELECT " + SELECT_COLS + " FROM ticket_extractions e"
                         + " JOIN tickets t ON t.id = e.ticket_id"
@@ -111,7 +111,7 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             ps.setObject(4, JsonbSupport.toJsonb(mapper.writeProducts(extraction.products())));
             ps.setBigDecimal(5, extraction.totalAmount());
             ps.setString(6, extraction.currency());
-            ps.setObject(7, extraction.ticketId());
+            ps.setLong(7, extraction.ticketId());
             return ps;
         });
         if (rows == 0) {
@@ -133,7 +133,7 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
      * contract for why re-save is a no-op).
      */
     private void bindInsert(PreparedStatement ps, TicketExtraction e) throws java.sql.SQLException {
-        ps.setObject(1, e.ticketId());
+        ps.setLong(1, e.ticketId());
         ps.setString(2, e.merchant());
         ps.setObject(3, e.purchaseDate());
         if (e.category() == null) {

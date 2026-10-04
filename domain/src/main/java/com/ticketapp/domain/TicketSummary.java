@@ -1,7 +1,7 @@
 package com.ticketapp.domain;
 
 import java.time.Instant;
-import java.util.UUID;
+
 
 /**
  * Lightweight ticket projection for list views. Carries every
@@ -16,8 +16,8 @@ import java.util.UUID;
  * row so a dashboard list never loads receipt blobs into memory.
  */
 public record TicketSummary(
-        UUID id,
-        UUID ownerId,
+        long id,
+        long ownerId,
         String title,
         String description,
         Ticket.Status status,
@@ -28,11 +28,9 @@ public record TicketSummary(
         Long sizeBytes,
         String errorMessage,
         int attempts,
-        UUID shopId
+        Long shopId
 ) {
     public TicketSummary {
-        if (id == null) throw new NullPointerException("id");
-        if (ownerId == null) throw new NullPointerException("ownerId");
         if (title == null) throw new NullPointerException("title");
         if (description == null) description = "";
         if (status == null) throw new NullPointerException("status");

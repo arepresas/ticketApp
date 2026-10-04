@@ -3,7 +3,7 @@ package com.ticketapp.domain;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+
 
 /**
  * Outbound port defined by domain. Infrastructure implements it.
@@ -30,7 +30,7 @@ public interface TicketRepository {
      * three cases are indistinguishable from the BFF's perspective
      * to avoid leaking existence.
      */
-    Optional<Ticket> findById(UUID id, UUID ownerId);
+    Optional<Ticket> findById(long id, long ownerId);
 
     /**
      * Persist (insert or guarded update). The owner comes from the
@@ -59,7 +59,7 @@ public interface TicketRepository {
      * is already deleted. Controller translates {@code false} to
      * 404.
      */
-    boolean deleteById(UUID id, UUID ownerId);
+    boolean deleteById(long id, long ownerId);
 
     /**
      * Owner-scoped status filter. Used by the dashboard to surface
@@ -71,7 +71,7 @@ public interface TicketRepository {
      * @param statuses non-empty set of statuses to match. Passing an
      *                 empty set is allowed and returns an empty list.
      */
-    List<Ticket> findByStatusIn(Set<Ticket.Status> statuses, UUID ownerId);
+    List<Ticket> findByStatusIn(Set<Ticket.Status> statuses, long ownerId);
 
     /**
      * Owner-scoped status filter returning lightweight
@@ -86,5 +86,5 @@ public interface TicketRepository {
      * @param statuses non-empty set of statuses to match. Passing an
      *                 empty set is allowed and returns an empty list.
      */
-    List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, UUID ownerId);
+    List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, long ownerId);
 }

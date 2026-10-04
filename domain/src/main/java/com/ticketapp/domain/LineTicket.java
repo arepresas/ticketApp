@@ -2,7 +2,7 @@ package com.ticketapp.domain;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.UUID;
+
 
 /**
  * One line of a receipt, normalised. A ticket that bought a
@@ -38,20 +38,16 @@ import java.util.UUID;
  * </ul>
  */
 public record LineTicket(
-        UUID id,
-        UUID ticketId,
-        UUID productId,
-        UUID priceId,
+        long id,
+        long ticketId,
+        long productId,
+        long priceId,
         BigDecimal quantity,
         BigDecimal lineTotal,
         Instant createdAt,
         Instant updatedAt
 ) {
     public LineTicket {
-        if (id == null) throw new NullPointerException("id");
-        if (ticketId == null) throw new NullPointerException("ticketId");
-        if (productId == null) throw new NullPointerException("productId");
-        if (priceId == null) throw new NullPointerException("priceId");
         if (quantity == null) throw new NullPointerException("quantity");
         if (lineTotal == null) throw new NullPointerException("lineTotal");
         if (quantity.signum() <= 0) {
@@ -59,5 +55,14 @@ public record LineTicket(
         }
         if (createdAt == null) createdAt = Instant.now();
         if (updatedAt == null) updatedAt = createdAt;
+    }
+    /**
+     * Attach the id assigned by the database on insert. Ids come from
+     * Postgres identity columns, so an entity leaves the domain with
+     * {@code id == 0} and gains its real id on the way back from
+     * {@code save()}. Only the adapter calls this.
+     */
+    public LineTicket withId(long newId) {
+        return new LineTicket(newId, ticketId, productId, priceId, quantity, lineTotal, createdAt, updatedAt);
     }
 }

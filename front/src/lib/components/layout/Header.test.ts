@@ -106,7 +106,7 @@ describe('Header', () => {
 
 	it('renders the app links when the user is authenticated', () => {
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -124,7 +124,7 @@ describe('Header', () => {
 		// the `is-new` body class. Pinning the href keeps that contract
 		// visible from the test surface.
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -153,7 +153,7 @@ describe('Header', () => {
 		// component (and its avatar + sign-out menu) the instant the user
 		// signed in. The fix always mounts it; the child branches internally.
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -168,7 +168,7 @@ describe('Header', () => {
 	it('does not render the GitHub link when the user is authenticated', () => {
 		// GitHub is a marketing affordance — keep the authenticated header focused.
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -186,7 +186,7 @@ describe('Header', () => {
 		// `body.is-new` overlay was up did nothing visually. The handler
 		// now clears both classes and the user lands back on the dashboard.
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -211,7 +211,7 @@ describe('Header', () => {
 		// It must clear any overlay class so the user is never stuck behind
 		// a screen they can't dismiss via the header.
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -237,7 +237,7 @@ describe('Header', () => {
 	// same-route dispatch in `navigate`).
 	it('dispatches a dashboard:refresh event when the Dashboard link is clicked while already on dashboard', () => {
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};
@@ -272,7 +272,7 @@ describe('Header', () => {
 	// silently broke the "click Dashboard to see fresh data" UX.
 	it('dispatches a dashboard:refresh event when the Dashboard link is clicked from another route', () => {
 		snapshot.user = {
-			id: 'u-1',
+			id: 'sub-1',
 			email: 'ada@example.com',
 			name: 'Ada Lovelace'
 		};

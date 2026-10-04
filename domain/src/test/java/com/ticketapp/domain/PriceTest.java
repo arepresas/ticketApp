@@ -24,7 +24,7 @@ class PriceTest {
     @Test
     void constructorAcceptsNonNegativeAmount() {
         Price p = new Price(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                nextId(), nextId(), nextId(),
                 new BigDecimal("1.2345"),
                 Instant.now(), Instant.now());
         assertEquals(new BigDecimal("1.2345"), p.amount());
@@ -34,7 +34,7 @@ class PriceTest {
     void constructorRejectsNegativeAmount() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Price(
-                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                        nextId(), nextId(), nextId(),
                         new BigDecimal("-0.01"),
                         Instant.now(), Instant.now()));
     }
@@ -44,31 +44,33 @@ class PriceTest {
         // Free samples (€0.00/ud) are valid: a clerk hands out one
         // and the receipt shows "0.00 €/ud" for that line.
         Price p = new Price(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                nextId(), nextId(), nextId(),
                 BigDecimal.ZERO,
                 Instant.now(), Instant.now());
         assertEquals(BigDecimal.ZERO, p.amount());
     }
 
     @Test
-    void constructorRejectsNullIdProductTicketAmount() {
+    void constructorRejectsNullAmount() {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
-                () -> new Price(null, UUID.randomUUID(), UUID.randomUUID(), BigDecimal.ONE, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new Price(UUID.randomUUID(), null, UUID.randomUUID(), BigDecimal.ONE, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new Price(UUID.randomUUID(), UUID.randomUUID(), null, BigDecimal.ONE, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new Price(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), null, now, now));
+                () -> new Price(nextId(), nextId(), nextId(), null, now, now));
     }
 
     @Test
     void constructorAutoFillsTimestamps() {
         Price p = new Price(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                nextId(), nextId(), nextId(),
                 BigDecimal.ONE, null, null);
         assertNotNull(p.createdAt());
         assertNotNull(p.updatedAt());
+    }
+
+    /** Sequential stand-in for the former UUID test ids. */
+    private static final java.util.concurrent.atomic.AtomicLong IDS =
+            new java.util.concurrent.atomic.AtomicLong(1L);
+
+    private static long nextId() {
+        return IDS.incrementAndGet();
     }
 }

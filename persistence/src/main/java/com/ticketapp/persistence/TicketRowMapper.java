@@ -36,8 +36,8 @@ final class TicketRowMapper implements RowMapper<Ticket> {
     }
 
     Ticket mapRow(ResultSet rs) throws SQLException {
-        UUID id = rs.getObject("id", UUID.class);
-        UUID ownerId = rs.getObject("owner_id", UUID.class);
+        long id = rs.getLong("id");
+        long ownerId = rs.getLong("owner_id");
         String title = rs.getString("title");
         String description = rs.getString("description");
         Ticket.Status status = Ticket.Status.valueOf(rs.getString("status"));
@@ -52,7 +52,7 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         // DONE transition, so most rows (OPEN / IN_PROGRESS /
         // ON_ERROR / CANCELLED) carry NULL here. getObject(..., UUID.class)
         // returns null for SQL NULL and forwards as-is to the domain.
-        UUID shopId = rs.getObject("shop_id", UUID.class);
+        Long shopId = nullableShopId(rs);
         // ocr_text is nullable too — populated at upload time by the
         // BFF's OCR step; pre-V15 rows and uploads where the provider
         // could not transcribe anything stay NULL.
@@ -67,5 +67,17 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         return rs.getObject(column, OffsetDateTime.class)
                 .withOffsetSameInstant(ZoneOffset.UTC)
                 .toInstant();
+    }
+
+    /**
+     * {@code shop_id} is a nullable FK, and
+     * {@link java.sql.ResultSet#getLong(String)} collapses SQL NULL
+     * to {@code 0} — a real shop id, so an un-normalised ticket would
+     * come back pointing at a shop that does not exist. Read the
+     * wrapper and keep the null.
+     */
+    private static Long nullableShopId(java.sql.ResultSet rs) throws java.sql.SQLException {
+        long value = rs.getLong("shop_id");
+        return rs.wasNull() ? null : value;
     }
 }

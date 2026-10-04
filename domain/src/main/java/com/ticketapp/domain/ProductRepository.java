@@ -43,7 +43,7 @@ public interface ProductRepository {
      * caller must tolerate the partial result — never silently
      * invent rows).
      */
-    Map<UUID, Product> findAllByIds(Collection<UUID> ids);
+    Map<Long, Product> findAllByIds(Collection<Long> ids);
 
     /**
      * Search products whose canonical name starts with the supplied

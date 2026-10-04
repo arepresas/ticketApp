@@ -2,7 +2,7 @@ package com.ticketapp.domain;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Outbound port for the {@link LineTicket} per-ticket line table.
@@ -14,7 +14,7 @@ import java.util.UUID;
  */
 public interface LineTicketRepository {
 
-    Optional<LineTicket> findByTicketAndProduct(UUID ticketId, UUID productId);
+    Optional<LineTicket> findByTicketAndProduct(long ticketId, long productId);
 
     /**
      * All line rows for one ticket, ordered by creation time. Used
@@ -23,7 +23,7 @@ public interface LineTicketRepository {
      * them. Empty when the ticket has no normalised lines (i.e.
      * has never been validated).
      */
-    List<LineTicket> findByTicketId(UUID ticketId, UUID ownerId);
+    List<LineTicket> findByTicketId(long ticketId, long ownerId);
 
     /**
      * Upsert one per-ticket line. Same {@code (ticket_id,
