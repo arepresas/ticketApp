@@ -85,9 +85,23 @@ public class ReceiptExtractionException extends TicketAppException {
 
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, Throwable cause) {
+        // Source-compat overload: the previous public signature was
+        // (int, boolean, String, Throwable). Code that still passes
+        // a `message` falls through to the GENERIC_SAFE_MESSAGE so
+        // no caller can accidentally leak provider text through an
+        // old call site. The diagnostic `message` is kept on the
+        // super-class for log-side debugging but never reaches
+        // safeMessage().
         this(statusCode, retryable, message, GENERIC_SAFE_MESSAGE, cause);
     }
 
+    /**
+     * @deprecated prefer the overload that takes an explicit
+     * {@code safeMessage}. The four-argument form is kept so the old
+     * call sites still compile; the {@code message} it accepts is
+     * the diagnostic, which is never persisted or sent to clients.
+     */
+    @Deprecated
     public ReceiptExtractionException(int statusCode, boolean retryable,
                                       String message, String safeMessage,
                                       Throwable cause) {
@@ -110,7 +124,12 @@ public class ReceiptExtractionException extends TicketAppException {
 
     @Override
     public String toString() {
+        // Deliberately omits `message=...`: the diagnostic may carry
+        // provider text (endpoint, response body, request id) and
+        // should never reach a logger or a `Throwable.toString()`
+        // chain that may eventually get serialised. Status + safe
+        // message is all an operator needs.
         return getClass().getSimpleName()
-                + "[statusCode=" + statusCode + ", message=" + getMessage() + "]";
+                + "[statusCode=" + statusCode + ", safeMessage=" + safeMessage + "]";
     }
 }

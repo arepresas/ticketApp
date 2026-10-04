@@ -43,14 +43,12 @@ ticketapp:
     batch-size: 5
     retry-attempts: 2
     openai:
-      # Base URL and model have NO default, on purpose: a provider
-      # change must never be silent, so this profile fails to start
-      # with a named-variable error when .env is absent. Local dev
-      # therefore needs `.env` (copy .env.example) — see README.
-      # The key is required too, so the AI stack cannot be half
-      # configured.
-      base-url: ${OPENAI_BASE_URL}
-      model:    ${OPENAI_MODEL}
+      # Base URL and model default to OpenAI's own endpoint. Local
+      # dev can boot without `.env`; just override via `.env` or the
+      # shell to point at a different provider. The local key still
+      # has no default — a missing API key is a fast-fail at boot.
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      model:    ${OPENAI_MODEL:gpt-4o-mini}
       # Two-minute request budget. Multimodal extraction with images
       # takes 10-30 s on a multimodal model; 3 s was too tight and
       # caused OpenAIIoException("Request failed") on every ticket.

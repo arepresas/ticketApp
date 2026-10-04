@@ -239,8 +239,11 @@ class TicketExtractionServiceTest {
         // an endpoint, a model id, a key, a multi-KB body. It must
         // reach the log and nothing else. The row is what the
         // dashboard renders and what any later API call returns.
+        // The sentinel value uses a deliberately credential-free shape
+        // (no `sk-`/`sk-live-` prefix, no `Bearer`, no base64-looking
+        // blob) so secret scanners do not classify it as a real key.
         String hostile = "provider 401 for https://internal.acme/v1"
-                + " model=acme-secret-v2 key=sk-live-abcdef123456"
+                + " model=acme-secret-v2 key=AAbbCCddEEffGGhh-1234"
                 + System.lineSeparator() + "{\"note\":\"x\"}".repeat(200);
         long id = nextId();
         Ticket open = sampleTicket(id);
@@ -253,6 +256,11 @@ class TicketExtractionServiceTest {
 
         service.processTicket(open);
 
+        // The marker 'note' is unescaped inside the JSON body
+        // (`{"note":"x"}`) so a real doesNotContain assertion catches
+        // it. The previous version searched for the literal
+        // backslashed-quote pair, which never appears in the runtime
+        // string and so passed trivially.
         verify(tickets).save(argThat(t -> {
             String persisted = t.errorMessage();
             if (persisted == null || !t.status().equals(Status.ON_ERROR)) {
@@ -262,20 +270,65 @@ class TicketExtractionServiceTest {
                     .as("persisted error message")
                     .doesNotContain("internal.acme")
                     .doesNotContain("acme-secret-v2")
-                    .doesNotContain("sk-live-abcdef123456")
-                    .doesNotContain("\\\"note\\\"")
+                    .doesNotContain("AAbbCCddEEffGGhh-1234")
+                    .doesNotContain("note")
                     .contains("check the configured key");
             return true;
         }));
     }
 
     @Test
-    void longErrorMessageIsTruncatedBeforePersist() throws Exception {
-        // The error_message column is TEXT, but the service bounds
-        // the message length so a runaway raw-reply (e.g. a multi-KB
-        // <think> dump) cannot bloat the row. The persisted message
-        // must end with the truncation marker so operators reading
-        // the dashboard know they are not seeing the full text.
+    void providerDiagnosticNeverReachesTheWarnLog() throws Exception {
+        // Capture the WARN log so we can assert the diagnostic (which
+        // may carry an endpoint, a key, or a response body) is NOT
+        // emitted at WARN. The orchestrator already caps the row to
+        // safeMessage() + status; the log must follow the same rule,
+        // otherwise a future bug that bypasses `markError` would
+        // still leak via stdout/stderr.
+        ch.qos.logback.classic.Logger svc =
+                (ch.qos.logback.classic.Logger)
+                        org.slf4j.LoggerFactory.getLogger(TicketExtractionService.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> sink =
+                new ch.qos.logback.core.read.ListAppender<>();
+        sink.start();
+        svc.addAppender(sink);
+        try {
+            String hostile = "provider 500 for https://internal.acme/v1"
+                    + " key=AAbbCCddEEffGGhh-1234"
+                    + " body=" + "{\"note\":\"x\"}".repeat(200);
+            long id = nextId();
+            Ticket open = sampleTicket(id);
+            when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
+            when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
+            when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(receiptExtractor.extract(any())).thenThrow(
+                    new ReceiptExtractionException(500, false, hostile,
+                            "the AI provider is unavailable"));
+
+            service.processTicket(open);
+
+            String joined = sink.list.stream()
+                    .filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN)
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                    .collect(java.util.stream.Collectors.joining("\n"));
+            assertThat(joined)
+                    .as("WARN log line")
+                    .doesNotContain("internal.acme")
+                    .doesNotContain("AAbbCCddEEffGGhh-1234")
+                    .doesNotContain("note");
+        } finally {
+            svc.detachAppender(sink);
+            sink.stop();
+        }
+    }
+
+    @Test
+    void errorMessageIsBoundedByTheSafeMessageRegardlessOfDiagnosticSize() throws Exception {
+        // The error_message column is TEXT, but the row must stay
+        // bounded: a multi-KB raw provider diagnostic (think a <think>
+        // dump) cannot bloat it. Truncation used to clamp the row
+        // directly; now safeMessage() is the only text persisted, so
+        // the size is fixed by construction.
         long id = nextId();
         Ticket open = sampleTicket(id);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
@@ -288,9 +341,6 @@ class TicketExtractionServiceTest {
 
         service.processTicket(open);
 
-        // Bounded by construction now, not by truncation: whatever
-        // size the diagnostic is, the row only ever holds the short
-        // safe message. Truncation still guards the log line.
         verify(tickets).save(argThat(t -> {
             String msg = t.errorMessage();
             return t.status() == Status.ON_ERROR
