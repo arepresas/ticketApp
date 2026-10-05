@@ -44,6 +44,10 @@ USER 65532:65532
 EXPOSE 8080
 
 ENV JAVA_HOME=/opt/jre \
-    PATH=/opt/jre/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/opt/jre/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    # Default heap cap (fly.toml [env] JAVA_TOOL_OPTIONS overrides this at
+    # runtime). Must be JAVA_TOOL_OPTIONS: exec-form ENTRYPOINT + no shell in
+    # distroless means $JAVA_OPTS would never expand.
+    JAVA_TOOL_OPTIONS=-Xmx768m
 
 ENTRYPOINT ["/opt/jre/bin/java", "-jar", "/app/bff.jar"]
