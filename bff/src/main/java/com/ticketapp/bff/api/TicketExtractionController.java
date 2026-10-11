@@ -4,6 +4,7 @@ import com.ticketapp.bff.api.dto.ExtractionResponse;
 import com.ticketapp.bff.api.dto.ProductLineDto;
 import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
@@ -122,7 +123,7 @@ public class TicketExtractionController {
                 current.ticketId(),
                 body.merchant(),
                 body.purchaseDate(),
-                body.category(),
+                SpendCategory.fromExtractionValue(body.category()),
                 domainProducts,
                 body.totalAmount(),
                 currency,

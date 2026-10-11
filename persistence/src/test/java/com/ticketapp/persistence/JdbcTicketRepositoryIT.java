@@ -362,8 +362,8 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
         repository.recordAttempt(stuck.id());
         backdateLastAttempt(stuck.id(), Instant.now().minus(Duration.ofMinutes(30)));
         jdbc.update("INSERT INTO ticket_extractions (ticket_id, merchant, purchase_date,"
-                + " products, total_amount, currency, model, extracted_at)"
-                + " VALUES (?, 'M', current_date, '[]'::jsonb, 1.00, 'EUR', 'test', now())",
+                + " category, products, total_amount, currency, model, extracted_at)"
+                + " VALUES (?, 'M', current_date, 'other'::spend_category, '[]'::jsonb, 1.00, 'EUR', 'test', now())",
                 stuck.id());
 
         assertThat(repository.requeueAbandonedAnalysis(
@@ -469,7 +469,7 @@ class JdbcTicketRepositoryIT extends AbstractPostgresIntegrationTest {
                 "INSERT INTO ticket_extractions (ticket_id, merchant, purchase_date, category,"
                         + " products, total_amount, currency, model, extracted_at,"
                         + " raw_response_text, extraction_payload)"
-                        + " VALUES (?, 'Mercadona', CURRENT_DATE, 'food', '[]'::jsonb,"
+                        + " VALUES (?, 'Mercadona', CURRENT_DATE, 'food'::spend_category, '[]'::jsonb,"
                         + " 1.20, 'EUR', 'gpt-4o-mini', now(), '{}', '{}'::jsonb)",
                 done.id());
 

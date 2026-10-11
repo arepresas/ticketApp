@@ -32,6 +32,7 @@
  * </ol>
  */
 import type { CreatedTicket, EditableExtraction, TicketExtraction } from '../api/tickets';
+import { asSpendCategory } from '../api/spendCategory';
 
 /** The two halves of the detail screen that can be edited. */
 export type EditSection = 'metadata' | 'extraction';
@@ -119,7 +120,10 @@ export function buildEditPayload(
 		payload.extraction = {
 			merchant: extraction.merchant,
 			purchaseDate: extraction.purchaseDate,
-			category: extraction.category,
+			// Narrowed on the way out: a payload from a build that knew
+			// fewer categories (or a hand-edited one) must not put a
+			// value on the wire the constrained column would reject.
+			category: asSpendCategory(extraction.category),
 			products: extraction.products.map((p) => ({
 				name: p.name,
 				quantity: p.quantity ?? 1,

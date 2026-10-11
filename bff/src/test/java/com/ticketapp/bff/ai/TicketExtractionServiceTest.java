@@ -1,5 +1,6 @@
 package com.ticketapp.bff.ai;
 
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
 import com.ticketapp.domain.TicketExtraction;
@@ -134,7 +135,7 @@ class TicketExtractionServiceTest {
                         new ReceiptExtractionResult(
                                 "Mercadona",
                                 LocalDate.of(2026, Month.JULY, 4),
-                                "food",
+                                SpendCategory.FOOD,
                                 List.of(new ProductLine(
                                         "Bread",
                                         new BigDecimal("1"),
@@ -186,7 +187,7 @@ class TicketExtractionServiceTest {
         when(receiptExtractor.extract(any())).thenReturn(
                 new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
+                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
                                 List.of(), BigDecimal.ONE, "EUR"),
                         "{}", MODEL));
 
@@ -356,7 +357,7 @@ class TicketExtractionServiceTest {
         long id = nextId();
         Ticket open = sampleTicket(id, new byte[]{1});
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
-                new TicketExtraction(id, "X", LocalDate.now(), null,
+                new TicketExtraction(id, "X", LocalDate.now(), SpendCategory.OTHER,
                         List.of(), BigDecimal.ZERO, "EUR", MODEL,
                         Instant.now(), "{}")));
 
@@ -380,7 +381,7 @@ class TicketExtractionServiceTest {
         when(receiptExtractor.extract(any())).thenReturn(
                 new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
+                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
                                 List.of(), BigDecimal.ONE, "EUR"),
                         "{}", MODEL));
 
@@ -408,7 +409,7 @@ class TicketExtractionServiceTest {
         when(receiptExtractor.extract(any())).thenReturn(
                 new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), "other",
+                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
                                 List.of(), BigDecimal.ONE, "EUR"),
                         "{}", MODEL));
         when(extractions.save(any())).thenThrow(
@@ -463,7 +464,7 @@ class TicketExtractionServiceTest {
                         new ReceiptExtractionResult(
                                 "Mercadona",
                                 LocalDate.of(2026, Month.JULY, 4),
-                                "food",
+                                SpendCategory.FOOD,
                                 List.of(),
                                 new BigDecimal("1.20"),
                                 "EUR"),
@@ -529,7 +530,7 @@ class TicketExtractionServiceTest {
                         "overloaded"))
                 .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
                                 List.of(), new BigDecimal("1.20"), "EUR"),
                         "{}", MODEL));
 
@@ -609,7 +610,7 @@ class TicketExtractionServiceTest {
         when(receiptExtractor.extract(any())).thenReturn(
                 new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
                                 List.of(), new BigDecimal("1.20"), "EUR"),
                         "{}", MODEL));
 
@@ -637,7 +638,7 @@ class TicketExtractionServiceTest {
         when(receiptExtractor.extract(any())).thenReturn(
                 new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food",
+                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
                                 List.of(), new BigDecimal("1.20"), "EUR"),
                         "{}", MODEL));
 

@@ -3,6 +3,7 @@ package com.ticketapp.bff.application;
 import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.ai.TicketExtractionService;
 import com.ticketapp.bff.extraction.TicketExtractionNormaliser;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
 import com.ticketapp.domain.TicketExtraction;
@@ -73,7 +74,7 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
+                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
@@ -93,7 +94,7 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
+                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
                 new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
@@ -118,7 +119,7 @@ class TicketApplicationServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
                 new TicketExtraction(
-                        id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
+                        id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
                         new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null)));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
@@ -123,7 +124,7 @@ public class TestReceiptExtractorConfig {
         return new ReceiptExtractionResult(
                 "Mercadona",
                 LocalDate.of(2026, 7, 4),
-                "food",
+                SpendCategory.FOOD,
                 List.of(new ProductLine(
                         "Bread",
                         new BigDecimal("1"),

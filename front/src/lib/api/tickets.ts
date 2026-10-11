@@ -15,6 +15,7 @@
  * user staring at a stale detail / pending screen with no recovery.
  */
 import type { QuantityUnit } from './quantityUnit';
+import type { SpendCategory } from './spendCategory';
 
 const API_BASE = '/api/tickets';
 
@@ -443,7 +444,8 @@ export const applyTicketEdit = async (
 export type EditableExtraction = {
 	merchant: string;
 	purchaseDate: string;
-	category: string | null;
+	/** One of the closed set — the column no longer accepts anything else. */
+	category: SpendCategory;
 	products: ExtractedProductLine[];
 	totalAmount: number;
 	currency: string;

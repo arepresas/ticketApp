@@ -439,7 +439,7 @@ public final class OpenAiApiClient {
             {
               "merchant": string,                    // store name as printed on the receipt
               "purchase_date": "YYYY-MM-DD",         // ISO date of the purchase
-              "category": "food|pharmacy|restaurant|fuel|other",
+              "category": "food|transport|lodging|pharmacy|other",
               "shop": {                              // optional — omit fields you can't read from the receipt
                 "address": string,                   // street + number
                 "postal_code": string,
@@ -463,6 +463,7 @@ public final class OpenAiApiClient {
             }
 
             Field rules:
+            - category MUST be one of the five values listed above: food (supermarket or restaurant), transport (fuel, taxi, train, parking), lodging (hotel, Airbnb), pharmacy, other. Never invent a new one — an unlisted value is stored as "other" anyway.
             - quantity and prices are decimals, not strings.
             - price_per_unit MUST reflect the EFFECTIVE price the customer actually paid for that line — after any line-level discount is applied (loyalty card, member discount, promo, etc.). If a discount appears on the receipt as a separate line, attribute it to the products it applies to and reduce price_per_unit accordingly. DO NOT emit a separate discount line: apply discounts to the lines they belong to.
             - line_total must equal quantity * price_per_unit, rounded to 2 decimals.

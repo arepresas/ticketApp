@@ -482,7 +482,7 @@ class TicketControllerIT {
                   (ticket_id, merchant, purchase_date, category, products,
                    total_amount, currency, model, extracted_at,
                    raw_response_text, extraction_payload)
-                VALUES (?, ?, '2026-07-03', ?, ?::jsonb, ?, ?, 'test-model',
+                VALUES (?, ?, '2026-07-03', ?::spend_category, ?::jsonb, ?, ?, 'test-model',
                         now(), 'seeded', NULL)
                 """,
                 ticketId, merchant, category, "[{\"name\":\"x\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1,\"lineTotal\":1}]",
@@ -631,7 +631,9 @@ class TicketControllerIT {
 
         assertThat(updated).isNotNull();
         assertThat(updated.merchant()).isEqualTo("Mercadona corrected");
-        assertThat(updated.category()).isEqualTo("groceries");
+        // The client may still send a legacy label; the wire answers with the
+        // member it folded onto, so the SPA and the column agree.
+        assertThat(updated.category()).isEqualTo("food");
         // AI audit preserved: model + extractedAt unchanged.
         assertThat(updated.model()).isEqualTo("test-model");
         assertThat(updated.totalAmount()).isEqualByComparingTo("3.00");
@@ -817,7 +819,7 @@ class TicketControllerIT {
                   (ticket_id, merchant, purchase_date, category, products,
                    total_amount, currency, model, extracted_at,
                    raw_response_text, extraction_payload)
-                VALUES (?, ?, '2026-07-03', 'food', ?::jsonb,
+                VALUES (?, ?, '2026-07-03', 'food'::spend_category, ?::jsonb,
                         100, 'EUR', 'test-model',
                         now(), 'seeded', NULL)
                 """,

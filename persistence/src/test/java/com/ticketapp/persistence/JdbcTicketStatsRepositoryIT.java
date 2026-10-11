@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * IT for {@link JdbcTicketStatsRepository} — the dashboard aggregates.
@@ -321,8 +322,8 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             List<CategorySpend> complete = CategorySpend.complete(repository.sumByCategory(owner, "EUR"));
 
             assertThat(complete).extracting(CategorySpend::category)
-                    .containsExactly(SpendCategory.TRANSPORT, SpendCategory.FOOD,
-                            SpendCategory.LODGING, SpendCategory.OTHER);
+                    .containsExactly(SpendCategory.FOOD, SpendCategory.TRANSPORT,
+                            SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER);
             assertThat(complete).filteredOn(r -> r.category() == SpendCategory.LODGING)
                     .singleElement()
                     .extracting(CategorySpend::amount)
@@ -359,25 +360,29 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
         }
 
         @Test
-        @DisplayName("folds an unrecognised category label into OTHER")
-        void foldsUnknownCategoryIntoOther() {
-            // The column is free text emitted by a model; the donut only
-            // knows four arcs.
-            seedTicket("a", Ticket.Status.DONE, withExtraction("12.00", "EUR", "groceries", date(2026, 1, 5)));
+        @DisplayName("rejects a category the enum does not carry")
+        void rejectsUnknownCategory() {
+            // The fold moved from this query to the write boundary:
+            // V25 constrains the column, so a label the model invents
+            // can no longer reach the database at all. This is the
+            // constraint doing what the old CASE used to do at read
+            // time — one layer earlier and once instead of per query.
+            seedTicket("a", Ticket.Status.DONE, withExtraction("12.00", "EUR", "food", date(2026, 1, 5)));
 
-            List<CategorySpend> rows = repository.sumByCategory(owner, "EUR");
-
-            assertThat(amountFor(rows, SpendCategory.OTHER)).isEqualByComparingTo("12.00");
+            assertThatThrownBy(() -> seedTicket("b", Ticket.Status.DONE,
+                    withExtraction("1.00", "EUR", "gas station", date(2026, 1, 6))))
+                    .hasMessageContaining("category");
         }
 
         @Test
-        @DisplayName("folds a null category into OTHER rather than dropping the money")
-        void foldsNullCategoryIntoOther() {
-            seedTicket("a", Ticket.Status.DONE, withExtraction("8.00", "EUR", null, date(2026, 1, 5)));
-
-            List<CategorySpend> rows = repository.sumByCategory(owner, "EUR");
-
-            assertThat(amountFor(rows, SpendCategory.OTHER)).isEqualByComparingTo("8.00");
+        @DisplayName("rejects a null category rather than inventing an OTHER slice")
+        void rejectsNullCategory() {
+            // "No readable category" is stored as the literal 'other'
+            // by the writer, so a NULL reaching the column means a
+            // writer that bypassed the enum.
+            assertThatThrownBy(() -> seedTicket("a", Ticket.Status.DONE,
+                    withExtraction("8.00", "EUR", null, date(2026, 1, 5))))
+                    .hasMessageContaining("category");
         }
 
         @Test
@@ -402,32 +407,34 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
         }
 
         @Test
-        @DisplayName("collapses several unknown labels and NULL into one OTHER row")
-        void collapsesUnknownLabelsIntoOneOtherRow() {
-            // The raw column is free text, so grouping by it directly
-            // would emit one OTHER row per distinct label — three
-            // overlapping slices, or two silently overwritten.
-            seedTicket("a", Ticket.Status.DONE, withExtraction("10.00", "EUR", "groceries", date(2026, 1, 5)));
-            seedTicket("b", Ticket.Status.DONE, withExtraction("20.00", "EUR", "supermarket", date(2026, 1, 6)));
-            seedTicket("c", Ticket.Status.DONE, withExtraction("30.00", "EUR", null, date(2026, 1, 7)));
+        @DisplayName("emits at most one row per member of the enum")
+        void collapsesToOneRowPerMember() {
+            // The row count is bounded by the enum now rather than by
+            // whatever the model emitted — the whole reason the
+            // GROUP BY no longer needs a CASE in front of it.
+            seedTicket("a", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 1)));
+            seedTicket("b", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 2)));
+            seedTicket("c", Ticket.Status.DONE, withExtraction("1.00", "EUR", "transport", date(2026, 1, 3)));
+            seedTicket("d", Ticket.Status.DONE, withExtraction("1.00", "EUR", "lodging", date(2026, 1, 4)));
+            seedTicket("e", Ticket.Status.DONE, withExtraction("1.00", "EUR", "pharmacy", date(2026, 1, 5)));
+            seedTicket("f", Ticket.Status.DONE, withExtraction("1.00", "EUR", "other", date(2026, 1, 6)));
 
             List<CategorySpend> rows = repository.sumByCategory(owner, "EUR");
 
-            assertThat(rows).hasSize(1);
-            assertThat(rows.get(0).category()).isEqualTo(SpendCategory.OTHER);
-            assertThat(rows.get(0).amount()).isEqualByComparingTo("60.00");
+            assertThat(rows).hasSize(SpendCategory.values().length);
+            assertThat(rows).extracting(CategorySpend::category)
+                    .containsExactlyInAnyOrder(SpendCategory.values());
+            assertThat(amountFor(rows, SpendCategory.FOOD)).isEqualByComparingTo("20.00");
         }
 
         @Test
         @DisplayName("never returns more rows than there are categories")
         void resultCardinalityIsBoundedByTheWhitelist() {
-            // Six distinct raw labels must collapse to at most four rows.
             seedTicket("a", Ticket.Status.DONE, withExtraction("1.00", "EUR", "food", date(2026, 1, 1)));
             seedTicket("b", Ticket.Status.DONE, withExtraction("1.00", "EUR", "transport", date(2026, 1, 2)));
             seedTicket("c", Ticket.Status.DONE, withExtraction("1.00", "EUR", "lodging", date(2026, 1, 3)));
-            seedTicket("d", Ticket.Status.DONE, withExtraction("1.00", "EUR", "gas station", date(2026, 1, 4)));
-            seedTicket("e", Ticket.Status.DONE, withExtraction("1.00", "EUR", "pharmacy", date(2026, 1, 5)));
-            seedTicket("f", Ticket.Status.DONE, withExtraction("1.00", "EUR", null, date(2026, 1, 6)));
+            seedTicket("d", Ticket.Status.DONE, withExtraction("1.00", "EUR", "pharmacy", date(2026, 1, 4)));
+            seedTicket("e", Ticket.Status.DONE, withExtraction("1.00", "EUR", "other", date(2026, 1, 5)));
 
             assertThat(repository.sumByCategory(owner, "EUR"))
                     .hasSizeLessThanOrEqualTo(SpendCategory.values().length);
@@ -469,7 +476,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
                         (ticket_id, merchant, purchase_date, category, products,
                          total_amount, currency, model, extracted_at,
                          raw_response_text, extraction_payload)
-                    VALUES (?, 'Test Merchant', ?, ?, '[]'::jsonb, ?, ?, 'test-model', now(),
+                    VALUES (?, 'Test Merchant', ?, ?::spend_category, '[]'::jsonb, ?, ?, 'test-model', now(),
                             NULL, '{}'::jsonb)""",
                     id,
                     extraction.purchaseDate(),

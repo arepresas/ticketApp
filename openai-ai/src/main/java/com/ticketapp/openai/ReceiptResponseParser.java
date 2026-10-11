@@ -3,6 +3,7 @@ package com.ticketapp.openai;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
@@ -15,7 +16,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Pure parser for the provider assistant replies (ADR 0007).
@@ -35,15 +35,6 @@ import java.util.Set;
 @Slf4j
 @RequiredArgsConstructor
 public class ReceiptResponseParser {
-
-    /**
-     * Known category labels. Anything else the model emits is stored
-     * as {@code "other"}. Kept here (provider-side) rather than in
-     * the domain because the label set is a property of the prompt,
-     * not of the extraction concept.
-     */
-    private static final Set<String> KNOWN_CATEGORIES = Set.of(
-            "food", "pharmacy", "restaurant", "fuel", "other");
 
     private final ObjectMapper objectMapper;
 
@@ -117,14 +108,13 @@ public class ReceiptResponseParser {
             if (currency.length() != 3) {
                 throw new IllegalStateException("currency must be ISO 4217, got: " + currency);
             }
-            String category = optionalText(root, "category");
-            if (category != null) {
-                String normalized = category.toLowerCase();
-                if (!KNOWN_CATEGORIES.contains(normalized)) {
-                    normalized = "other";
-                }
-                category = normalized;
-            }
+            // The model emits whatever label fits the receipt; the
+            // column holds a closed set. Folding here rather than
+            // rejecting means a prompt regression narrows what is
+            // stored, never what is asked for — and it is the same
+            // table the V24 backfill applies to rows already written.
+            SpendCategory category = SpendCategory.fromExtractionValue(
+                    optionalText(root, "category"));
             List<ProductLine> products = parseProducts(root.get("products"));
             return new ReceiptExtractionResult(
                     merchant, purchaseDate, category, products, totalAmount, currency);

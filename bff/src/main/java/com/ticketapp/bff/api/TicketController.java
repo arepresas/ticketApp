@@ -7,6 +7,7 @@ import com.ticketapp.bff.application.TicketApplicationService;
 import com.ticketapp.bff.application.TicketEditService;
 import com.ticketapp.bff.api.dto.ProductLineDto;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
@@ -292,7 +293,8 @@ public class TicketController {
                         p.lineTotal() == null ? java.math.BigDecimal.ZERO : p.lineTotal()))
                 .toList();
         return new EditableFields(
-                body.merchant(), body.purchaseDate(), body.category(),
+                body.merchant(), body.purchaseDate(),
+                SpendCategory.fromExtractionValue(body.category()),
                 lines, body.totalAmount(), body.currency().toUpperCase(java.util.Locale.ROOT));
     }
 

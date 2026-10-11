@@ -25,6 +25,11 @@ public record ExtractionResponse(
         long ticketId,
         String merchant,
         LocalDate purchaseDate,
+        /**
+         * {@link com.ticketapp.domain.SpendCategory} wire name. Always
+         * present: an unclassifiable receipt is {@code other}, not an
+         * absent value.
+         */
         String category,
         List<ProductLineDto> products,
         BigDecimal totalAmount,
@@ -45,7 +50,7 @@ public record ExtractionResponse(
                 e.ticketId(),
                 e.merchant(),
                 e.purchaseDate(),
-                e.category(),
+                e.category().wireName(),
                 products,
                 e.totalAmount(),
                 e.currency(),

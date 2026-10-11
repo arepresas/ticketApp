@@ -3,6 +3,7 @@ package com.ticketapp.persistence;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import lombok.NonNull;
@@ -79,7 +80,7 @@ final class ExtractionRowMapper {
         long ticketId = rs.getLong("ticket_id");
         String merchant = rs.getString("merchant");
         LocalDate purchaseDate = rs.getObject("purchase_date", LocalDate.class);
-        String category = rs.getString("category");
+        SpendCategory category = SpendCategory.fromStorage(rs.getString("category"));
         String productsJson = rs.getString("products");
         BigDecimal totalAmount = rs.getBigDecimal("total_amount");
         String currency = rs.getString("currency");

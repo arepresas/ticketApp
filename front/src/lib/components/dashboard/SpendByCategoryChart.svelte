@@ -11,12 +11,16 @@
 	import CardContent from '../ui/card/CardContent.svelte';
 
 	// Tailwind theme tokens — chosen for contrast against the card background.
-	// Order MUST match the domain categories (transport / food / lodging / other)
-	// so the slice color stays stable regardless of array order in `data`.
+	// Keyed by category rather than positional: the palette is looked up per
+	// slice, so the arc colour follows the category and not the order the
+	// BFF happened to serialise. `Record<SpendByCategory, string>` is
+	// exhaustive, so adding a member to the enum is a type error here until
+	// it gets a colour.
 	const CATEGORY_COLORS: Record<SpendByCategory['category'], string> = {
-		transport: 'oklch(0.685 0.169 237.323)', // sky-500
 		food: 'oklch(0.769 0.188 70.08)', // amber-500
+		transport: 'oklch(0.685 0.169 237.323)', // sky-500
 		lodging: 'oklch(0.606 0.25 292.717)', // violet-500
+		pharmacy: 'oklch(0.704 0.191 22.216)', // red-500
 		other: 'oklch(0.552 0.016 285.938)' // zinc-500
 	};
 
