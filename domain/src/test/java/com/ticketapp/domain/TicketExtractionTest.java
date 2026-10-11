@@ -33,7 +33,7 @@ class TicketExtractionTest {
     private static final LocalDate DATE = LocalDate.of(2026, Month.JULY, 4);
     private static final Instant NOW = Instant.parse("2026-07-05T17:00:00Z");
     private static final List<ProductLine> PRODUCTS = List.of(
-            new ProductLine("Bread", new BigDecimal("1"), "unit",
+            new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
                     new BigDecimal("1.20"), new BigDecimal("1.20")));
 
     @Test
@@ -138,13 +138,13 @@ class TicketExtractionTest {
     @Test
     void productLineRejectsBlankName() {
         assertThrows(IllegalArgumentException.class,
-                () -> new ProductLine("", BigDecimal.ONE, "unit", BigDecimal.ONE, BigDecimal.ONE));
+                () -> new ProductLine("", BigDecimal.ONE, QuantityUnit.UNIT, BigDecimal.ONE, BigDecimal.ONE));
     }
 
     @Test
     void productLineRejectsNonPositiveQuantity() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> new ProductLine("X", BigDecimal.ZERO, "unit", BigDecimal.ONE, BigDecimal.ONE));
+                () -> new ProductLine("X", BigDecimal.ZERO, QuantityUnit.UNIT, BigDecimal.ONE, BigDecimal.ONE));
         assertTrue(ex.getMessage().contains("quantity"));
     }
 
@@ -154,7 +154,7 @@ class TicketExtractionTest {
         // as negative pricePerUnit / lineTotal on a quantity=1 line,
         // never as a negative count.
         assertThrows(IllegalArgumentException.class,
-                () -> new ProductLine("X", new BigDecimal("-1"), "unit",
+                () -> new ProductLine("X", new BigDecimal("-1"), QuantityUnit.UNIT,
                         BigDecimal.ONE, BigDecimal.ONE));
     }
 
@@ -164,10 +164,19 @@ class TicketExtractionTest {
         // lineTotal to go negative to model a discount. Quantity
         // stays 1.
         ProductLine discount = new ProductLine(
-                "Remise 6€", BigDecimal.ONE, "unit",
+                "Remise 6€", BigDecimal.ONE, QuantityUnit.UNIT,
                 new BigDecimal("-6.00"), new BigDecimal("-6.00"));
 
         assertEquals(0, discount.pricePerUnit().compareTo(new BigDecimal("-6.00")));
         assertEquals(0, discount.lineTotal().compareTo(new BigDecimal("-6.00")));
+    }
+
+    @Test
+    void productLineRejectsNullUnit() {
+        // A line that printed no unit is UNIT, not "no unit". Letting
+        // null through here would put the same product into two
+        // catalogue match keys downstream.
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProductLine("Bread", BigDecimal.ONE, null, BigDecimal.ONE, BigDecimal.ONE));
     }
 }

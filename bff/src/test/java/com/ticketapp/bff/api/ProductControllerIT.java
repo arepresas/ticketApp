@@ -86,9 +86,9 @@ class ProductControllerIT {
     @Test
     void searchReturnsMatchingProducts() {
         String token = loginAndGetToken();
-        long breadId = seedProduct("Bread", null);
-        long bananaId = seedProduct("Banana", null);
-        seedProduct("Milk", null);
+        long breadId = seedProduct("Bread", "unit");
+        long bananaId = seedProduct("Banana", "unit");
+        seedProduct("Milk", "unit");
 
         List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri.path("/api/products/search").queryParam("name", "B").build())
@@ -128,7 +128,7 @@ class ProductControllerIT {
     void searchRespectsLimit() {
         String token = loginAndGetToken();
         for (String n : new String[]{"Apple", "Avocado", "Almond", "Artichoke"}) {
-            seedProduct(n, null);
+            seedProduct(n, "unit");
         }
 
         List<ProductSearchResponse> body = web()
@@ -154,7 +154,7 @@ class ProductControllerIT {
         // whole catalogue. The endpoint clamps to MAX_LIMIT.
         String token = loginAndGetToken();
         for (int i = 0; i < 30; i++) {
-            seedProduct("Apple " + i, null);
+            seedProduct("Apple " + i, "unit");
         }
 
         List<ProductSearchResponse> body = web()
@@ -177,7 +177,7 @@ class ProductControllerIT {
     @Test
     void searchReturnsEmptyForBlankName() {
         String token = loginAndGetToken();
-        seedProduct("Bread", null);
+        seedProduct("Bread", "unit");
 
         List<ProductSearchResponse> body = web()
                 .get().uri(uri -> uri

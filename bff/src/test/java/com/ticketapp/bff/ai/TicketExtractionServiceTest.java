@@ -3,6 +3,7 @@ package com.ticketapp.bff.ai;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
 import com.ticketapp.domain.TicketExtraction;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
@@ -137,7 +138,7 @@ class TicketExtractionServiceTest {
                                 List.of(new ProductLine(
                                         "Bread",
                                         new BigDecimal("1"),
-                                        "unit",
+                                        QuantityUnit.UNIT,
                                         new BigDecimal("1.20"),
                                         new BigDecimal("1.20"))),
                                 new BigDecimal("1.20"),

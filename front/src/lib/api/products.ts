@@ -6,6 +6,8 @@
  * 401-bubbling conventions in `auth/api.ts` and `tickets.ts`.
  */
 
+import type { QuantityUnit } from './quantityUnit';
+
 export class ProductApiError extends Error {
 	constructor(
 		message: string,
@@ -26,9 +28,9 @@ export type ProductSummary = {
 	id: number;
 	/** Display name as printed on past receipts. */
 	name: string;
-	/** Unit label ("kg", "L", "unit", ...). Null when the line had no unit. */
-	unit: string | null;
-	/** Pre-rendered display label: "Name (unit)" or just "Name". */
+	/** Unit the catalogue stores this product under ("kg" or "unit"). */
+	unit: QuantityUnit;
+	/** Pre-rendered display label: "Name (kg)" or just "Name". */
 	label: string;
 };
 

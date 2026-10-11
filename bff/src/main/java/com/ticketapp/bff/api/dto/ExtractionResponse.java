@@ -37,7 +37,7 @@ public record ExtractionResponse(
                 .map(p -> new ProductLineDto(
                         p.name(),
                         p.quantity(),
-                        p.unit(),
+                        p.unit().wireName(),
                         p.pricePerUnit(),
                         p.lineTotal()))
                 .toList();

@@ -3,6 +3,7 @@ package com.ticketapp.bff.api;
 import com.ticketapp.bff.api.dto.ExtractionResponse;
 import com.ticketapp.bff.api.dto.ProductLineDto;
 import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
@@ -113,7 +114,7 @@ public class TicketExtractionController {
 
         List<TicketExtraction.ProductLine> domainProducts = productDtos.stream()
                 .map(p -> new TicketExtraction.ProductLine(
-                        p.name(), p.quantity(), p.unit(),
+                        p.name(), p.quantity(), QuantityUnit.fromLabel(p.unit()),
                         zeroIfNull(p.pricePerUnit()),
                         zeroIfNull(p.lineTotal())))
                 .toList();

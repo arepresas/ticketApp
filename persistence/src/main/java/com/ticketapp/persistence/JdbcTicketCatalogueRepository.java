@@ -1,5 +1,6 @@
 package com.ticketapp.persistence;
 
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.TicketCatalogueRepository;
 
@@ -31,6 +32,11 @@ import java.util.Optional;
  * catalogue row that was deleted after the ticket was validated
  * must not hide the whole line. The projection then reports a null
  * name or amount, which is what the dashboard renders as "unknown".
+ *
+ * <p>{@code products.unit} is projected through
+ * {@link QuantityUnit#fromStorage(String)}: the column predates the
+ * enum and holds NULL, "kg" or a label the enum no longer carries, and
+ * a catalogue view must still load when it does.
  */
 @Repository
 public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository {
@@ -84,12 +90,12 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
                 new MapSqlParameterSource()
                         .addValue("ticket", ticketId)
                         .addValue("owner", ownerId),
-                (rs, n) -> new CatalogueLine(
-                        rs.getString("product_name"),
-                        rs.getString("product_unit"),
-                        rs.getBigDecimal("quantity"),
-                        rs.getBigDecimal("price_per_unit"),
-                        rs.getBigDecimal("line_total")));
+(rs, n) -> new CatalogueLine(
+                                rs.getString("product_name"),
+                                QuantityUnit.fromStorage(rs.getString("product_unit")),
+                                rs.getBigDecimal("quantity"),
+                                rs.getBigDecimal("price_per_unit"),
+                                rs.getBigDecimal("line_total")));
         if (lines.isEmpty()) {
             return Optional.empty();
         }
