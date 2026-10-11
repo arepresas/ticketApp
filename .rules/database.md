@@ -15,8 +15,17 @@
 - **No `DROP` in the same release that removes the column from code.** Two-release deprecation:
   1. Stop reading the column (release N).
   2. `DROP COLUMN` in release N+1 (or later).
-- Backfills ship in their own ordered migration, never bundled with the structural change.
-- New columns: `NULL`-able or have a `DEFAULT`. Never `NOT NULL` without a default against an existing populated table.
+- **No backfill migrations. The project has no data to preserve.**
+  A migration that only rewrites existing rows is deleted rather than
+  shipped: with nothing in the database, it is a statement that reads as
+  if it mattered and a test that pins behaviour nobody can observe. The
+  schema simply takes its final shape at the step that introduces it —
+  a typed column is created typed, NOT NULL from the start, rather than
+  introduced nullable and narrowed later. Migrations that only make
+  sense *against* existing rows (`UPDATE … WHERE legacy_value`, a merge
+  before a UNIQUE index) do not get written at all.
+- New columns: `NOT NULL` with a `DEFAULT`, or nullable when the value
+  is genuinely optional. No "add it nullable, backfill, then constrain".
 - Index additions: `CREATE INDEX CONCURRENTLY` wrapped in a Liquibase `precondition` that detects lock conflicts when running outside Postgres.
 
 ## SQL style
@@ -55,7 +64,8 @@
 
 - `spring.jpa.hibernate.ddl-auto=update` (or any auto-DDL).
 - Editing schema in Java code at runtime.
-- Bundling backfill data with structural changes.
+- A migration whose only job is rewriting existing rows. If the schema
+  needs a different shape, change it where it is introduced.
 - Renaming an existing changeset that has shipped.
 - Mixing `.sql`, `.xml`, and `.yaml` formats within a single migration (pick one per file).
 - `DROP TABLE` without an ADR.

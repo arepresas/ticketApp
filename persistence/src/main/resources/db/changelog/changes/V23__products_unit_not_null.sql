@@ -2,29 +2,23 @@
 
 -- products.unit is NOT NULL from here on.
 --
--- The column was VARCHAR(16) NULL because a language model wrote
--- into it and a receipt line may print no unit. Both halves are now
+-- The column was VARCHAR(16) NULL because a language model wrote into
+-- it and a receipt line may print no unit. Both halves are now
 -- settled: the domain types it as com.ticketapp.domain.QuantityUnit,
--- where "no unit" is QuantityUnit.UNIT rather than an absent value,
--- and V22 has already backfilled every NULL to the literal 'unit'.
+-- where "no unit" is QuantityUnit.UNIT rather than an absent value.
+-- There is nothing to backfill — no database predates the enum.
 --
 -- No DEFAULT, deliberately. The single writer
 -- (JdbcProductRepository.save) always binds the column, so a DEFAULT
 -- would only mask a writer that forgot to — turning a loud failure
--- into a silently wrong product. The rule database.md states for NEW
--- columns (never NOT NULL without a default against a populated
--- table) does not apply here: this column already existed and V22
--- is what makes the constraint applicable to its rows.
+-- into a silently wrong product.
 --
 -- Additive per database.md: the column stays, the index
--- idx_products_normalised_name_unit is untouched. Its
+-- idx_products_normalised_name_unit is untouched here. Its
 -- COALESCE(unit, '') expression is now an identity function, so
 -- JdbcProductRepository keeps writing the same SQL against it rather
--- than rewriting the index in the same release.
---
--- Still no CHECK on the enum's values: rows carrying a label from
--- before the enum ('L', 'pack') are still in the table, and
--- constraining them is the follow-up that has to merge them first.
+-- than rewriting the index in the same release. V26 replaces both
+-- once the column becomes a native type.
 --
 --changeset ticketapp:20261011120100-products-unit-not-null runInTransaction:true
 ALTER TABLE products ALTER COLUMN unit SET NOT NULL;

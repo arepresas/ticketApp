@@ -52,11 +52,10 @@ public enum QuantityUnit {
      * How this unit is written to {@code products.unit}: always the
      * {@link #wireName()}, never SQL NULL.
      *
-     * <p>The column is {@code NOT NULL} since V23, and V22 backfilled
-     * the rows that used to spell "no unit" as NULL. That is the point
-     * of the enum: "no unit" is {@link #UNIT}, not an absent value, so
-     * it is stored like any other member rather than as a hole in the
-     * column.
+     * <p>The column is {@code NOT NULL} since V23 and a native type
+     * since V26. That is the point of the enum: "no unit" is
+     * {@link #UNIT}, not an absent value, so it is stored like any
+     * other member rather than as a hole in the column.
      *
      * <p>Reads stay tolerant — {@link #fromStorage(String)} accepts the
      * NULL and free-text values older rows and older payloads still
