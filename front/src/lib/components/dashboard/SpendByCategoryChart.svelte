@@ -32,7 +32,7 @@
 		labels: data.map((d) => d.category),
 		datasets: [
 			{
-				data: data.map((d) => d.amountEur),
+				data: data.map((d) => d.amount),
 				backgroundColor: data.map((d) => CATEGORY_COLORS[d.category])
 			}
 		]
