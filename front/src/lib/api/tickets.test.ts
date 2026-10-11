@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+	applyTicketEdit,
 	createTicket,
 	deleteTicket,
 	getTicket,
@@ -10,6 +11,7 @@ import {
 	TicketApiError,
 	updateTicketStatus,
 	type CreatedTicket,
+	type EditableExtraction,
 	type TicketExtraction
 } from '../api/tickets';
 
@@ -287,6 +289,139 @@ describe('updateTicketStatus', () => {
 			name: 'TicketApiError',
 			status: 404
 		});
+	});
+});
+
+describe('applyTicketEdit', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	const editable: EditableExtraction = {
+		merchant: 'Mercadona Centro',
+		purchaseDate: '2026-03-12',
+		category: 'food',
+		products: [
+			{ name: 'Aceite oliva 1L', quantity: 1, unit: 'unit', pricePerUnit: 45.6, lineTotal: 45.6 }
+		],
+		totalAmount: 45.6,
+		currency: 'EUR'
+	};
+
+	it('PUTs the atomic edit to /api/tickets/{id} with the Bearer token', async () => {
+		// One request, one transaction on the BFF side — this replaced
+		// the old PATCH-then-PUT pair that could half-save.
+		const updated: CreatedTicket = { ...sampleCreated, title: 'Weekly shop' };
+		const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse(updated));
+
+		const got = await applyTicketEdit('tok', sampleCreated.id, {
+			title: 'Weekly shop',
+			description: 'edited by hand',
+			extraction: editable
+		});
+
+		expect(got).toEqual(updated);
+		const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+		expect(url).toBe(`/api/tickets/${sampleCreated.id}`);
+		expect(init.method).toBe('PUT');
+		const headers = init.headers as Record<string, string>;
+		expect(headers.authorization).toBe('Bearer tok');
+		expect(headers['content-type']).toBe('application/json');
+		expect(headers.accept).toBe('application/json');
+		expect(JSON.parse(init.body as string)).toEqual({
+			title: 'Weekly shop',
+			description: 'edited by hand',
+			extraction: editable
+		});
+	});
+
+	it('serialises the sparse payload as sent — omitted fields stay omitted', async () => {
+		// The BFF treats a missing field as "leave alone", so the
+		// client must not send nulls the server would have to guess at.
+		const fetchSpy = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(mockResponse(sampleCreated));
+
+		await applyTicketEdit('tok', sampleCreated.id, { extraction: null });
+
+		const init = fetchSpy.mock.calls[0]?.[1] as RequestInit;
+		expect(JSON.parse(init.body as string)).toEqual({ extraction: null });
+	});
+
+	it('sends only the extraction half when that is what changed', async () => {
+		// Metadata stays out of the payload, so a save cannot clobber a
+		// field the user did not touch.
+		const fetchSpy = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(mockResponse(sampleCreated));
+
+		await applyTicketEdit('tok', sampleCreated.id, { extraction: editable });
+
+		const init = fetchSpy.mock.calls[0]?.[1] as RequestInit;
+		const body = JSON.parse(init.body as string);
+		expect(body).toEqual({ extraction: editable });
+		expect(body.title).toBeUndefined();
+		expect(body.description).toBeUndefined();
+	});
+
+	it('bubbles auth expiry and throws TicketApiError on 401', async () => {
+		// Without this pass-through an expired session would leave the
+		// user on a stale detail screen with no recovery path.
+		const expired = vi.fn();
+		window.addEventListener('auth:expired', expired);
+		try {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				mockResponse({ message: 'unauthorized' }, { status: 401, ok: false })
+			);
+
+			await expect(
+				applyTicketEdit('stale', sampleCreated.id, { title: 'x' })
+			).rejects.toMatchObject({
+				name: 'TicketApiError',
+				status: 401,
+				message: 'unauthorized'
+			});
+			expect(expired).toHaveBeenCalledTimes(1);
+		} finally {
+			window.removeEventListener('auth:expired', expired);
+		}
+	});
+
+	it('throws TicketApiError on 404 without firing the auth event', async () => {
+		// A rejected extraction (the AI has not read the ticket) is a
+		// 404, not an expired session.
+		const expired = vi.fn();
+		window.addEventListener('auth:expired', expired);
+		try {
+			vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+				mockResponse({ error: 'Not Found' }, { status: 404, ok: false })
+			);
+
+			await expect(
+				applyTicketEdit('tok', 9999, { title: 'x', extraction: editable })
+			).rejects.toMatchObject({
+				name: 'TicketApiError',
+				status: 404,
+				message: 'Not Found'
+			});
+			expect(expired).not.toHaveBeenCalled();
+		} finally {
+			window.removeEventListener('auth:expired', expired);
+		}
+	});
+
+	it('returns the persisted ticket on success', async () => {
+		const updated: CreatedTicket = {
+			...sampleCreated,
+			title: 'Weekly shop',
+			description: 'edited by hand',
+			updatedAt: '2026-07-04T09:00:00Z'
+		};
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse(updated, { status: 200 }));
+
+		await expect(
+			applyTicketEdit('tok', sampleCreated.id, { title: 'Weekly shop' })
+		).resolves.toEqual(updated);
 	});
 });
 

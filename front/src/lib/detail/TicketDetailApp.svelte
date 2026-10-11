@@ -58,8 +58,7 @@
 		getTicketExtraction,
 		getTicketFile,
 		updateTicketStatus,
-		updateTicketMetadata,
-		replaceTicketExtraction,
+			applyTicketEdit,
 		getTicketCatalogue,
 		retryTicket,
 		deleteTicket,
@@ -69,8 +68,10 @@
 		type ExtractedProductLine,
 		type CatalogueLine
 	} from '../api/tickets';
-	import { searchProducts, type ProductSummary } from '../api/products';
-	import { navigateBack } from '../navigation';
+import { searchProducts, type ProductSummary } from '../api/products';
+import { navigateBack } from '../navigation';
+import { flushThenAct } from './flushThenAct';
+import { createSaveState, runEditSave, type EditSection } from './editSave';
 	import { formatDate as sharedFmtDate, formatDateTime as sharedFmtDateTime } from '../utils/date';
 
 	const SESSION_STORAGE_KEY = 'ticketapp.session';
@@ -339,6 +340,12 @@
 			]);
 			ticket = t;
 			extraction = ex;
+			// The freshly-loaded values are the baseline: any edit
+			// flag from a previous ticket (or a failed save) would
+			// otherwise ship this ticket's sections on the next save.
+			saveState.clear();
+			dirty = false;
+			extractionDirty = false;
 			// Pre-warm the per-line icon column: kick off one
 			// catalogue search per existing line so the green
 			// check / plus-circle shows up the moment the screen
@@ -580,16 +587,46 @@
 		};
 	});
 
+	/**
+	 * Move the ticket to a terminal status, flushing any pending edits
+	 * first.
+	 *
+	 * <p>The flush is the point of this change. The Save button and
+	 * "Mark as done" are peers in the UI, and users reasonably expect
+	 * "mark as done" to keep what they just typed. It did not: the PATCH
+	 * fired with unsaved edits still only in component state and then
+	 * `close()` unmounted the view, so the corrections were silently
+	 * lost while the status change appeared to succeed.
+	 *
+	 * <p>If the save fails we abort and stay on the ticket. Flipping the
+	 * status anyway would mark a ticket DONE that still carries the
+	 * pre-edit data, which is the half-applied state we are trying to
+	 * avoid.
+	 */
 	async function setStatus(status: 'DONE' | 'CANCELLED'): Promise<void> {
-		if (!ticketId || acting) return;
+		// Captured before the awaits: TypeScript cannot carry the null
+		// narrowing of `ticketId` into the closure below.
+		const id = ticketId;
+		if (!id || acting) return;
 		const token = readSessionToken();
 		if (!token) return;
 		acting = true;
 		errorMessage = null;
 		try {
-			await updateTicketStatus(token, ticketId, status);
-			window.dispatchEvent(new CustomEvent('ticket:updated'));
-			close();
+			const progressed = await flushThenAct(
+				dirty ? () => saveChanges() : null,
+				async () => {
+					await updateTicketStatus(token, id, status);
+					window.dispatchEvent(new CustomEvent('ticket:updated'));
+					close();
+				}
+			);
+			if (!progressed) {
+				// The save failed and has already surfaced its own
+				// message; stay on the ticket so the edits are still
+				// there to retry.
+				return;
+			}
 		} catch (err: unknown) {
 			if (err instanceof TicketApiError) {
 				errorMessage = `Could not mark as ${status} (${err.status}): ${err.message}`;
@@ -675,17 +712,28 @@
 	 * action failed. Closed-on-success mirrors {@link setStatus}: the
 	 * detail screen is no longer useful once the status flips because
 	 * the orchestrator will mutate the extraction row asynchronously.
+	 *
+	 * <p>Also flushes pending edits first, for the same reason as
+	 * {@link setStatus}: this closes the view, so unsaved edits would be
+	 * unreachable rather than merely pending.
 	 */
 	async function resetStatus(): Promise<void> {
-		if (!ticketId || acting) return;
+		const id = ticketId;
+		if (!id || acting) return;
 		const token = readSessionToken();
 		if (!token) return;
 		acting = true;
 		errorMessage = null;
 		try {
-			await retryTicket(token, ticketId);
-			window.dispatchEvent(new CustomEvent('ticket:updated'));
-			close();
+			const progressed = await flushThenAct(
+				dirty ? () => saveChanges() : null,
+				async () => {
+					await retryTicket(token, id);
+					window.dispatchEvent(new CustomEvent('ticket:updated'));
+					close();
+				}
+			);
+			if (!progressed) return;
 		} catch (err: unknown) {
 			if (err instanceof TicketApiError) {
 				errorMessage = `Could not reset ticket (${err.status}): ${err.message}`;
@@ -754,8 +802,23 @@
 	}
 
 	/** Anything changed since the last successful save? Drives the
-	 * Save button's enabled state and the visual "Unsaved" hint. */
+	 * Save button's enabled state and the visual "Unsaved" hint.
+	 * Mirrors {@link saveState}; kept as its own rune so the template
+	 * re-renders on change. */
 	let dirty = $state(false);
+
+	/** True when the extraction half specifically has unsaved edits —
+	 * that section only travels in the payload when it is dirty, so a
+	 * metadata-only save cannot overwrite a fresher server-side
+	 * extraction (e.g. one a concurrent AI run refreshed). */
+	let extractionDirty = $state(false);
+
+	/** Section flags + the edit-generation counter. Owns the truth; the
+	 * runes above only mirror it for rendering. */
+	const saveState = createSaveState();
+
+	/** The save currently running, so a second caller awaits it. */
+	let saveInFlight: Promise<boolean> | null = null;
 
 	/** Save in-flight; disables the Save button. */
 	let savingChanges = $state(false);
@@ -776,8 +839,21 @@
 		}
 	}
 
-	function markDirty(): void {
-		if (!savingChanges) dirty = true;
+	/**
+	 * Record an edit and mark the screen dirty. The section decides
+	 * which half of the save payload carries the value next time —
+	 * see `editSave.ts`.
+	 *
+	 * <p>Unlike the pre-fix version this also runs while a save is in
+	 * flight. That was the silent data-loss path: the request snapshot
+	 * was older than the user's latest keystroke, so adopting the
+	 * server's copy on completion overwrote the edit and cleared
+	 * `dirty` in the same breath.
+	 */
+	function markDirty(section: EditSection): void {
+		saveState.markDirty(section);
+		dirty = saveState.isDirty();
+		extractionDirty = saveState.dirtySections().has('extraction');
 	}
 
 	/**
@@ -911,59 +987,65 @@
 		});
 	}
 
-	async function saveChanges(): Promise<void> {
-		if (!ticket || !dirty || savingChanges) return;
+	/**
+	 * Persist pending edits (metadata + extraction).
+	 *
+	 * <p>Returns whether the edits reached the server, so callers that
+	 * do more afterwards — {@link setStatus} flushing before a status
+	 * change — can abort instead of half-applying. `true` also when
+	 * there was nothing to save.
+	 */
+	async function saveChanges(): Promise<boolean> {
+		const current = ticket;
+		if (!current) return true;
+		// A save is already running: wait for that one. Reporting
+		// success here would let the caller act on edits whose write
+		// has not landed yet, and the status change could normalise the
+		// catalogue against the pre-edit row.
+		if (saveInFlight) return saveInFlight;
+		if (!saveState.isDirty()) return true;
 		const token = readSessionToken();
 		if (!token) {
 			errorMessage = 'Session expired. Sign in again to save changes.';
 			setSaveOutcome('error', 3000);
-			return;
+			return false;
 		}
 		savingChanges = true;
 		errorMessage = null;
+		saveInFlight = runEditSave({
+			token,
+			api: { applyEdit: applyTicketEdit, getExtraction: getTicketExtraction },
+			state: saveState,
+			currentTicket: () => ticket,
+			currentExtraction: () => extraction,
+			onCommitted: (saved, refreshed) => {
+				ticket = saved;
+				// Null means the refresh 404'd or failed; keep the
+				// local copy rather than blanking the panel.
+				if (refreshed) extraction = refreshed;
+				dirty = saveState.isDirty();
+				extractionDirty = saveState.dirtySections().has('extraction');
+				setSaveOutcome('saved', 2000);
+				window.dispatchEvent(new CustomEvent('ticket:updated'));
+			},
+			onSaveFailed: (err) => {
+				console.warn('TicketDetailApp: save failed', err);
+				errorMessage =
+					err instanceof TicketApiError
+						? `Save failed (${err.status}): ${err.message}`
+						: `Save failed: ${err instanceof Error ? err.message : 'unknown error'}`;
+				setSaveOutcome('error', 3000);
+			},
+			onUnstable: () => {
+				errorMessage = 'Still editing — save again to store the latest changes.';
+				setSaveOutcome('idle');
+			}
+		});
 		try {
-			// 1) metadata first — `await` so a failure here stops
-			// the extraction PUT (no half-saves).
-			const updatedTicket = await updateTicketMetadata(token, ticket.id, {
-				title: ticket.title,
-				description: ticket.description
-			});
-			ticket = updatedTicket;
-
-			// 2) extraction only if the AI has produced a row to
-			// update. Same PUT maps products so lineTotal is always
-			// the product of qty × €/unit regardless of stale state.
-			if (extraction) {
-				const updatedEx = await replaceTicketExtraction(token, ticket.id, {
-					merchant: extraction.merchant,
-					purchaseDate: extraction.purchaseDate,
-					category: extraction.category,
-					products: extraction.products.map((p) => ({
-						name: p.name,
-						quantity: p.quantity ?? 1,
-						unit: p.unit,
-						pricePerUnit: p.pricePerUnit ?? 0,
-						lineTotal: computedLineTotal(p)
-					})),
-					totalAmount: extraction.totalAmount,
-					currency: extraction.currency
-				});
-				extraction = updatedEx;
-			}
-
-			dirty = false;
-			setSaveOutcome('saved', 2000);
-			window.dispatchEvent(new CustomEvent('ticket:updated'));
-		} catch (err) {
-			console.warn('TicketDetailApp: save failed', err);
-			if (err instanceof TicketApiError) {
-				errorMessage = `Save failed (${err.status}): ${err.message}`;
-			} else {
-				errorMessage = `Save failed: ${err instanceof Error ? err.message : 'unknown error'}`;
-			}
-			setSaveOutcome('error', 3000);
+			return await saveInFlight;
 		} finally {
 			savingChanges = false;
+			saveInFlight = null;
 		}
 	}
 
@@ -974,6 +1056,11 @@
 	 * elaborate "you have unsaved changes, are you sure?" guard:
 	 * the screen is for quick edits, and the Save button is the
 	 * only way to persist. No shadow buffer.
+	 *
+	 * <p>Marking the ticket DONE or CANCELLED is the one exception —
+	 * it flushes first (see {@link setStatus}), because that action
+	 * closes the view, so unsaved edits there would be unreachable
+	 * rather than merely pending.
 	 */
 
 	function addProductRow(): void {
@@ -989,14 +1076,14 @@
 			...extraction,
 			products: [...extraction.products, next]
 		};
-		markDirty();
+		markDirty('extraction');
 	}
 
 	function removeProductRow(index: number): void {
 		if (!extraction) return;
 		const products = extraction.products.filter((_, i) => i !== index);
 		extraction = { ...extraction, products };
-		markDirty();
+		markDirty('extraction');
 	}
 
 	/**
@@ -1108,7 +1195,7 @@
 						<input
 							type="text"
 							bind:value={ticket.title}
-							oninput={markDirty}
+							oninput={() => markDirty('metadata')}
 							maxlength="255"
 							required
 							readonly={!editable}
@@ -1161,7 +1248,7 @@
 						<input
 							type="text"
 							bind:value={ticket.description}
-							oninput={markDirty}
+							oninput={() => markDirty('metadata')}
 							maxlength="2000"
 							readonly={!editable}
 							placeholder="Add a description…"
@@ -1259,7 +1346,7 @@
 										<input
 											type="text"
 											bind:value={extraction.merchant}
-											oninput={markDirty}
+											oninput={() => markDirty('extraction')}
 											maxlength="255"
 											required
 											readonly={!editable}
@@ -1273,7 +1360,7 @@
 											<input
 												type="date"
 												bind:value={extraction.purchaseDate}
-												oninput={markDirty}
+												oninput={() => markDirty('extraction')}
 												required
 												readonly={!editable}
 												aria-label="Purchase date"
@@ -1304,7 +1391,7 @@
 																	: e.currentTarget.value
 														};
 														extraction = next;
-												markDirty();
+												markDirty('extraction');
 													}}
 													maxlength="64"
 													placeholder="food, pharmacy…"
@@ -1378,7 +1465,7 @@
 													currency: v
 												};
 												extraction = next;
-																markDirty();
+																markDirty('extraction');
 											}}
 											maxlength="3"
 											required
@@ -1396,7 +1483,7 @@
 											step="0.01"
 											min="0"
 											bind:value={extraction.totalAmount}
-											oninput={markDirty}
+											oninput={() => markDirty('extraction')}
 											required
 											readonly={!editable}
 											aria-label="Total"
@@ -1557,7 +1644,7 @@
 															type="text"
 															bind:value={product.name}
 															oninput={() => {
-																markDirty();
+																markDirty('extraction');
 																scheduleProductSearch(i, product.name);
 															}}
 															list={`product-suggest-${i}`}
@@ -1607,7 +1694,7 @@
 															step="0.01"
 															min="0"
 															bind:value={product.quantity}
-															oninput={markDirty}
+															oninput={() => markDirty('extraction')}
 															required
 															readonly={!editable}
 															aria-label="Quantity"
@@ -1625,7 +1712,7 @@
 																	e.currentTarget.value === ''
 																		? null
 																		: e.currentTarget.value;
-																markDirty();
+																markDirty('extraction');
 															}}
 															maxlength="16"
 															placeholder="kg"
@@ -1639,7 +1726,7 @@
 															type="number"
 															step="0.01"
 															bind:value={product.pricePerUnit}
-															oninput={markDirty}
+															oninput={() => markDirty('extraction')}
 															readonly={!editable}
 															aria-label="Price per unit"
 															data-testid="product-price-per-unit-input"

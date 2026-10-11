@@ -2,6 +2,7 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
+import com.ticketapp.domain.TicketExtraction.EditableFields;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
@@ -97,6 +98,66 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
                 "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?",
                 Integer.class, t.id());
         assertThat(rows).isEqualTo(1);
+    }
+
+    @Test
+    void updateEditableFieldsChangesOnlyTheSixEditableColumns() {
+        // The atomic detail edit path: the AI's audit columns must
+        // survive a user edit untouched — "extracted by X on Y" stays
+        // truthful — and the write must not need to read them first.
+        Ticket t = tickets.save(Ticket.open(owner, "r.png", "r"));
+        TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
+                List.of(new ProductLine("Tomatoes", new BigDecimal("1.200"), "kg",
+                        new BigDecimal("2.50"), new BigDecimal("3.00"))));
+        extractions.save(ext);
+        // Read back before the edit: comparing against what the
+        // database itself stored avoids asserting on sub-microsecond
+        // timestamp rounding, which is not what this test is about.
+        TicketExtraction before = extractions.findByTicketId(t.id(), owner).orElseThrow();
+
+        boolean updated = extractions.updateEditableFields(t.id(), owner, new EditableFields(
+                "Lidl", LocalDate.of(2026, Month.JULY, 5), "food",
+                List.of(new ProductLine("Bread", new BigDecimal("1"), "unit",
+                        new BigDecimal("1.20"), new BigDecimal("1.20"))),
+                new BigDecimal("1.20"), "EUR"));
+
+        assertThat(updated).isTrue();
+        TicketExtraction got = extractions.findByTicketId(t.id(), owner).orElseThrow();
+        assertThat(got.merchant()).isEqualTo("Lidl");
+        assertThat(got.purchaseDate()).isEqualTo(LocalDate.of(2026, Month.JULY, 5));
+        assertThat(got.products()).hasSize(1);
+        assertThat(got.totalAmount()).isEqualByComparingTo("1.20");
+        // Audit columns preserved without being read-modify-written.
+        assertThat(got.model()).isEqualTo(before.model());
+        assertThat(got.extractedAt()).isEqualTo(before.extractedAt());
+        assertThat(got.rawResponse()).isEqualTo(before.rawResponse());
+    }
+
+    @Test
+    void updateEditableFieldsRefusesForeignOwnersAndMissingRows() {
+        // Authorization rides with the mutation: a cross-tenant edit
+        // updates zero rows instead of landing, and a ticket the AI
+        // has not read yet reports the same false. The BFF maps both
+        // to the one 404 every other path uses.
+        Ticket mine = tickets.save(Ticket.open(owner, "mine.png", "r"));
+        extractions.save(sample(mine.id(), "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4), List.of()));
+        long stranger = seedOwner(jdbc, "owner-it-stranger");
+        Ticket theirs = tickets.save(Ticket.open(stranger, "theirs.png", "r"));
+        extractions.save(sample(theirs.id(), "Theirs",
+                LocalDate.of(2026, Month.JULY, 4), List.of()));
+        Ticket unextracted = tickets.save(Ticket.open(owner, "bare.png", "r"));
+        EditableFields edit = new EditableFields("Hijacked",
+                LocalDate.of(2026, Month.JULY, 4), "food", List.of(),
+                new BigDecimal("0"), "EUR");
+
+        assertThat(extractions.updateEditableFields(theirs.id(), owner, edit)).isFalse();
+        assertThat(extractions.updateEditableFields(unextracted.id(), owner, edit)).isFalse();
+
+        // Neither refusal wrote anything.
+        assertThat(extractions.findByTicketId(theirs.id(), stranger).orElseThrow().merchant())
+                .isEqualTo("Theirs");
+        assertThat(extractions.findByTicketId(unextracted.id(), owner)).isEmpty();
     }
 
     @Test

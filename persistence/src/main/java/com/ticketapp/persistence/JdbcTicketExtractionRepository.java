@@ -62,6 +62,22 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             WHERE ticket_id = ?
             """;
 
+    /**
+     * Column-scoped update for the atomic detail-screen edit: same six
+     * columns as {@link #UPDATE_SQL}, but the ownership predicate is
+     * joined into the statement so the mutation refuses cross-tenant
+     * writes on its own (no pre-check to forget) and the audit columns
+     * are never read into memory just to be written back unchanged.
+     */
+    private static final String UPDATE_EDITABLE_SQL = """
+            UPDATE ticket_extractions e SET
+                merchant = ?, purchase_date = ?, category = ?,
+                products = ?::jsonb, total_amount = ?, currency = ?
+            WHERE e.ticket_id = ?
+              AND EXISTS (SELECT 1 FROM tickets t
+                          WHERE t.id = e.ticket_id AND t.owner_id = ?)
+            """;
+
     private final JdbcTemplate jdbc;
     private final ExtractionRowMapper mapper;
 
@@ -101,16 +117,10 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
         // instead of overwriting the genuine extraction flow.
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_SQL);
-            ps.setString(1, extraction.merchant());
-            ps.setObject(2, extraction.purchaseDate());
-            if (extraction.category() == null) {
-                ps.setNull(3, Types.VARCHAR);
-            } else {
-                ps.setString(3, extraction.category());
-            }
-            ps.setObject(4, JsonbSupport.toJsonb(mapper.writeProducts(extraction.products())));
-            ps.setBigDecimal(5, extraction.totalAmount());
-            ps.setString(6, extraction.currency());
+            bindEditableFields(ps, 1, extraction.merchant(),
+                    extraction.purchaseDate(), extraction.category(),
+                    extraction.products(), extraction.totalAmount(),
+                    extraction.currency());
             ps.setLong(7, extraction.ticketId());
             return ps;
         });
@@ -119,6 +129,45 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
                     extraction.ticketId());
         }
         return extraction;
+    }
+
+    @Override
+    public boolean updateEditableFields(long ticketId, long ownerId,
+                                        TicketExtraction.EditableFields fields) {
+        int rows = jdbc.update(con -> {
+            PreparedStatement ps = con.prepareStatement(UPDATE_EDITABLE_SQL);
+            bindEditableFields(ps, 1, fields.merchant(), fields.purchaseDate(),
+                    fields.category(), fields.products(), fields.totalAmount(),
+                    fields.currency());
+            ps.setLong(7, ticketId);
+            ps.setLong(8, ownerId);
+            return ps;
+        });
+        return rows == 1;
+    }
+
+    /**
+     * Bind the six editable columns starting at {@code base} (1 for
+     * both update statements). Shared so the two write paths cannot
+     * drift on null handling or JSONB wrapping.
+     */
+    private void bindEditableFields(PreparedStatement ps, int base,
+                                    String merchant,
+                                    java.time.LocalDate purchaseDate,
+                                    String category,
+                                    List<ProductLine> products,
+                                    java.math.BigDecimal totalAmount,
+                                    String currency) throws java.sql.SQLException {
+        ps.setString(base, merchant);
+        ps.setObject(base + 1, purchaseDate);
+        if (category == null) {
+            ps.setNull(base + 2, Types.VARCHAR);
+        } else {
+            ps.setString(base + 2, category);
+        }
+        ps.setObject(base + 3, JsonbSupport.toJsonb(mapper.writeProducts(products)));
+        ps.setBigDecimal(base + 4, totalAmount);
+        ps.setString(base + 5, currency);
     }
 
     /**
