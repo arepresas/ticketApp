@@ -1,0 +1,14 @@
+# Issue template chooser configuration.
+# Blank issues are disabled on purpose: both templates above carry the
+# module list, the secrets-redaction warning, and the triage labels,
+# so a free-form issue would lose all of that.
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question or idea
+    url: https://github.com/arepresas/ticketApp/discussions/new?category=q-a
+    about: Ask in Discussions Q&A — public answers help the next person.
+  - name: Feature brainstorm
+    url: https://github.com/arepresas/ticketApp/discussions/new?category=ideas
+    about: Early-stage proposals belong in Discussions Ideas, not as issues.

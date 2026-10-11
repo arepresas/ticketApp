@@ -100,7 +100,9 @@ ticketApp/
 │       └── index.ts                 # Web-component entry point
 ├── local-environment/
 ├── .github/
-│   ├── workflows/                   # ci.yml, sonar-manual.yml
+│   ├── workflows/                   # ci.yml, sonar-manual.yml, ai-review.yml, fly-deploy.yml
+│   ├── ISSUE_TEMPLATE/              # bug_report.yml, feature_request.yml, config.yml
+│   ├── CODEOWNERS                   # auto review requests per path
 │   ├── dependabot.yml
 │   └── PULL_REQUEST_TEMPLATE.md
 └── .rules/                          # Reusable rules packs (this directory)

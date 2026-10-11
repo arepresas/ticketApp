@@ -46,7 +46,7 @@
 ## Quality gates
 
 - [ ] `mvn -B verify` passes locally
-- [ ] `cd front && npm test && npm run build` passes locally
+- [ ] `cd front && pnpm test && pnpm build` passes locally
 - [ ] SonarQube quality gate not worsened
 - [ ] New tests cover the change
 - [ ] No new Sonar smells / security hotspots introduced
@@ -57,7 +57,7 @@
 
 ## Checklist
 
-- [ ] I have read the [CONTRIBUTING](../CONTRIBUTING.md) guidelines (if available)
+- [ ] I have read the [CONTRIBUTING](../CONTRIBUTING.md) guidelines
 - [ ] My code follows the project's style
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have updated relevant documentation
