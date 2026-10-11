@@ -406,6 +406,38 @@ export const updateTicketMetadata = async (
  * untouched so the "extracted by X on Y" attribution stays
  * truthful even after the user corrects a line item.
  */
+/**
+ * The detail screen's atomic edit: metadata and extraction in one
+ * request.
+ *
+ * <p>Replaces the previous pair of calls (metadata PATCH then
+ * extraction PUT), which were not atomic — the metadata could commit
+ * and the extraction then fail, leaving the server holding half an edit
+ * that the UI reported as failed. Both parts stay sparse: a `null`
+ * field is left alone, and a `null` extraction means "nothing to write",
+ * never "clear it".
+ */
+export const applyTicketEdit = async (
+	token: string,
+	id: number,
+	payload: { title?: string; description?: string; extraction?: EditableExtraction | null }
+): Promise<CreatedTicket> => {
+	const res = await fetch(`${API_BASE}/${id}`, {
+		method: 'PUT',
+		headers: {
+			authorization: `Bearer ${token}`,
+			'content-type': 'application/json',
+			accept: 'application/json'
+		},
+		body: JSON.stringify(payload)
+	});
+	if (!res.ok) {
+		bubbleAuthExpired(res);
+		throw new TicketApiError(await parseError(res), res.status);
+	}
+	return (await res.json()) as CreatedTicket;
+};
+
 export type EditableExtraction = {
 	merchant: string;
 	purchaseDate: string;

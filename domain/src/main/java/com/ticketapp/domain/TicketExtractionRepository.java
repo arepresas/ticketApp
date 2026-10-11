@@ -47,4 +47,26 @@ public interface TicketExtractionRepository {
      * on the not-found path; the BFF translates it to 404.
      */
     TicketExtraction replace(TicketExtraction extraction);
+
+    /**
+     * Column-scoped variant of {@link #replace} for callers that must
+     * not pay for the audit columns: updates exactly the six editable
+     * columns named by {@link TicketExtraction.EditableFields} and
+     * leaves every other column — including the AI's audit fields —
+     * untouched by construction, not by read-modify-write.
+     *
+     * <p>Authorization is bound into the mutation itself: the update
+     * applies only when the owning ticket belongs to {@code ownerId},
+     * so a cross-tenant edit cannot land even if the caller skipped a
+     * pre-check. The affected-row count is the whole result — a
+     * {@code false} means "no extraction row for this owner's ticket",
+     * which the caller maps to the same 404 every other path uses
+     * (existence never leaks across tenants).
+     *
+     * @return {@code true} when exactly one row was updated,
+     *         {@code false} when the ticket has no extraction row or
+     *         belongs to another owner
+     */
+    boolean updateEditableFields(long ticketId, long ownerId,
+                                 TicketExtraction.EditableFields fields);
 }

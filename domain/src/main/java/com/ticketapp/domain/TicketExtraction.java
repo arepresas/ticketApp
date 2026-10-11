@@ -129,4 +129,40 @@ public record TicketExtraction(
             // and lineTotal = -6.00.
         }
     }
+
+    /**
+     * The user-editable half of an extraction: the six columns a
+     * detail-screen edit may change. The AI's audit columns
+     * ({@code model}, {@code extractedAt}, {@code rawResponse},
+     * {@code extractionPayload}) are deliberately absent — they are
+     * preserved server-side on every edit path so the "extracted by X
+     * on Y" attribution stays truthful.
+     *
+     * <p>A domain type rather than a BFF DTO because it crosses the
+     * port boundary: {@link TicketExtractionRepository#updateEditableFields}
+     * takes exactly this shape and updates exactly those columns.
+     */
+    public record EditableFields(
+            String merchant,
+            LocalDate purchaseDate,
+            String category,
+            List<ProductLine> products,
+            BigDecimal totalAmount,
+            String currency
+    ) {
+        public EditableFields {
+            if (merchant == null || merchant.isBlank()) {
+                throw new IllegalArgumentException("merchant must not be blank");
+            }
+            if (purchaseDate == null) throw new NullPointerException("purchaseDate");
+            if (products == null) throw new NullPointerException("products");
+            if (totalAmount == null) throw new NullPointerException("totalAmount");
+            if (totalAmount.signum() < 0) {
+                throw new IllegalArgumentException("totalAmount must be >= 0");
+            }
+            if (currency == null || currency.length() != 3) {
+                throw new IllegalArgumentException("currency must be an ISO 4217 code");
+            }
+        }
+    }
 }
