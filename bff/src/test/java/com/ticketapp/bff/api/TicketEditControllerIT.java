@@ -364,7 +364,7 @@ class TicketEditControllerIT {
     private long seedTicket(Ticket.Status status, ExtractionSeed extraction) {
         Long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
-                VALUES (?, 'Original title', 'Original description', ?, now(), now())
+                VALUES (?, 'Original title', 'Original description', ?::ticket_status, now(), now())
                 RETURNING id""", Long.class, ownerId, status.name());
         if (extraction != null) {
             jdbc.update("""

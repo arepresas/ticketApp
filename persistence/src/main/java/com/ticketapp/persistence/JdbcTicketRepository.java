@@ -31,6 +31,14 @@ import java.util.UUID;
  * scheduler calls — that path is documented as system-only on the
  * port and must not be reached from the controller layer.
  */
+/**
+ * {@code status} is the native {@code ticket_status} enum (V27), so
+ * every bind that reaches it is {@code Types.OTHER} rather than
+ * {@code setString}: the driver would send {@code character varying}
+ * and Postgres rejects the mismatch. Statuses written as SQL literals
+ * need no such care — a literal is typed {@code unknown} and the
+ * server coerces it.
+ */
 @Repository
 public class JdbcTicketRepository implements TicketRepository, TicketExtractionQueue {
 
@@ -205,7 +213,14 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
             ps.setLong(base, ticket.ownerId());
             ps.setString(base + 1, ticket.title());
             ps.setString(base + 2, ticket.description());
-            ps.setString(base + 3, ticket.status().name());
+            // Types.OTHER against the native `ticket_status` column:
+            // setString would send character varying and Postgres
+            // rejects it ("column status is of type ticket_status but
+            // expression is of type character varying"). A status that
+            // is not a member fails at the bind rather than after the
+            // write — which is the point of the type: it cannot be
+            // widened by a typo the way a CHECK's string list could.
+            ps.setObject(base + 3, ticket.status().name(), Types.OTHER);
             ps.setObject(base + 4, OffsetDateTime.ofInstant(ticket.createdAt(), ZoneOffset.UTC));
             ps.setObject(base + 5, OffsetDateTime.ofInstant(ticket.updatedAt(), ZoneOffset.UTC));
             // Each nullable column routes through the same
@@ -289,7 +304,15 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 + " ORDER BY created_at DESC";
         var params = new MapSqlParameterSource()
                 .addValue("owner", ownerId)
-                .addValue("statuses", statuses.stream().map(Enum::name).toList());
+                // Types.OTHER per element: NamedParameterJdbcTemplate
+                // expands the collection to one bind per status, and
+                // each bind has to reach a ticket_status column typed.
+                // An earlier attempt bound a VARCHAR[] and unnested it
+                // in SQL, which fails because the template hands the
+                // values over as separate parameters — "malformed
+                // array literal: ON_ERROR".
+                .addValue("statuses", statuses.stream().map(Enum::name).toList(),
+                        Types.OTHER);
         return namedJdbc.query(sql, params, mapper);
     }
 
@@ -304,7 +327,15 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 + " ORDER BY created_at DESC";
         var params = new MapSqlParameterSource()
                 .addValue("owner", ownerId)
-                .addValue("statuses", statuses.stream().map(Enum::name).toList());
+                // Types.OTHER per element: NamedParameterJdbcTemplate
+                // expands the collection to one bind per status, and
+                // each bind has to reach a ticket_status column typed.
+                // An earlier attempt bound a VARCHAR[] and unnested it
+                // in SQL, which fails because the template hands the
+                // values over as separate parameters — "malformed
+                // array literal: ON_ERROR".
+                .addValue("statuses", statuses.stream().map(Enum::name).toList(),
+                        Types.OTHER);
         return namedJdbc.query(sql, params, (rs, n) -> new TicketSummary(
                 rs.getLong("id"),
                 rs.getLong("owner_id"),

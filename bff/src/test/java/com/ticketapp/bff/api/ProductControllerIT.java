@@ -79,7 +79,7 @@ class ProductControllerIT {
     private long seedProduct(String name, String unit) {
         return jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
+                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
     }
 

@@ -461,7 +461,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
     private long seedTicketFor(long ownerId, String title, Ticket.Status status, ExtractionSeed extraction) {
         Long id = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
-                VALUES (?, ?, '', ?, now(), now()) RETURNING id""",
+                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""",
                 Long.class, ownerId, title, status.name());
         if (extraction != null) {
             jdbc.update("""

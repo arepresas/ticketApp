@@ -17,8 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies the V22/V23 pair that made {@code products.unit}
- * {@code NOT NULL}: the backfill ran, the constraint holds, and the
- * repository agrees with both.
+ * {@code NOT NULL}, and V26 which gave the column a type:
  *
  * <p>database.md asks for one {@code *IT} per release asserting the
  * changelog is up to date. These tests assert the schema rather than
@@ -91,20 +90,31 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     }
 
     /**
-     * A label from before the enum still loads. The constraint says
-     * "not null", not "one of these two" — constraining the values is
-     * the follow-up that has to merge the folded rows first, and until
-     * then a read must not be the thing that breaks.
+     * A label from before the enum can no longer be stored. This used to
+     * be the tolerant read — the column said "L", the domain said UNIT —
+     * and the native type is what retires it: an unrecognised label is
+     * now rejected at the database instead of quietly folded on every
+     * read. The write boundary (QuantityUnit.fromLabel) is where the
+     * fold now happens, once, on the way in.
      */
     @Test
-    @DisplayName("a pre-enum free-text label still loads as UNIT")
-    void legacyLabelStillLoads() {
-        Long id = jdbc.queryForObject("""
+    @DisplayName("a pre-enum free-text label can no longer be stored")
+    void legacyLabelIsRejectedByTheType() {
+        assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES ('Milk 1L', 'milk 1l', 'L', now()) RETURNING id""", Long.class);
+                VALUES ('Milk 1L', 'milk 1l', 'L', now())"""))
+                .hasMessageContaining("quantity_unit");
+    }
 
-        Product loaded = repository.findAllByIds(List.of(id)).get(id);
-
-        assertThat(loaded.unit()).isEqualTo(QuantityUnit.UNIT);
+    @Test
+    @DisplayName("the column is the quantity_unit type")
+    void unitColumnIsTheNativeType() {
+        // A VARCHAR with a CHECK beside it would still report
+        // character varying here; the type is the point.
+        assertThat(jdbc.queryForObject("""
+                SELECT udt_name FROM information_schema.columns
+                WHERE table_name = 'products' AND column_name = 'unit'""",
+                String.class))
+                .isEqualTo("quantity_unit");
     }
 }

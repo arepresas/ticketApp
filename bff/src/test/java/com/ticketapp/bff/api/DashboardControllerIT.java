@@ -464,7 +464,7 @@ class DashboardControllerIT {
                                String currency, String category, LocalDate purchaseDate) {
         Long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
-                VALUES (?, ?, '', ?, now(), now()) RETURNING id""",
+                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""",
                 Long.class, ownerId, title, status.name());
         if (amount != null) {
             jdbc.update("""
