@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
@@ -126,7 +127,7 @@ public class TestReceiptExtractorConfig {
                 List.of(new ProductLine(
                         "Bread",
                         new BigDecimal("1"),
-                        null,
+                        QuantityUnit.UNIT,
                         new BigDecimal("1.00"),
                         new BigDecimal("1.00"))),
                 new BigDecimal("1.00"),

@@ -18,7 +18,7 @@ describe('searchProducts', () => {
 
 	it('passes name + Bearer token in the request', async () => {
 		const expected: ProductSummary[] = [
-			{ id: 1, name: 'Bread', unit: null, label: 'Bread' }
+			{ id: 1, name: 'Bread', unit: 'unit', label: 'Bread' }
 		];
 		const fetchSpy = vi
 			.spyOn(globalThis, 'fetch')

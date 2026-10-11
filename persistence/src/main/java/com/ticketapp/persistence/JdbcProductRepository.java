@@ -2,13 +2,13 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Product;
 import com.ticketapp.domain.ProductRepository;
+import com.ticketapp.domain.QuantityUnit;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
-import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,9 +18,12 @@ import java.util.Optional;
  *
  * <p>Products are upserted on the {@code (normalised_name, COALESCE(unit, ''))}
  * UNIQUE index so two calls with the same match key collapse to one row
- * without losing the original {@code id}. NULL units collide with each
- * other through the {@code COALESCE} predicate; "kg" + NULL stay
- * distinct products.
+ * without losing the original {@code id}. The unit half of that key is a
+ * {@link QuantityUnit} and the column is {@code NOT NULL} (V23), so the
+ * COALESCE in the index is now an identity function kept only so the
+ * index and the queries it serves keep the same expression — rewriting
+ * the index in the same release would be a DROP, which database.md
+ * forbids alongside a structural change.
  */
 @Repository
 public class JdbcProductRepository implements ProductRepository {
@@ -81,10 +84,10 @@ public class JdbcProductRepository implements ProductRepository {
             "LIMIT :limit";
 
     @Override
-    public Optional<Product> findByNormalisedName(String normalisedName, String unit) {
+    public Optional<Product> findByNormalisedName(String normalisedName, QuantityUnit unit) {
         var params = new MapSqlParameterSource()
                 .addValue("name", normalisedName)
-                .addValue("unit", unit);
+                .addValue("unit", unit.storageValue());
         var rows = namedJdbc.query(FIND_BY_NAME_SQL, params, (rs, n) -> mapProduct(rs));
         return rows.stream().findFirst();
     }
@@ -128,19 +131,25 @@ public class JdbcProductRepository implements ProductRepository {
                     PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
                 ps.setString(1, product.name());
                 ps.setString(2, product.normalisedName());
-                if (product.unit() == null) ps.setNull(3, Types.VARCHAR);
-                else ps.setString(3, product.unit());
+                // Never NULL: "no unit" is QuantityUnit.UNIT, stored
+                // under its own name. The column is NOT NULL (V23).
+                ps.setString(3, product.unit().storageValue());
                 ps.setObject(4, java.sql.Timestamp.from(product.createdAt()));
                     return ps;
                 },
                 (rs, n) -> product.withId(rs.getLong(1))).stream().findFirst().orElse(product);
     }
 
+    /**
+     * Reads a row written before {@link QuantityUnit} existed: the
+     * column may still hold NULL or a label like {@code "L"} in a
+     * database whose backfill has not run, and neither may fail a read.
+     */
     private static Product mapProduct(java.sql.ResultSet rs) throws java.sql.SQLException {
         long id = rs.getLong("id");
         String name = rs.getString("name");
         String normalised = rs.getString("normalised_name");
-        String unit = rs.getString("unit"); // nullable
+        QuantityUnit unit = QuantityUnit.fromStorage(rs.getString("unit"));
         var odt = rs.getObject("created_at", java.time.OffsetDateTime.class);
         var createdAt = odt != null ? odt.toInstant() : java.time.Instant.now();
         return new Product(id, name, normalised, unit, createdAt);

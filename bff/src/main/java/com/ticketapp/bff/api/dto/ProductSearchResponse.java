@@ -21,15 +21,16 @@ public record ProductSearchResponse(
         String label) {
 
     public static ProductSearchResponse of(Product p) {
-        // Rendered label = "Name (unit)" when a unit exists, bare
-        // name otherwise. The datalist's <option value="..."/>
-        // uses the label, so the input picks the full label
-        // string on selection — not ideal for downstream
-        // matching. The SPA extracts the canonical name from
+        // Rendered label = "Name (kg)" for a weighed product, bare name
+        // otherwise. UNIT is not spelled out: "(unit)" on every row
+        // would be noise, and "Milk" already reads as a piece. The
+        // datalist's <option value="..."/> uses the label, so the input
+        // picks the full label string on selection — not ideal for
+        // downstream matching. The SPA extracts the canonical name from
         // the picked id when wiring up the line.
-        String label = (p.unit() == null || p.unit().isBlank())
-                ? p.name()
-                : p.name() + " (" + p.unit() + ")";
-        return new ProductSearchResponse(p.id(), p.name(), p.unit(), label);
+        String label = p.unit() == com.ticketapp.domain.QuantityUnit.KG
+                ? p.name() + " (" + p.unit().wireName() + ")"
+                : p.name();
+        return new ProductSearchResponse(p.id(), p.name(), p.unit().wireName(), label);
     }
 }

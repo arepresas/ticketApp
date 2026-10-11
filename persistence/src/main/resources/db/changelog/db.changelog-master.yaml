@@ -59,3 +59,9 @@ databaseChangeLog:
   - include:
       file: changes/V21__neutralise_legacy_model_names.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V22__backfill_products_unit.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V23__products_unit_not_null.sql
+      relativeToChangelogFile: true

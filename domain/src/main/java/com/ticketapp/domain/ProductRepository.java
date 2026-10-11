@@ -26,11 +26,12 @@ public interface ProductRepository {
      * @param normalisedName canonical name (use
      *                       {@link Product#normalisedNameOf(String)});
      *                       case- and whitespace-insensitive lookup.
-     * @param unit          unit label, nullable. NULL matches other
-     *                      NULL rows; "kg" and NULL are distinct
-     *                      products.
+     * @param unit          the unit half of the match key.
+     *                       {@link QuantityUnit#KG} and
+     *                       {@link QuantityUnit#UNIT} are distinct
+     *                       products.
      */
-    Optional<Product> findByNormalisedName(String normalisedName, String unit);
+    Optional<Product> findByNormalisedName(String normalisedName, QuantityUnit unit);
 
     /**
      * Batch lookup for the catalogue read API — fans out via an
@@ -57,10 +58,10 @@ public interface ProductRepository {
      * returns an empty list — the SPA handles the empty-input
      * "show all" itself if it wants.
      *
-     * <p>Like {@link #findByNormalisedName(String, String)}, the
+     * <p>Like {@link #findByNormalisedName(String, QuantityUnit)}, the
      * match key is {@code (normalisedName, unit)}; units are
-     * ignored for the SPA's hint-icon purpose — a "Bread" with no
-     * unit and a "Bread" with {@code kg} both visually read as the
+     * ignored for the SPA's hint-icon purpose — a "Bread" sold by
+     * weight and a "Bread" sold by piece both visually read as the
      * same product to the user, even though they collide in the
      * catalogue. The {@link #findByNormalisedName} follow-up picks
      * the exact row when the user commits the line.

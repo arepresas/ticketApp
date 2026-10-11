@@ -9,6 +9,7 @@ import com.ticketapp.domain.Price;
 import com.ticketapp.domain.PriceRepository;
 import com.ticketapp.domain.Product;
 import com.ticketapp.domain.ProductRepository;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
 import com.ticketapp.domain.Ticket;
@@ -266,7 +267,7 @@ public class TicketExtractionNormaliser {
         static final ShopContact EMPTY = new ShopContact(null, null, null, null, null, null, null);
     }
 
-    private Resolved<Product> resolveProduct(String name, String unit, Instant now) {
+    private Resolved<Product> resolveProduct(String name, QuantityUnit unit, Instant now) {
         String normalised = Product.normalisedNameOf(name);
         return resolve(products.findByNormalisedName(normalised, unit), () -> products.save(new Product(
                 0L,

@@ -1,0 +1,25 @@
+--liquibase formatted sql
+
+-- Backfill NULL product units to the enum's UNIT wire name.
+--
+-- Split from the structural change (V23) per database.md: "backfills
+-- ship in their own ordered migration, never bundled with the
+-- structural change".
+--
+-- "No unit" was previously spelled SQL NULL and is now spelled
+-- 'unit' — the wire name of com.ticketapp.domain.QuantityUnit.UNIT.
+-- Backfilling to the literal rather than leaving NULL means the rows
+-- V23 constrains are exactly the rows this file produces, with no
+-- third state in between.
+--
+-- Only NULL is touched. Rows carrying a free-text label a language
+-- model once emitted ('L', 'pack', …) keep it: folding them here
+-- would make two rows collide on idx_products_normalised_name_unit,
+-- and merging them means repointing prices.product_id and
+-- line_tickets.product_id — a data migration of its own. Those rows
+-- read back as UNIT through QuantityUnit.fromStorage, which is what
+-- keeps the catalogue readable in the meantime; folding them and
+-- adding a CHECK on the enum is the next migration.
+--
+--changeset ticketapp:20261011120000-backfill-products-unit runInTransaction:true
+UPDATE products SET unit = 'unit' WHERE unit IS NULL;

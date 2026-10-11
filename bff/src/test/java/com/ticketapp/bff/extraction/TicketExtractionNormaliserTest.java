@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.LineTicketRepository;
 import com.ticketapp.domain.PriceRepository;
 import com.ticketapp.domain.ProductRepository;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
 import com.ticketapp.domain.Ticket;
@@ -133,7 +134,8 @@ class TicketExtractionNormaliserTest {
     }
 
     private ProductLine sampleLine() {
-        return new ProductLine("Bread", new BigDecimal("1"), null,
+        // UNIT, not a null unit: a line that printed none is a piece.
+        return new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
                 new BigDecimal("3.50"), new BigDecimal("3.50"));
     }
 

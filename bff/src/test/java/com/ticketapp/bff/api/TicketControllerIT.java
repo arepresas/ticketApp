@@ -1221,14 +1221,18 @@ class TicketControllerIT {
         // Order matches the seeded order (created_at ASC).
         var first = cat.lines().get(0);
         assertThat(first.productName()).isEqualTo("Bread");
-        assertThat(first.unit()).isNull();
+        // The seed sent "unit": null and "L"; both fold to the enum's
+        // UNIT, which travels as "unit" rather than as an absent value.
+        assertThat(first.unit()).isEqualTo("unit");
         assertThat(first.quantity()).isEqualByComparingTo("2");
         assertThat(first.pricePerUnit()).isEqualByComparingTo("1.20");
         assertThat(first.lineTotal()).isEqualByComparingTo("2.40");
 
         var second = cat.lines().get(1);
         assertThat(second.productName()).isEqualTo("Milk 1L");
-        assertThat(second.unit()).isEqualTo("L");
+        // "L" is not in the enum yet, so a litre line reads as a piece.
+        // Adding LITER to the enum has to change this assertion.
+        assertThat(second.unit()).isEqualTo("unit");
         assertThat(second.quantity()).isEqualByComparingTo("1");
         assertThat(second.pricePerUnit()).isEqualByComparingTo("0.90");
         assertThat(second.lineTotal()).isEqualByComparingTo("0.90");

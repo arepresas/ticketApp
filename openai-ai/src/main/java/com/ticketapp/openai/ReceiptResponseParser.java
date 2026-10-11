@@ -2,6 +2,7 @@ package com.ticketapp.openai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
@@ -144,7 +145,11 @@ public class ReceiptResponseParser {
             JsonNode p = it.next();
             String name = requireText(p, "name");
             BigDecimal qty = parseDecimal(p.get("quantity"), "quantity");
-            String unit = optionalText(p, "unit");
+            // The model emits free text here ("kg", "L", "pack", or
+            // nothing at all); QuantityUnit folds all of it. Rejecting
+            // an unrecognised label would fail the whole extraction over
+            // a litre of milk.
+            QuantityUnit unit = QuantityUnit.fromLabel(optionalText(p, "unit"));
             BigDecimal ppu = parseDecimal(p.get("price_per_unit"), "price_per_unit");
             BigDecimal total = parseDecimal(p.get("line_total"), "line_total");
             out.add(new ProductLine(name, qty, unit, ppu, total));

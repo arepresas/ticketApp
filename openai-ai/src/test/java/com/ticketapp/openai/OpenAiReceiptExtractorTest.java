@@ -1,6 +1,7 @@
 package com.ticketapp.openai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
@@ -15,6 +16,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -501,6 +503,36 @@ class OpenAiReceiptExtractorTest {
         assertThat(result.result().products()).hasSize(1);
         assertThat(result.rawReply()).contains("\"shop\"")
                 .contains("Calle Mayor 1");
+    }
+
+    @Test
+    void freeTextUnitsAreFoldedIntoTheQuantityUnitEnum() throws Exception {
+        // The model emits whatever the receipt printed. "kg" is a real
+        // unit; "L", "pack" and an absent unit all fold to UNIT until
+        // the enum carries them. Rejecting instead would fail the whole
+        // extraction over a litre of milk.
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"Mercadona",
+                 "purchase_date":"2026-07-04",
+                 "category":"food",
+                 "products":[
+                   {"name":"Flour","quantity":2,"unit":"kg","price_per_unit":1.50,"line_total":3.00},
+                   {"name":"Milk 1L","quantity":1,"unit":"L","price_per_unit":0.90,"line_total":0.90},
+                   {"name":"Coffee","quantity":1,"unit":"pack","price_per_unit":6.00,"line_total":6.00},
+                   {"name":"Bread","quantity":1,"unit":null,"price_per_unit":1.20,"line_total":1.20}],
+                 "total_amount":11.10,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().products())
+                .extracting(ProductLine::name, ProductLine::unit)
+                .containsExactly(
+                        tuple("Flour", QuantityUnit.KG),
+                        tuple("Milk 1L", QuantityUnit.UNIT),
+                        tuple("Coffee", QuantityUnit.UNIT),
+                        tuple("Bread", QuantityUnit.UNIT));
     }
 
     @Test

@@ -95,9 +95,11 @@ public record TicketExtraction(
      * recomputing.
      *
      * <p>{@code quantity} is the count on the receipt (e.g. 2 for "2
-     * bottles of water"), {@code unit} the unit label as printed (kg,
-     * L, unit, pack). {@code pricePerUnit} and {@code lineTotal} are
-     * in the same currency as the parent extraction.
+     * bottles of water"), {@code unit} the {@link QuantityUnit} that
+     * count is expressed in — never null, because a line that printed
+     * no unit is a {@link QuantityUnit#UNIT} line, not an absent one.
+     * {@code pricePerUnit} and {@code lineTotal} are in the same
+     * currency as the parent extraction.
      *
      * <p><b>Discounts and credits.</b> Negative values on
      * {@code pricePerUnit} and {@code lineTotal} are allowed and
@@ -112,7 +114,7 @@ public record TicketExtraction(
     public record ProductLine(
             String name,
             BigDecimal quantity,
-            String unit,
+            QuantityUnit unit,
             BigDecimal pricePerUnit,
             BigDecimal lineTotal
     ) {
@@ -122,6 +124,12 @@ public record TicketExtraction(
             }
             if (quantity == null || quantity.signum() <= 0) {
                 throw new IllegalArgumentException("quantity must be > 0");
+            }
+            if (unit == null) {
+                // A line always has a unit; a line that printed none is
+                // UNIT. Rejecting null here keeps "no unit" from
+                // reappearing downstream as a blank catalogue label.
+                throw new IllegalArgumentException("unit must not be null");
             }
             // pricePerUnit and lineTotal are intentionally NOT
             // constrained to non-negative values — see the Javadoc

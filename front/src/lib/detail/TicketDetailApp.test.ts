@@ -76,7 +76,7 @@ const SAMPLE_EXTRACTION = {
 	category: 'food',
 	products: [
 		{ name: 'Bread', quantity: 1, unit: 'unit', pricePerUnit: 1.2, lineTotal: 1.2 },
-		{ name: 'Milk', quantity: 2, unit: 'L', pricePerUnit: 0.9, lineTotal: 1.8 }
+		{ name: 'Flour', quantity: 2, unit: 'kg', pricePerUnit: 0.9, lineTotal: 1.8 }
 	],
 	totalAmount: 3.0,
 	currency: 'EUR',

@@ -6,6 +6,7 @@ import com.ticketapp.bff.api.dto.UpdateTicketRequest;
 import com.ticketapp.bff.application.TicketApplicationService;
 import com.ticketapp.bff.application.TicketEditService;
 import com.ticketapp.bff.api.dto.ProductLineDto;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
@@ -286,7 +287,7 @@ public class TicketController {
 
         List<TicketExtraction.ProductLine> lines = lineDtos.stream()
                 .map(p -> new TicketExtraction.ProductLine(
-                        p.name(), p.quantity(), p.unit(),
+                        p.name(), p.quantity(), QuantityUnit.fromLabel(p.unit()),
                         p.pricePerUnit() == null ? java.math.BigDecimal.ZERO : p.pricePerUnit(),
                         p.lineTotal() == null ? java.math.BigDecimal.ZERO : p.lineTotal()))
                 .toList();

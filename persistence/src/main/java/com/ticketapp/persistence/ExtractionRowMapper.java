@@ -2,6 +2,7 @@ package com.ticketapp.persistence;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import lombok.NonNull;
@@ -28,6 +29,13 @@ import java.util.List;
  * provider's verbatim reply (V5; the legacy JSONB column was
  * dropped in V18).
  *
+ * <p>The JSONB is read through {@link ProductLineJson} rather than
+ * straight into {@code ProductLine}: the column predates
+ * {@link QuantityUnit} and holds {@code "unit": null} or a free-text
+ * label, and binding it directly would make every such row
+ * un-deserialisable. The conversion happens here, at the adapter edge,
+ * so the domain type stays free of Jackson.
+ *
  * <p>If a future read path needs to query into the response, a
  * dedicated view can use Postgres {@code jsonb_path_query} without
  * touching the mapper.
@@ -35,10 +43,37 @@ import java.util.List;
 @RequiredArgsConstructor
 final class ExtractionRowMapper {
 
-    private static final TypeReference<List<ProductLine>> PRODUCTS_TYPE = new TypeReference<>() {};
+    private static final TypeReference<List<ProductLineJson>> PRODUCTS_TYPE = new TypeReference<>() {};
 
     @NonNull
     private final ObjectMapper objectMapper;
+
+    /**
+     * JSONB shape of one product line.
+     *
+     * <p>{@code unit} is a {@code String} here on purpose: rows written
+     * before {@link QuantityUnit} exist carry {@code null} or a label
+     * the enum no longer holds, and a read must fold them rather than
+     * fail. Writing goes back out through the same record so the
+     * column keeps its lower-case wire names.
+     */
+    private record ProductLineJson(
+            String name,
+            BigDecimal quantity,
+            String unit,
+            BigDecimal pricePerUnit,
+            BigDecimal lineTotal) {
+
+        ProductLine toDomain() {
+            return new ProductLine(name, quantity, QuantityUnit.fromLabel(unit),
+                    pricePerUnit, lineTotal);
+        }
+
+        static ProductLineJson fromDomain(ProductLine line) {
+            return new ProductLineJson(line.name(), line.quantity(), line.unit().wireName(),
+                    line.pricePerUnit(), line.lineTotal());
+        }
+    }
 
     TicketExtraction mapRow(ResultSet rs) throws SQLException {
         long ticketId = rs.getLong("ticket_id");
@@ -59,7 +94,9 @@ final class ExtractionRowMapper {
 
         List<ProductLine> products;
         try {
-            products = objectMapper.readValue(productsJson, PRODUCTS_TYPE);
+            products = objectMapper.readValue(productsJson, PRODUCTS_TYPE).stream()
+                    .map(ProductLineJson::toDomain)
+                    .toList();
         } catch (Exception e) {
             // Don't swallow — surface the broken JSON as a SQLException so
             // the caller logs the row id and moves on. Backend.md: never
@@ -80,7 +117,9 @@ final class ExtractionRowMapper {
      */
     String writeProducts(List<ProductLine> products) throws SQLException {
         try {
-            return objectMapper.writeValueAsString(products);
+            return objectMapper.writeValueAsString(products.stream()
+                    .map(ProductLineJson::fromDomain)
+                    .toList());
         } catch (Exception ex) {
             throw new SQLException("Failed to serialise products to JSONB", ex);
         }

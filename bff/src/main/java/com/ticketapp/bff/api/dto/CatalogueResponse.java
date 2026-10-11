@@ -26,6 +26,14 @@ public record CatalogueResponse(
         String shopName,
         List<CatalogueLine> lines) {
 
+    /**
+     * One catalogue line on the wire. {@code unit} is the
+     * {@link com.ticketapp.domain.QuantityUnit} wire name — always
+     * present, where the column-backed value it replaces could be
+     * null. {@code productName}, {@code pricePerUnit} and
+     * {@code lineTotal} stay nullable for the deleted-master-row case
+     * documented on the port.
+     */
     public record CatalogueLine(
             String productName,
             String unit,
@@ -47,7 +55,7 @@ public record CatalogueResponse(
                 catalogue.lines().stream()
                         .map(l -> new CatalogueLine(
                                 l.productName(),
-                                l.unit(),
+                                l.unit().wireName(),
                                 l.quantity(),
                                 l.pricePerUnit(),
                                 l.lineTotal()))

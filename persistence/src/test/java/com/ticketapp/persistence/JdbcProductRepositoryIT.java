@@ -2,6 +2,7 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Product;
 import com.ticketapp.domain.ProductRepository;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +43,14 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         jdbc.update("DELETE FROM products");
     }
 
+    /**
+     * Seeds a raw catalogue row, bypassing the repository.
+     *
+     * <p>The {@code unit} argument is written straight to the column,
+     * which is what makes this useful: it reproduces rows written
+     * before {@link QuantityUnit} existed — NULL, {@code "kg"} and
+     * labels such as {@code "L"} the enum no longer carries.
+     */
     private long seedProduct(String name, String unit) {
         return jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
@@ -54,7 +64,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // casing without the user having to know the catalogue's
         // canonical lower-case form.
         seedProduct("Bread", "kg");
-        seedProduct("Banana", null);
+        seedProduct("Banana", "unit");
         seedProduct("Milk 1L", "L");
 
         List<Product> got = repository.searchByNormalisedName("b", 10);
@@ -65,10 +75,10 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void prefixSearchReturnsAlphabeticallyOrderedMatches() {
-        seedProduct("Bread", null);
-        seedProduct("Banana", null);
-        seedProduct("Beef", null);
-        seedProduct("Cheese", null); // shouldn't match
+        seedProduct("Bread", "unit");
+        seedProduct("Banana", "unit");
+        seedProduct("Beef", "unit");
+        seedProduct("Cheese", "unit"); // shouldn't match
 
         // Sorted by normalised_name ASC in the SQL — pins the
         // ordering the SPA relies on for the dropdown.
@@ -81,7 +91,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     @Test
     void prefixSearchRespectsLimit() {
         for (String n : new String[]{"Apple", "Avocado", "Almond", "Artichoke", "Aubergine", "Apricot"}) {
-            seedProduct(n, null);
+            seedProduct(n, "unit");
         }
 
         assertThat(repository.searchByNormalisedName("a", 3)).hasSize(3);
@@ -89,8 +99,8 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void prefixSearchIgnoresNonMatchingRows() {
-        seedProduct("Bread", null);
-        seedProduct("Milk", null);
+        seedProduct("Bread", "unit");
+        seedProduct("Milk", "unit");
 
         // "z" matches nothing — empty result, not an empty-shaped list.
         assertThat(repository.searchByNormalisedName("z", 10)).isEmpty();
@@ -102,8 +112,8 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // "_" must not blow the search up into "match everything".
         // The implementation escapes them with '\' so they
         // become literal characters.
-        seedProduct("Bread", null);
-        seedProduct("%50-off coupon", null);
+        seedProduct("Bread", "unit");
+        seedProduct("%50-off coupon", "unit");
 
         List<Product> got = repository.searchByNormalisedName("%", 10);
 
@@ -113,8 +123,8 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
     @Test
     void prefixSearchReturnsEmptyForEmptyOrNegativeArguments() {
-        seedProduct("Bread", null);
-        seedProduct("Milk", null);
+        seedProduct("Bread", "unit");
+        seedProduct("Milk", "unit");
 
         // Empty / null / negative must not throw and must not blow
         // up into "match every row in the catalogue".
@@ -131,7 +141,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // search is by name only — both rows surface. Callers
         // that need exact-match pick do a follow-up with
         // findByNormalisedName(name, unit).
-        seedProduct("Bread", null);
+        seedProduct("Bread", "unit");
         seedProduct("Bread", "kg");
 
         List<Product> got = repository.searchByNormalisedName("bread", 10);
@@ -149,36 +159,85 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // UUID would hand the caller a dangling id to write into
         // line_tickets.product_id.
         Product first = repository.save(
-                new Product(nextId(), "Bread", "bread", "kg", Instant.now()));
+                new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
 
         Product second = repository.save(
-                new Product(nextId(), "bread", "bread", "kg", Instant.now()));
+                new Product(nextId(), "bread", "bread", QuantityUnit.KG, Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
     }
 
     @Test
     void saveDistinguishesTheSameNameWithADifferentUnit() {
-        Product noUnit = repository.save(
-                new Product(nextId(), "Bread", "bread", null, Instant.now()));
-        Product withUnit = repository.save(
-                new Product(nextId(), "Bread", "bread", "kg", Instant.now()));
+        Product byPiece = repository.save(
+                new Product(nextId(), "Bread", "bread", QuantityUnit.UNIT, Instant.now()));
+        Product byWeight = repository.save(
+                new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
 
-        assertThat(withUnit.id()).isNotEqualTo(noUnit.id());
+        assertThat(byWeight.id()).isNotEqualTo(byPiece.id());
     }
 
     @Test
-    void saveReturnsTheStoredRowForANullUnit() {
+    void saveReturnsTheStoredRowForAUnitProduct() {
         // The conflict target uses COALESCE(unit, ''), so the
         // re-read must apply the same normalisation or it would miss
         // the row it just wrote and fall back to the argument.
         Product first = repository.save(
-                new Product(nextId(), "Banana", "banana", null, Instant.now()));
+                new Product(nextId(), "Banana", "banana", QuantityUnit.UNIT, Instant.now()));
 
         Product second = repository.save(
-                new Product(nextId(), "banana", "banana", null, Instant.now()));
+                new Product(nextId(), "banana", "banana", QuantityUnit.UNIT, Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
+    }
+
+    // "No unit" is stored under its own name, not as SQL NULL. The
+    // column is NOT NULL since V23 and V22 backfilled the rows that
+    // used to spell it NULL — a NULL here would be a row the schema
+    // rejects rather than a product state the code models.
+    @Test
+    void aUnitProductIsStoredUnderItsOwnName() {
+        long id = repository.save(
+                new Product(nextId(), "Rice", "rice", QuantityUnit.UNIT, Instant.now())).id();
+
+        String stored = jdbc.queryForObject(
+                "SELECT unit FROM products WHERE id = ?", String.class, id);
+
+        assertThat(stored).isEqualTo("unit");
+        assertThat(repository.findByNormalisedName("rice", QuantityUnit.UNIT))
+                .get()
+                .extracting(Product::id)
+                .isEqualTo(id);
+    }
+
+    // A pre-enum row carrying a label the enum no longer holds still
+// loads — folding is why the column cannot make the catalogue
+// unreadable. It is also no longer *matchable* by a UNIT lookup: the
+// stored label stays "L", so the next normalisation of the same product
+// writes a second row. That duplication is the known cost of not
+// backfilling the column, and it is asserted here so a future migration
+// has to come back and change this test deliberately.
+@Test
+void aLegacyForeignLabelReadsBackAsUnitButStopsMatching() {
+    long legacyId = seedProduct("Milk 1L", "L");
+
+    Optional<Product> loaded = repository.findAllByIds(List.of(legacyId))
+            .values().stream().findFirst();
+
+    assertThat(loaded).isPresent();
+    assertThat(loaded.get().unit()).isEqualTo(QuantityUnit.UNIT);
+    assertThat(repository.findByNormalisedName("milk 1l", QuantityUnit.UNIT)).isEmpty();
+}
+
+    @Test
+    void aWeightRowIsNotMatchedByAUnitLookup() {
+        long kgId = seedProduct("Flour", "kg");
+
+        assertThat(repository.findByNormalisedName("flour", QuantityUnit.UNIT)).isEmpty();
+        assertThat(repository.findByNormalisedName("flour", QuantityUnit.KG))
+                .get()
+                .extracting(Product::id)
+                .isEqualTo(kgId);
     }
 
     /** Sequential stand-in for the former UUID test ids. */

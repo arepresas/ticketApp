@@ -1,6 +1,7 @@
 package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
@@ -59,9 +60,9 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         Ticket t = tickets.save(Ticket.open(owner, "r.png", "receipt"));
         TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
                 List.of(
-                        new ProductLine("Tomatoes", new BigDecimal("1.200"), "kg",
+                        new ProductLine("Tomatoes", new BigDecimal("1.200"), QuantityUnit.KG,
                                 new BigDecimal("2.50"), new BigDecimal("3.00")),
-                        new ProductLine("Bread", new BigDecimal("1"), "unit",
+                        new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
                                 new BigDecimal("1.20"), new BigDecimal("1.20"))));
 
         extractions.save(ext);
@@ -107,7 +108,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // truthful — and the write must not need to read them first.
         Ticket t = tickets.save(Ticket.open(owner, "r.png", "r"));
         TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
-                List.of(new ProductLine("Tomatoes", new BigDecimal("1.200"), "kg",
+                List.of(new ProductLine("Tomatoes", new BigDecimal("1.200"), QuantityUnit.KG,
                         new BigDecimal("2.50"), new BigDecimal("3.00"))));
         extractions.save(ext);
         // Read back before the edit: comparing against what the
@@ -117,7 +118,7 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
 
         boolean updated = extractions.updateEditableFields(t.id(), owner, new EditableFields(
                 "Lidl", LocalDate.of(2026, Month.JULY, 5), "food",
-                List.of(new ProductLine("Bread", new BigDecimal("1"), "unit",
+                List.of(new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
                         new BigDecimal("1.20"), new BigDecimal("1.20"))),
                 new BigDecimal("1.20"), "EUR"));
 

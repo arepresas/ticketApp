@@ -11,9 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Product master row. Match key is {@code (normalised_name, unit)}
- * so "Bread" + null unit is distinct from "Bread" + "kg". Tests
- * pin the lower-trim rule + that {@code unit} can be null without
- * the record collapsing on its own.
+ * so "Bread" by weight is distinct from "Bread" by piece. Tests pin
+ * the lower-trim rule, that the unit is a non-null
+ * {@link QuantityUnit}, and that a null unit is rejected rather than
+ * quietly creating a second match key for the same product.
  */
 class ProductTest {
 
@@ -27,25 +28,27 @@ class ProductTest {
 
     @Test
     void constructorAutoFillsNormalisedNameAndCreatedAt() {
-        Product p = new Product(nextId(), "Olive Oil", null, "L", null);
+        Product p = new Product(nextId(), "Olive Oil", null, QuantityUnit.KG, null);
         assertEquals("olive oil", p.normalisedName());
-        assertEquals("L", p.unit());
+        assertEquals(QuantityUnit.KG, p.unit());
         assertNotNull(p.createdAt());
     }
 
     @Test
-    void constructorAcceptsNullUnit() {
-        // Receipts frequently omit the unit for items like "Bread"
-        // — null unit is a valid value, not a bug.
-        Product p = new Product(nextId(), "Bread", "bread", null, Instant.now());
-        assertEquals(null, p.unit());
+    void constructorRejectsNullUnit() {
+        // A line that printed no unit is UNIT, not "no unit" — accepting
+        // null here would put "Bread" and "Bread (unit)" into two
+        // different match keys and split the catalogue in two.
+        Instant now = Instant.now();
+        assertThrows(IllegalArgumentException.class,
+                () -> new Product(nextId(), "Bread", "bread", null, now));
     }
 
     @Test
     void constructorRejectsNullName() {
         Instant now = Instant.now();
         assertThrows(NullPointerException.class,
-                () -> new Product(nextId(), null, null, "kg", now));
+                () -> new Product(nextId(), null, null, QuantityUnit.UNIT, now));
     }
 
     /** Sequential stand-in for the former UUID test ids. */

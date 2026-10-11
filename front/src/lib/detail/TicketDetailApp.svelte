@@ -69,6 +69,12 @@
 		type CatalogueLine
 	} from '../api/tickets';
 import { searchProducts, type ProductSummary } from '../api/products';
+	import {
+		QUANTITY_UNITS,
+		DEFAULT_QUANTITY_UNIT,
+		asQuantityUnit,
+		type QuantityUnit
+	} from '../api/quantityUnit';
 import { navigateBack } from '../navigation';
 import { flushThenAct } from './flushThenAct';
 import { createSaveState, runEditSave, type EditSection } from './editSave';
@@ -136,7 +142,7 @@ import { createSaveState, runEditSave, type EditSection } from './editSave';
 	interface DisplayLine {
 		name: string;
 		quantity: number | null;
-		unit: string | null;
+		unit: QuantityUnit;
 		pricePerUnit: number | null;
 		lineTotal: number | null;
 	}
@@ -1068,7 +1074,7 @@ import { createSaveState, runEditSave, type EditSection } from './editSave';
 		const next: ExtractedProductLine = {
 			name: '',
 			quantity: 1,
-			unit: null,
+			unit: DEFAULT_QUANTITY_UNIT,
 			pricePerUnit: 0,
 			lineTotal: 0
 		};
@@ -1703,23 +1709,36 @@ import { createSaveState, runEditSave, type EditSection } from './editSave';
 														/>
 													</td>
 													<td class="py-1.5 pr-1">
-														<input
-															type="text"
-															value={product.unit ?? ''}
-															readonly={!editable}
-															oninput={(e) => {
-																product.unit =
-																	e.currentTarget.value === ''
-																		? null
-																		: e.currentTarget.value;
+														<!--
+															A <select>, not a free-text
+															input: the backend stores
+															the unit as an enum, so a
+															label it does not model
+															("L", "pack") would be
+															silently folded to "unit"
+															on the next save and
+															disagree with what the
+															user just typed. Offering
+															exactly what is storable
+															is the honest control.
+														-->
+														<select
+															value={product.unit}
+															disabled={!editable}
+															onchange={(e) => {
+																product.unit = asQuantityUnit(
+																	e.currentTarget.value
+																);
 																markDirty('extraction');
 															}}
-															maxlength="16"
-															placeholder="kg"
 															aria-label="Unit"
 															data-testid="product-unit-input"
-															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
-														/>
+															class="w-20 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm hover:border-input focus:border-input focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-default disabled:border-transparent disabled:hover:border-transparent"
+														>
+															{#each QUANTITY_UNITS as u (u)}
+																<option value={u}>{u}</option>
+															{/each}
+														</select>
 													</td>
 													<td class="py-1.5 pr-1">
 														<input

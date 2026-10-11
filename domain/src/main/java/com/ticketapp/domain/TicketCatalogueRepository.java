@@ -65,10 +65,16 @@ public interface TicketCatalogueRepository {
      * string or a zero — the dashboard renders "unknown" and the
      * difference between "no price recorded" and "priced at 0" is
      * worth preserving.
+     *
+     * <p>{@code unit} is never null: a product master row written
+     * before {@link QuantityUnit} existed, or carrying a label the
+     * enum does not carry, is folded by
+     * {@link QuantityUnit#fromStorage(String)} rather than reported
+     * as a missing value.
      */
     record CatalogueLine(
             String productName,
-            String unit,
+            QuantityUnit unit,
             java.math.BigDecimal quantity,
             BigDecimal pricePerUnit,
             BigDecimal lineTotal

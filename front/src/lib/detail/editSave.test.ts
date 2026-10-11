@@ -225,7 +225,7 @@ describe('buildEditPayload', () => {
 			...EXTRACTION,
 			products: [
 				// A half-typed row must serialise, not produce NaN.
-				{ name: 'Milk', quantity: null as unknown as number, unit: 'L', pricePerUnit: null as unknown as number, lineTotal: 0 }
+				{ name: 'Milk', quantity: null as unknown as number, unit: 'kg', pricePerUnit: null as unknown as number, lineTotal: 0 }
 			]
 		};
 
@@ -234,7 +234,7 @@ describe('buildEditPayload', () => {
 		expect(payload.extraction?.products[0]).toEqual({
 			name: 'Milk',
 			quantity: 1,
-			unit: 'L',
+			unit: 'kg',
 			pricePerUnit: 0,
 			lineTotal: 0
 		});

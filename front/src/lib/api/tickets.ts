@@ -14,6 +14,8 @@
  * Without this pass-through, an expired-session 401 would leave the
  * user staring at a stale detail / pending screen with no recovery.
  */
+import type { QuantityUnit } from './quantityUnit';
+
 const API_BASE = '/api/tickets';
 
 export class TicketApiError extends Error {
@@ -188,7 +190,7 @@ export const listAllTickets = async (token: string): Promise<CreatedTicket[]> =>
 export type ExtractedProductLine = {
 	name: string;
 	quantity: number;
-	unit: string | null;
+	unit: QuantityUnit;
 	pricePerUnit: number;
 	lineTotal: number;
 };
@@ -490,7 +492,7 @@ export const replaceTicketExtraction = async (
  */
 export type CatalogueLine = {
 	productName: string | null;
-	unit: string | null;
+	unit: QuantityUnit;
 	quantity: number | null;
 	pricePerUnit: number | null;
 	lineTotal: number | null;
