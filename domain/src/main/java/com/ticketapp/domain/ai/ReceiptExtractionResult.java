@@ -1,5 +1,6 @@
 package com.ticketapp.domain.ai;
 
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 
 import java.math.BigDecimal;
@@ -24,9 +25,11 @@ import java.util.List;
  *
  * @param merchant       store name as printed on the receipt
  * @param purchaseDate   ISO date of the purchase
- * @param category       free-form category label, validated by the
- *                       orchestrator against its known set; {@code null}
- *                       means the provider did not emit one
+ * @param category       the receipt's category, already folded onto
+ *                       {@link SpendCategory} by the provider adapter
+ *                       (ADR 0007 keeps that fold out of the port, so a
+ *                       new provider cannot widen the set the column
+ *                       accepts)
  * @param products       line items; may be empty when the provider
  *                       could not parse any
  * @param totalAmount    sum the customer paid
@@ -35,7 +38,7 @@ import java.util.List;
 public record ReceiptExtractionResult(
         String merchant,
         LocalDate purchaseDate,
-        String category,
+        SpendCategory category,
         List<ProductLine> products,
         BigDecimal totalAmount,
         String currency
@@ -50,7 +53,11 @@ public record ReceiptExtractionResult(
         if (currency == null || currency.length() != 3) {
             throw new IllegalArgumentException("currency must be an ISO 4217 code");
         }
-        // category may be null — the orchestrator treats null as "model
-        // did not emit one" and persists it as-is.
+        if (category == null) {
+            // A provider that cannot classify the receipt answers
+            // OTHER, not null: the column is constrained, and a null
+            // would have to be written as a hole in it.
+            throw new IllegalArgumentException("category must not be null");
+        }
     }
 }

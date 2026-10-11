@@ -1,6 +1,7 @@
 package com.ticketapp.bff.extraction;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.LineTicketRepository;
 import com.ticketapp.domain.PriceRepository;
 import com.ticketapp.domain.ProductRepository;
@@ -123,7 +124,7 @@ class TicketExtractionNormaliserTest {
                 ticketId,
                 merchant,
                 LocalDate.of(2026, Month.JULY, 4),
-                "food",
+                SpendCategory.FOOD,
                 lines,
                 new BigDecimal("3.50"),
                 "EUR",

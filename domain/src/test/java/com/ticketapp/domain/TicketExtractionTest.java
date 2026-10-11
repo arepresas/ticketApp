@@ -39,13 +39,13 @@ class TicketExtractionTest {
     @Test
     void canonicalConstructorCarriesAllFields() {
         TicketExtraction e = new TicketExtraction(
-                ID, "Mercadona", DATE, "food", PRODUCTS,
+                ID, "Mercadona", DATE, SpendCategory.FOOD, PRODUCTS,
                 new BigDecimal("12.50"), "EUR", "gpt-4o-mini", NOW, "raw", "payload");
 
         assertEquals(ID, e.ticketId());
         assertEquals("Mercadona", e.merchant());
         assertEquals(DATE, e.purchaseDate());
-        assertEquals("food", e.category());
+        assertEquals(SpendCategory.FOOD, e.category());
         assertEquals(PRODUCTS, e.products());
         assertEquals(0, e.totalAmount().compareTo(new BigDecimal("12.50")));
         assertEquals("EUR", e.currency());
@@ -62,7 +62,7 @@ class TicketExtractionTest {
         // compiling. Verify the missing field is null, not a default
         // empty string that would corrupt downstream queries.
         TicketExtraction e = new TicketExtraction(
-                ID, "Mercadona", DATE, null, PRODUCTS,
+                ID, "Mercadona", DATE, SpendCategory.OTHER, PRODUCTS,
                 new BigDecimal("12.50"), "EUR", "gpt-4o-mini", NOW, "raw");
 
         assertNull(e.extractionPayload());
@@ -73,7 +73,7 @@ class TicketExtractionTest {
     void rejectsBlankMerchant() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> new TicketExtraction(
-                        ID, "", DATE, null, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
+                        ID, "", DATE, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
         assertTrue(ex.getMessage().contains("merchant"));
     }
 
@@ -81,28 +81,28 @@ class TicketExtractionTest {
     void rejectsNullPurchaseDate() {
         assertThrows(NullPointerException.class,
                 () -> new TicketExtraction(
-                        ID, "X", null, null, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
+                        ID, "X", null, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
     }
 
     @Test
     void rejectsNullProducts() {
         assertThrows(NullPointerException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, null, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, null, BigDecimal.ZERO, "EUR", "M", NOW, "raw", "p"));
     }
 
     @Test
     void rejectsNullTotalAmount() {
         assertThrows(NullPointerException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, null, "EUR", "M", NOW, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, null, "EUR", "M", NOW, "raw", "p"));
     }
 
     @Test
     void rejectsNegativeTotalAmount() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, new BigDecimal("-0.01"), "EUR", "M", NOW, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, new BigDecimal("-0.01"), "EUR", "M", NOW, "raw", "p"));
         assertTrue(ex.getMessage().contains(">= 0"));
     }
 
@@ -110,7 +110,7 @@ class TicketExtractionTest {
     void rejectsInvalidCurrencyLength() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, BigDecimal.ZERO, "EURO", "M", NOW, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EURO", "M", NOW, "raw", "p"));
         assertTrue(ex.getMessage().contains("ISO 4217"));
     }
 
@@ -118,21 +118,21 @@ class TicketExtractionTest {
     void rejectsBlankModel() {
         assertThrows(IllegalArgumentException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, BigDecimal.ZERO, "EUR", "", NOW, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EUR", "", NOW, "raw", "p"));
     }
 
     @Test
     void rejectsNullExtractedAt() {
         assertThrows(NullPointerException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, BigDecimal.ZERO, "EUR", "M", null, "raw", "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EUR", "M", null, "raw", "p"));
     }
 
     @Test
     void rejectsNullRawResponse() {
         assertThrows(NullPointerException.class,
                 () -> new TicketExtraction(
-                        ID, "X", DATE, null, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, null, "p"));
+                        ID, "X", DATE, SpendCategory.OTHER, PRODUCTS, BigDecimal.ZERO, "EUR", "M", NOW, null, "p"));
     }
 
     @Test

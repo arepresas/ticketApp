@@ -372,7 +372,7 @@ class TicketEditControllerIT {
                         (ticket_id, merchant, purchase_date, category, products,
                          total_amount, currency, model, extracted_at,
                          raw_response_text, extraction_payload)
-                    VALUES (?, ?, '2026-03-12', 'food', '[]'::jsonb, ?, 'EUR',
+                    VALUES (?, ?, '2026-03-12', 'food'::spend_category, '[]'::jsonb, ?, 'EUR',
                             'test-model', now(), '{}', '{}'::jsonb)""",
                     ticketId, extraction.merchant(), new BigDecimal(extraction.amount()));
         }

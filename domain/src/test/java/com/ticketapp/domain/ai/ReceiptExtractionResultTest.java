@@ -1,5 +1,6 @@
 package com.ticketapp.domain.ai;
 
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 
 import org.junit.jupiter.api.Test;
@@ -10,7 +11,6 @@ import java.time.Month;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,9 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Pins the field-level validation that the orchestrator relies
  * on. The record's compact constructor enforces: non-blank
- * merchant, non-null purchaseDate / products / totalAmount, and a
- * 3-letter ISO 4217 currency. {@code category} stays nullable by
- * design.
+ * merchant, non-null purchaseDate / products / totalAmount / category,
+ * and a 3-letter ISO 4217 currency.
  */
 class ReceiptExtractionResultTest {
 
@@ -31,26 +30,25 @@ class ReceiptExtractionResultTest {
     @Test
     void carriesAllFields() {
         ReceiptExtractionResult r = new ReceiptExtractionResult(
-                "Mercadona", DATE, "food", EMPTY_PRODUCTS,
+                "Mercadona", DATE, SpendCategory.FOOD, EMPTY_PRODUCTS,
                 new BigDecimal("12.50"), "EUR");
 
         assertEquals("Mercadona", r.merchant());
         assertEquals(DATE, r.purchaseDate());
-        assertEquals("food", r.category());
+        assertEquals(SpendCategory.FOOD, r.category());
         assertEquals(EMPTY_PRODUCTS, r.products());
         assertEquals(0, r.totalAmount().compareTo(new BigDecimal("12.50")));
         assertEquals("EUR", r.currency());
     }
 
     @Test
-    void categoryMayBeNull() {
-        // Provider did not emit a category — the orchestrator stores
-        // the row as-is. This branch is part of the documented
-        // contract, not an oversight.
-        ReceiptExtractionResult r = new ReceiptExtractionResult(
-                "X", DATE, null, EMPTY_PRODUCTS, BigDecimal.ZERO, "EUR");
-
-        assertNull(r.category());
+    void rejectsNullCategory() {
+        // "The provider could not classify this" is OTHER, chosen by
+        // the adapter. A null here would have to be written as a hole
+        // in a column that no longer accepts one.
+        assertThrows(IllegalArgumentException.class,
+                () -> new ReceiptExtractionResult(
+                        "X", DATE, null, EMPTY_PRODUCTS, BigDecimal.ZERO, "EUR"));
     }
 
     @Test
@@ -65,7 +63,7 @@ class ReceiptExtractionResultTest {
     void rejectsNullPurchaseDate() {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", null, null, EMPTY_PRODUCTS, BigDecimal.ZERO, "EUR"));
+                        "X", null, SpendCategory.OTHER, EMPTY_PRODUCTS, BigDecimal.ZERO, "EUR"));
         assertEquals("purchaseDate", ex.getMessage());
     }
 
@@ -73,7 +71,7 @@ class ReceiptExtractionResultTest {
     void rejectsNullProducts() {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", DATE, null, null, BigDecimal.ZERO, "EUR"));
+                        "X", DATE, SpendCategory.OTHER, null, BigDecimal.ZERO, "EUR"));
         assertEquals("products", ex.getMessage());
     }
 
@@ -81,7 +79,7 @@ class ReceiptExtractionResultTest {
     void rejectsNullTotalAmount() {
         NullPointerException ex = assertThrows(NullPointerException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", DATE, null, EMPTY_PRODUCTS, null, "EUR"));
+                        "X", DATE, SpendCategory.OTHER, EMPTY_PRODUCTS, null, "EUR"));
         assertEquals("totalAmount", ex.getMessage());
     }
 
@@ -89,7 +87,7 @@ class ReceiptExtractionResultTest {
     void rejectsCurrencyShorterThanThree() {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", DATE, null, EMPTY_PRODUCTS, BigDecimal.ZERO, "EU"));
+                        "X", DATE, SpendCategory.OTHER, EMPTY_PRODUCTS, BigDecimal.ZERO, "EU"));
         assertTrue(ex.getMessage().contains("ISO 4217"));
     }
 
@@ -97,13 +95,13 @@ class ReceiptExtractionResultTest {
     void rejectsCurrencyLongerThanThree() {
         assertThrows(IllegalArgumentException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", DATE, null, EMPTY_PRODUCTS, BigDecimal.ZERO, "EURO"));
+                        "X", DATE, SpendCategory.OTHER, EMPTY_PRODUCTS, BigDecimal.ZERO, "EURO"));
     }
 
     @Test
     void rejectsNullCurrency() {
         assertThrows(IllegalArgumentException.class,
                 () -> new ReceiptExtractionResult(
-                        "X", DATE, null, EMPTY_PRODUCTS, BigDecimal.ZERO, null));
+                        "X", DATE, SpendCategory.OTHER, EMPTY_PRODUCTS, BigDecimal.ZERO, null));
     }
 }

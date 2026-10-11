@@ -75,6 +75,7 @@ import { searchProducts, type ProductSummary } from '../api/products';
 		asQuantityUnit,
 		type QuantityUnit
 	} from '../api/quantityUnit';
+	import { SPEND_CATEGORIES, asSpendCategory } from '../api/spendCategory';
 import { navigateBack } from '../navigation';
 import { flushThenAct } from './flushThenAct';
 import { createSaveState, runEditSave, type EditSection } from './editSave';
@@ -1374,38 +1375,44 @@ import { createSaveState, runEditSave, type EditSection } from './editSave';
 												class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0 disabled:cursor-default"
 											/>
 										</label>
-										<label class="flex flex-col gap-1">
+<label class="flex flex-col gap-1">
 											<span class="uppercase tracking-wide">Category</span>
-											<input
-												type="text"
-												value={extraction.category ?? ''}
-												readonly={!editable}
-												oninput={(e) => {
-														// Explicit annotation pins the
-														// spread to the full
-														// TicketExtraction type — without
-														// it, TypeScript widens the
-														// spread to a partial and drops
-														// required fields like
-														// ticketId.
-														if (!extraction) return;
-														const next: TicketExtraction = {
-															...extraction,
-															category:
-																e.currentTarget.value === ''
-																	? null
-																	: e.currentTarget.value
-														};
-														extraction = next;
-												markDirty('extraction');
-													}}
-													maxlength="64"
-													placeholder="food, pharmacy…"
-													aria-label="Category"
-													data-testid="extraction-category"
-													class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring read-only:cursor-default read-only:border-transparent read-only:hover:border-transparent read-only:focus:border-transparent read-only:focus:ring-0"
-												/>
-											</label>
+											<!--
+												A <select> over the closed set, not a
+												text field: the column is
+												constrained, so anything typed here
+												that is not a member would come
+												back folded to "other" and disagree
+												with what the user just saved.
+											-->
+											<select
+												value={extraction.category}
+												disabled={!editable}
+												onchange={(e) => {
+													// Explicit annotation pins the
+													// spread to the full
+													// TicketExtraction type — without
+													// it, TypeScript widens the
+													// spread to a partial and drops
+													// required fields like
+													// ticketId.
+													if (!extraction) return;
+													const next: TicketExtraction = {
+														...extraction,
+														category: asSpendCategory(e.currentTarget.value)
+													};
+													extraction = next;
+													markDirty('extraction');
+												}}
+												aria-label="Category"
+												data-testid="extraction-category"
+												class="rounded-md border border-input bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:cursor-default"
+											>
+												{#each SPEND_CATEGORIES as c (c)}
+													<option value={c}>{c}</option>
+												{/each}
+											</select>
+										</label>
 										</div>
 									{:else if ticket?.status === 'ON_ERROR'}
 										<!--

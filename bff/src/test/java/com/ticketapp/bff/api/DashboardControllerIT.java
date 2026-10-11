@@ -171,7 +171,7 @@ class DashboardControllerIT {
 
         assertThat(body).isNotNull();
         assertThat(body.spendByCategory()).extracting(DashboardResponse.CategoryAmount::category)
-                .containsExactly("transport", "food", "lodging", "other");
+                .containsExactly("food", "transport", "lodging", "pharmacy", "other");
         // Exact, not "isNotEmpty()": every month of the six-month window
         // in order, gap-filled, ending on the reporting month so the chart
         // is anchored to today rather than to the newest ticket. A window
@@ -295,9 +295,9 @@ class DashboardControllerIT {
         assertThat(body.kpis().avgTicketValue()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(body.kpis().currency()).isEqualTo("EUR");
         assertThat(body.spendByCategory())
-                .hasSize(4)
+                .hasSize(5)
                 .extracting(DashboardResponse.CategoryAmount::category)
-                .containsExactly("transport", "food", "lodging", "other");
+                .containsExactly("food", "transport", "lodging", "pharmacy", "other");
         assertThat(body.spendByCategory())
                 .allSatisfy(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
         assertThat(body.ticketsPerMonth())
@@ -367,7 +367,7 @@ class DashboardControllerIT {
         // Both series too: an unscoped aggregate would leak another
         // owner's activity even with the KPIs correct.
         assertThat(body.spendByCategory())
-                .hasSize(4)
+                .hasSize(5)
                 .allSatisfy(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
         assertThat(body.ticketsPerMonth())
                 .isNotEmpty()
@@ -472,7 +472,7 @@ class DashboardControllerIT {
                         (ticket_id, merchant, purchase_date, category, products,
                          total_amount, currency, model, extracted_at,
                          raw_response_text, extraction_payload)
-                    VALUES (?, 'Test Merchant', ?, ?, '[]'::jsonb, ?, ?, 'test-model', now(),
+                    VALUES (?, 'Test Merchant', ?, ?::spend_category, '[]'::jsonb, ?, ?, 'test-model', now(),
                             NULL, '{}'::jsonb)""",
                     ticketId, purchaseDate, category, new BigDecimal(amount), currency);
         }

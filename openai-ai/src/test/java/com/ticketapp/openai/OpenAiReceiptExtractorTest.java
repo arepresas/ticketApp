@@ -2,6 +2,7 @@ package com.ticketapp.openai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
@@ -281,7 +282,25 @@ class OpenAiReceiptExtractorTest {
         ReceiptExtraction result = extractor.extract(
                 new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
 
-        assertThat(result.result().category()).isEqualTo("other");
+        assertThat(result.result().category()).isEqualTo(SpendCategory.OTHER);
+    }
+
+    @Test
+    void legacyPromptLabelsFoldOntoTheEnum() throws Exception {
+        // The prompt used to ask for restaurant / fuel / pharmacy; the
+        // column holds a closed set, so those land on the member that
+        // answers the same question. A fuel receipt stored as `fuel` and
+        // reported as `other` is the bug this replaces.
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"X","purchase_date":"2026-01-01",
+                 "category":"fuel","products":[],
+                 "total_amount":1,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().category()).isEqualTo(SpendCategory.TRANSPORT);
     }
 
     @Test

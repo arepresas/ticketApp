@@ -17,11 +17,13 @@ import java.util.List;
  * domain only carries the typed {@link ProductLine} list and the raw
  * string.
  *
- * <p>{@code category} is constrained to a small set of free-form
- * strings (food, pharmacy, restaurant, fuel, other) emitted by the LLM
- * prompt — we deliberately don't model it as an enum because the model
- * may produce new categories that we want to surface in analytics
- * without a code change. Validation lives in the extraction service.
+ * <p>{@code category} is a {@link SpendCategory}, never null: the
+ * column is constrained to that set and a receipt whose category could
+ * not be read is {@link SpendCategory#OTHER}. What the model emits is
+ * folded onto the set at the provider boundary
+ * ({@link SpendCategory#fromExtractionValue(String)}) rather than
+ * trusted, so a prompt regression widens the set's input without
+ * widening its output.
  *
  * <p>{@code currency} is stored as ISO 4217 (3-letter). Default in
  * the database is {@code EUR}; the LLM is prompted to detect it but
@@ -31,7 +33,7 @@ public record TicketExtraction(
         long ticketId,
         String merchant,
         LocalDate purchaseDate,
-        String category,
+        SpendCategory category,
         List<ProductLine> products,
         BigDecimal totalAmount,
         String currency,
@@ -46,6 +48,12 @@ public record TicketExtraction(
             throw new IllegalArgumentException("merchant must not be blank");
         }
         if (purchaseDate == null) throw new NullPointerException("purchaseDate");
+        if (category == null) {
+            // "No readable category" is OTHER, not an absent value —
+            // accepting null here would put the same receipt in two
+            // reporting buckets depending on who read it.
+            throw new IllegalArgumentException("category must not be null");
+        }
         if (products == null) throw new NullPointerException("products");
         if (totalAmount == null) throw new NullPointerException("totalAmount");
         if (totalAmount.signum() < 0) {
@@ -78,7 +86,7 @@ public record TicketExtraction(
     public TicketExtraction(long ticketId,
                             String merchant,
                             LocalDate purchaseDate,
-                            String category,
+                            SpendCategory category,
                             List<ProductLine> products,
                             BigDecimal totalAmount,
                             String currency,
@@ -153,7 +161,7 @@ public record TicketExtraction(
     public record EditableFields(
             String merchant,
             LocalDate purchaseDate,
-            String category,
+            SpendCategory category,
             List<ProductLine> products,
             BigDecimal totalAmount,
             String currency
@@ -163,6 +171,13 @@ public record TicketExtraction(
                 throw new IllegalArgumentException("merchant must not be blank");
             }
             if (purchaseDate == null) throw new NullPointerException("purchaseDate");
+            if (category == null) {
+                // An edit with no category is not "leave it blank": the
+                // column is constrained, so the user's choice has to be
+                // an actual member. OTHER is the explicit way to say
+                // "I don't know".
+                throw new IllegalArgumentException("category must not be null");
+            }
             if (products == null) throw new NullPointerException("products");
             if (totalAmount == null) throw new NullPointerException("totalAmount");
             if (totalAmount.signum() < 0) {

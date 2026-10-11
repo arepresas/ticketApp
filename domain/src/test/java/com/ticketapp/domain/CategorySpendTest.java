@@ -56,8 +56,8 @@ class CategorySpendTest {
                 new CategorySpend(SpendCategory.FOOD, new BigDecimal("3.00")),
                 new CategorySpend(SpendCategory.TRANSPORT, new BigDecimal("4.00"))));
 
-        assertEquals(List.of(SpendCategory.TRANSPORT, SpendCategory.FOOD,
-                        SpendCategory.LODGING, SpendCategory.OTHER),
+        assertEquals(List.of(SpendCategory.FOOD, SpendCategory.TRANSPORT,
+                        SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER),
                 complete.stream().map(CategorySpend::category).toList());
     }
 

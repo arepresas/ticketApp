@@ -1,5 +1,6 @@
 package com.ticketapp.domain.ai;
 
+import com.ticketapp.domain.SpendCategory;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -23,7 +24,7 @@ class ReceiptExtractionTest {
 
     private static ReceiptExtractionResult sampleResult() {
         return new ReceiptExtractionResult(
-                "X", LocalDate.of(2026, Month.JANUARY, 1), null,
+                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
                 List.of(), BigDecimal.ONE, "EUR");
     }
 

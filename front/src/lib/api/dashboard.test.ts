@@ -26,9 +26,10 @@ const payload: Dashboard = {
 		{ month: '2026-05', count: 10 }
 	],
 	spendByCategory: [
-		{ category: 'transport', amount: 845 },
 		{ category: 'food', amount: 1120.5 },
+		{ category: 'transport', amount: 845 },
 		{ category: 'lodging', amount: 920 },
+		{ category: 'pharmacy', amount: 118 },
 		{ category: 'other', amount: 302 }
 	]
 };

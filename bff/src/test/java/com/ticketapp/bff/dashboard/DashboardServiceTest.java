@@ -200,8 +200,8 @@ class DashboardServiceTest {
         List<CategorySpend> series = service.load(OWNER).spendByCategory();
 
         assertThat(series).extracting(CategorySpend::category)
-                .containsExactly(SpendCategory.TRANSPORT, SpendCategory.FOOD,
-                        SpendCategory.LODGING, SpendCategory.OTHER);
+                .containsExactly(SpendCategory.FOOD, SpendCategory.TRANSPORT,
+                        SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER);
         // The amount must survive: an earlier version of this test
         // stubbed sumByCategory before the shared helper and so
         // asserted against an empty list, passing for the wrong reason.

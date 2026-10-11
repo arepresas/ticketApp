@@ -11,6 +11,8 @@
  * `api/tickets.ts`, so an expired session fires the `auth:expired` DOM
  * event that `auth/host.ts` listens for.
  */
+import type { SpendCategory } from './spendCategory';
+
 const API_BASE = '/api/dashboard';
 
 export class DashboardApiError extends Error {
@@ -22,9 +24,6 @@ export class DashboardApiError extends Error {
 		this.name = 'DashboardApiError';
 	}
 }
-
-/** The four categories the donut knows about, in wire (lowercase) form. */
-export type SpendCategory = 'transport' | 'food' | 'lodging' | 'other';
 
 export type Kpi = {
   /** Tickets the user can still see a record of (excludes deleted/cancelled). */
@@ -59,6 +58,7 @@ export type TicketsPerMonth = {
 };
 
 export type SpendByCategory = {
+  /** One arc per member of the closed set — see `spendCategory.ts`. */
   category: SpendCategory;
   amount: number;
 };

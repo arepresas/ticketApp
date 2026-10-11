@@ -1,6 +1,7 @@
 package com.ticketapp.persistence;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
@@ -151,20 +152,35 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
      * both update statements). Shared so the two write paths cannot
      * drift on null handling or JSONB wrapping.
      */
+    /**
+     * Binds a {@link SpendCategory} into the native {@code spend_category}
+     * column.
+     *
+     * <p>{@code setString} cannot be used: the driver would send the value
+     * as {@code character varying} and Postgres rejects it with "column
+     * category is of type spend_category but expression is of type
+     * character varying" — the same reason {@link JsonbSupport} exists for
+     * the JSONB columns. {@link Types#OTHER} sends it untyped, which the
+     * server coerces against the enum, and a value that is not a member
+     * fails here rather than after the row is written.
+     */
+    private static void bindCategory(PreparedStatement ps, int index, SpendCategory category)
+            throws java.sql.SQLException {
+        // Never NULL: the column is NOT NULL and "unclassifiable" is
+        // SpendCategory.OTHER.
+        ps.setObject(index, category.storageValue(), Types.OTHER);
+    }
+
     private void bindEditableFields(PreparedStatement ps, int base,
                                     String merchant,
                                     java.time.LocalDate purchaseDate,
-                                    String category,
+                                    SpendCategory category,
                                     List<ProductLine> products,
                                     java.math.BigDecimal totalAmount,
                                     String currency) throws java.sql.SQLException {
         ps.setString(base, merchant);
         ps.setObject(base + 1, purchaseDate);
-        if (category == null) {
-            ps.setNull(base + 2, Types.VARCHAR);
-        } else {
-            ps.setString(base + 2, category);
-        }
+        bindCategory(ps, base + 2, category);
         ps.setObject(base + 3, JsonbSupport.toJsonb(mapper.writeProducts(products)));
         ps.setBigDecimal(base + 4, totalAmount);
         ps.setString(base + 5, currency);
@@ -185,11 +201,7 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
         ps.setLong(1, e.ticketId());
         ps.setString(2, e.merchant());
         ps.setObject(3, e.purchaseDate());
-        if (e.category() == null) {
-            ps.setNull(4, Types.VARCHAR);
-        } else {
-            ps.setString(4, e.category());
-        }
+        bindCategory(ps, 4, e.category());
         ps.setObject(5, JsonbSupport.toJsonb(mapper.writeProducts(e.products())));
         ps.setBigDecimal(6, e.totalAmount());
         ps.setString(7, e.currency());
