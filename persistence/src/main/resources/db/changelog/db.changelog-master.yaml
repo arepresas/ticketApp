@@ -65,3 +65,9 @@ databaseChangeLog:
   - include:
       file: changes/V23__products_unit_not_null.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/V26__quantity_unit_native_type.sql
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V27__ticket_status_native_type.sql
+      relativeToChangelogFile: true

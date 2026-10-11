@@ -65,7 +65,7 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
                 VALUES ('it-shop', 'it-shop', now()) RETURNING id""", Long.class);
         long productId = jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES ('it-bread', 'it-bread', 'unit', now()) RETURNING id""", Long.class);
+                VALUES ('it-bread', 'it-bread', 'unit'::quantity_unit, now()) RETURNING id""", Long.class);
         long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, status, created_at, updated_at)
                 VALUES (?, 't', 'DONE', now(), now()) RETURNING id""", Long.class, owner);

@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,15 +41,15 @@ public class JdbcProductRepository implements ProductRepository {
             "id, name, normalised_name, unit, created_at";
 
     /**
-     * Upsert by the match key. The COALESCE trick in the conflict
-     * target mirrors the index definition so the database matches
-     * the lookup key consistently.
+     * Upsert by the match key. The conflict target names the same
+     * columns as the unique index, so the database and the lookup
+     * agree on what "the same product" means.
      */
     private static final String UPSERT_SQL = """
             INSERT INTO products
                 (name, normalised_name, unit, created_at)
             VALUES (?, ?, ?, ?)
-            ON CONFLICT (normalised_name, COALESCE(unit, '')) DO UPDATE
+            ON CONFLICT (normalised_name, unit) DO UPDATE
             SET name = EXCLUDED.name
             RETURNING id
             """;
@@ -65,7 +66,7 @@ public class JdbcProductRepository implements ProductRepository {
     private static final String FIND_BY_NAME_SQL =
             SELECT_PRODUCTS +
             "WHERE normalised_name = :name " +
-            "AND COALESCE(unit, '') = COALESCE(:unit, '')";
+            "AND unit = CAST(:unit AS quantity_unit)";
 
     private static final String FIND_BY_IDS_SQL =
             SELECT_PRODUCTS + "WHERE id IN (:ids)";
@@ -87,6 +88,12 @@ public class JdbcProductRepository implements ProductRepository {
     public Optional<Product> findByNormalisedName(String normalisedName, QuantityUnit unit) {
         var params = new MapSqlParameterSource()
                 .addValue("name", normalisedName)
+                // Cast in the SQL, not in the value: a
+                // NamedParameterJdbcTemplate bind has no per-parameter
+                // type the way setObject(.., Types.OTHER) does, and
+                // concatenating "::quantity_unit" onto the value would
+                // bind it as one literal string rather than a cast
+                // expression.
                 .addValue("unit", unit.storageValue());
         var rows = namedJdbc.query(FIND_BY_NAME_SQL, params, (rs, n) -> mapProduct(rs));
         return rows.stream().findFirst();
@@ -131,9 +138,14 @@ public class JdbcProductRepository implements ProductRepository {
                     PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
                 ps.setString(1, product.name());
                 ps.setString(2, product.normalisedName());
-                // Never NULL: "no unit" is QuantityUnit.UNIT, stored
-                // under its own name. The column is NOT NULL (V23).
-                ps.setString(3, product.unit().storageValue());
+                // Types.OTHER, not setString: the driver would send the
+                // value as character varying and Postgres rejects it
+                // with "column unit is of type quantity_unit but
+                // expression is of type character varying" — the same
+                // trap JsonbSupport exists for on the JSONB columns.
+                // A value that is not a member fails here rather than
+                // after the row is written.
+                ps.setObject(3, product.unit().storageValue(), Types.OTHER);
                 ps.setObject(4, java.sql.Timestamp.from(product.createdAt()));
                     return ps;
                 },

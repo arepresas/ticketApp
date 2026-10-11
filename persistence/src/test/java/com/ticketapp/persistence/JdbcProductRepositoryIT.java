@@ -12,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,14 +46,15 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
      * Seeds a raw catalogue row, bypassing the repository.
      *
      * <p>The {@code unit} argument is written straight to the column,
-     * which is what makes this useful: it reproduces rows written
-     * before {@link QuantityUnit} existed — NULL, {@code "kg"} and
-     * labels such as {@code "L"} the enum no longer carries.
+     * so a fixture states which member a product is filed under rather
+     * than letting the repository decide. The cast is the column's: it
+     * is a native {@code quantity_unit}, so a text literal has to be
+     * told what it is becoming.
      */
     private long seedProduct(String name, String unit) {
         return jdbc.queryForObject("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
+                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
                 Timestamp.from(Instant.now()));
     }
 
@@ -65,7 +65,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // canonical lower-case form.
         seedProduct("Bread", "kg");
         seedProduct("Banana", "unit");
-        seedProduct("Milk 1L", "L");
+        seedProduct("Milk 1L", "unit");
 
         List<Product> got = repository.searchByNormalisedName("b", 10);
 
@@ -212,22 +212,24 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
     // A pre-enum row carrying a label the enum no longer holds still
 // loads — folding is why the column cannot make the catalogue
-// unreadable. It is also no longer *matchable* by a UNIT lookup: the
-// stored label stays "L", so the next normalisation of the same product
-// writes a second row. That duplication is the known cost of not
-// backfilling the column, and it is asserted here so a future migration
-// has to come back and change this test deliberately.
-@Test
-void aLegacyForeignLabelReadsBackAsUnitButStopsMatching() {
-    long legacyId = seedProduct("Milk 1L", "L");
+    // The two spellings of "no unit" that coexisted while the column
+    // was NULLable — a row filed under no unit and one under the
+    // literal "unit" — are now the same row. With a native type there
+    // is only one way to say "a piece", so the second save resolves to
+    // the first instead of leaving a duplicate row behind.
+    @Test
+    void savingTheSameNameTwiceUnderUnitResolvesToOneRow() {
+        long first = repository.save(
+                new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now())).id();
+        long second = repository.save(
+                new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now())).id();
 
-    Optional<Product> loaded = repository.findAllByIds(List.of(legacyId))
-            .values().stream().findFirst();
-
-    assertThat(loaded).isPresent();
-    assertThat(loaded.get().unit()).isEqualTo(QuantityUnit.UNIT);
-    assertThat(repository.findByNormalisedName("milk 1l", QuantityUnit.UNIT)).isEmpty();
-}
+        assertThat(second).isEqualTo(first);
+        assertThat(repository.findByNormalisedName("milk 1l", QuantityUnit.UNIT))
+                .get()
+                .extracting(Product::id)
+                .isEqualTo(first);
+    }
 
     @Test
     void aWeightRowIsNotMatchedByAUnitLookup() {
