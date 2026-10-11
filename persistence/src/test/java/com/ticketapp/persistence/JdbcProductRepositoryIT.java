@@ -192,9 +192,8 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     // "No unit" is stored under its own name, not as SQL NULL. The
-    // column is NOT NULL since V23 and V22 backfilled the rows that
-    // used to spell it NULL — a NULL here would be a row the schema
-    // rejects rather than a product state the code models.
+    // column is NOT NULL since V23, and nothing needs backfilling —
+    // no database predates the enum, so every row was written under it.
     @Test
     void aUnitProductIsStoredUnderItsOwnName() {
         long id = repository.save(

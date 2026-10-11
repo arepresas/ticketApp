@@ -3,7 +3,7 @@
 -- Give products.unit a real type, and give the match key a plain one.
 --
 -- The column has been constrained to the two members for a while
--- (V22 backfilled the NULLs, V23 set NOT NULL), but "constrained" was
+-- (V23 set NOT NULL), but "constrained" was
 -- still a VARCHAR holding a string. A native enum moves the list into
 -- the schema, where the column, the index and every reader agree by
 -- construction — and an ORDER BY on it sorts by declaration order for
@@ -46,8 +46,8 @@ $$;
 DROP INDEX IF EXISTS idx_products_normalised_name_unit;
 
 -- The conversion is explicit because PostgreSQL will not narrow a
--- VARCHAR to an enum on its own. Every row already holds one of the two
--- values: V22 wrote 'unit' where the column used to say "no unit".
+-- VARCHAR to an enum on its own. No row needs folding first: nothing
+-- predates the enum, so every row already holds one of the two values.
 --
 --changeset ticketapp:20261013120200-quantity-unit-column-type runInTransaction:true
 ALTER TABLE products

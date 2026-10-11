@@ -22,13 +22,11 @@
 --
 -- The fix is a two-migration rollout (per AGENTS.md §3.4):
 --   * V5 (this file): add raw_response_text TEXT, drop the NOT NULL on
---     the legacy JSONB column, backfill. Both columns coexist.
+--     the legacy JSONB column. Both columns coexist.
 --   * V6 (follow-up PR): code reads/writes only raw_response_text, the
 --     legacy column is dropped.
 --
--- This file is additive — no column is removed, no row is mutated
--- beyond a backfill that copies raw_response::text into raw_response_text
--- (lossless for the valid JSONB values that exist today).
+-- This file is additive — no column is removed and no row is touched.
 
 ALTER TABLE ticket_extractions
     ADD COLUMN raw_response_text TEXT;
@@ -39,10 +37,8 @@ ALTER TABLE ticket_extractions
 ALTER TABLE ticket_extractions
     ALTER COLUMN raw_response DROP NOT NULL;
 
--- Backfill. ::text on a JSONB value yields the canonical JSON text
--- representation; existing rows are all valid JSONB (V4's type
--- constraint rejected anything else at insert time), so the cast is
--- lossless.
-UPDATE ticket_extractions
-   SET raw_response_text = raw_response::text
- WHERE raw_response_text IS NULL;
+-- No backfill from the legacy JSONB column. This project has never run
+-- against a database anyone cares about, so there are no rows to copy:
+-- every row that exists was written after this migration. Reinstating
+-- one later means writing it then, against real data, rather than
+-- carrying a no-op that reads as if it mattered.

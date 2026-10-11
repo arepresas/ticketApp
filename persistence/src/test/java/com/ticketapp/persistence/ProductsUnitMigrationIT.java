@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Verifies the V22/V23 pair that made {@code products.unit}
- * {@code NOT NULL}, and V26 which gave the column a type:
+ * Verifies V23, which made {@code products.unit} {@code NOT NULL}, and
+ * V26, which gave the column a type.
  *
  * <p>database.md asks for one {@code *IT} per release asserting the
  * changelog is up to date. These tests assert the schema rather than
@@ -41,7 +41,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("the unit changesets are recorded in DATABASECHANGELOG")
+    @DisplayName("the NOT NULL changeset is recorded in DATABASECHANGELOG")
     void changesetsAreRecorded() {
         // Liquibase splits `--changeset ticketapp:<id>` into an author
         // column and an id column, so the filter is on the id half.
@@ -49,9 +49,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
                 "SELECT id FROM databasechangelog WHERE author = 'ticketapp' AND id LIKE '20261011%'",
                 String.class);
 
-        assertThat(ids).containsExactlyInAnyOrder(
-                "20261011120000-backfill-products-unit",
-                "20261011120100-products-unit-not-null");
+        assertThat(ids).containsExactly("20261011120100-products-unit-not-null");
     }
 
     @Test
