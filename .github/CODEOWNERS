@@ -1,11 +1,30 @@
-node_modules/
-target/
-dist/
-build/
-coverage/
-.tmp/
-*.log
-.DS_Store
-.idea/
-.vscode/
-*.iml
+# CODEOWNERS — automatic review requests.
+#
+# This file takes owner rules ONLY — never gitignore-style entries.
+# Patterns follow gitignore syntax; the LAST matching pattern wins,
+# which is why the catch-all `*` sits first.
+
+# Default owner for everything not matched below.
+*                                   @arepresas
+
+# Auth, sessions and secrets handling always need a security review.
+/bff/src/main/java/com/ticketapp/bff/auth/**    @arepresas
+/bff/src/main/java/com/ticketapp/bff/security/** @arepresas
+
+# Schema changes are additive-only and backfills ship separately.
+/persistence/src/main/resources/db/**           @arepresas
+
+# Provider port contract (ReceiptExtractor) and its implementations.
+/domain/src/main/java/com/ticketapp/domain/ai/** @arepresas
+/openai-ai/**                                    @arepresas
+
+# CI, deploy and review automation.
+/.github/workflows/**                            @arepresas
+/.github/CODEOWNERS                              @arepresas
+/.github/ISSUE_TEMPLATE/**                       @arepresas
+
+# Operating manuals for assistants and humans.
+/AGENTS.md                                       @arepresas
+/CONVENTIONS.md                                  @arepresas
+/CONTRIBUTING.md                                 @arepresas
+/SECURITY.md                                     @arepresas

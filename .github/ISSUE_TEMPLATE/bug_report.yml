@@ -1,0 +1,109 @@
+name: Bug report
+description: Report a defect with enough detail to reproduce it.
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security issues do not belong here.** See [`SECURITY.md`](../../blob/main/SECURITY.md) for the private reporting channels.
+        Check existing issues first — the bug may already be tracked.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences on what is broken.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - Blocker — app unusable, data loss, security-relevant
+        - High — main feature broken, no workaround
+        - Medium — broken with a workaround
+        - Low — cosmetic or minor annoyance
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: Modules affected
+      options:
+        - label: domain
+        - label: persistence
+        - label: openai-ai (or another AI provider module)
+        - label: bff
+        - label: front
+        - label: local-environment
+        - label: CI / workflows
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, curl commands, or a failing test. A minimal reproducer gets fixed fastest.
+      placeholder: |
+        1. Start the BFF with profile `local`
+        2. POST /api/tickets with …
+        3. Observe …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the exact error / status code / stack trace if any.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Tag or commit SHA where you observed the bug (`git rev-parse HEAD`).
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local — docker compose Postgres
+        - Local — Testcontainers (mvn verify)
+        - Fly.io deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Paste only the relevant lines. **Redact before pasting:** no `OPENAI_API_KEY`, `BFF_JWT_SECRET`,
+        `GOOGLE_CLIENT_ID`, DB passwords, or bearer tokens — not even partially.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: I can reproduce this on `main`
+          required: false

@@ -1,0 +1,74 @@
+name: Feature request
+description: Propose new behaviour. Architecture-level proposals may need an ADR.
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Small UX or API tweaks: open a PR directly (see [`CONTRIBUTING.md`](../../blob/main/CONTRIBUTING.md)).
+        Bigger changes: discuss here first, ADR before code.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is painful today, and for whom? The problem outlives the proposed solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: modules
+    attributes:
+      label: Modules touched
+      options:
+        - label: domain
+        - label: persistence
+        - label: openai-ai (or another AI provider module)
+        - label: bff
+        - label: front
+        - label: local-environment
+        - label: CI / workflows
+
+  - type: dropdown
+    id: adr
+    attributes:
+      label: Does this need an ADR?
+      description: Required for new top-level Maven modules, new persistence tech, auth/JWT changes, or new external integrations.
+      options:
+        - No — fits inside the existing architecture
+        - Unsure — let's discuss
+        - Yes — I will draft docs/adr/NNNN-<short-title>.md
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable outcomes. How will we know this is done?
+      placeholder: |
+        - [ ] Given … when … then …
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and discussions and this is not a duplicate
+          required: true
