@@ -148,11 +148,6 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     }
 
     /**
-     * Bind the six editable columns starting at {@code base} (1 for
-     * both update statements). Shared so the two write paths cannot
-     * drift on null handling or JSONB wrapping.
-     */
-    /**
      * Binds a {@link SpendCategory} into the native {@code spend_category}
      * column.
      *
@@ -171,6 +166,11 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
         ps.setObject(index, category.storageValue(), Types.OTHER);
     }
 
+    /**
+     * Bind the six editable columns starting at {@code base} (1 for
+     * both update statements). Shared so the two write paths cannot
+     * drift on null handling or JSONB wrapping.
+     */
     private void bindEditableFields(PreparedStatement ps, int base,
                                     String merchant,
                                     java.time.LocalDate purchaseDate,
