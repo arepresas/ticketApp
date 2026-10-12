@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -133,7 +134,7 @@ class ExtractionCategoryMigrationIT extends AbstractPostgresIntegrationTest {
                     (ticket_id, merchant, purchase_date, category, products,
                      total_amount, currency, model, extracted_at)
                 VALUES (?, 'M', ?, ?::spend_category, '[]'::jsonb, 1.00, 'EUR', 'test', now())""",
-                ticketId, LocalDate.of(2026, 1, 1), category);
+                ticketId, LocalDate.of(2026, Month.JANUARY, 1), category);
     }
 
     /** The write path stores the enum's name, never the model's label. */
@@ -143,7 +144,7 @@ class ExtractionCategoryMigrationIT extends AbstractPostgresIntegrationTest {
         // Guards the other direction: the column is only as trustworthy
         // as the code that writes it.
         TicketExtraction extraction = new TicketExtraction(
-                0L, "M", LocalDate.of(2026, 1, 1), SpendCategory.TRANSPORT,
+                0L, "M", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.TRANSPORT,
                 List.of(), new BigDecimal("1.00"), "EUR", "test",
                 java.time.Instant.now(), "{}", null);
 
