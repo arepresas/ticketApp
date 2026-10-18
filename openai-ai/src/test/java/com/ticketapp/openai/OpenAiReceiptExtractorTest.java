@@ -263,12 +263,52 @@ class OpenAiReceiptExtractorTest {
     @Test
     void missingRequiredFieldRaises() throws Exception {
         when(client.extractReceipt(any())).thenReturn("""
-                {"merchant":"X","total_amount":1,"currency":"EUR"}
+                {"purchase_date":"2026-01-01","total_amount":1,"currency":"EUR"}
                 """);
 
         assertThatThrownBy(() -> extractor.extract(
                 new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class);
+    }
+
+    @Test
+    void missingPurchaseDateDefaultsToToday() throws Exception {
+        // 2026-10-18 ALDI incident: date genuinely absent from a
+        // cropped receipt. purchase_date is optional — the parser
+        // defaults it to the extraction day instead of failing a
+        // ticket whose merchant/lines/total are all usable.
+        LocalDate before = LocalDate.now();
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"ALDI","category":"food",
+                 "shop":{"address":"12 Rue de la Paix","city":"Paris","country":"FR"},
+                 "products":[{"name":"BEURRE GASTRO DOUX 250G","quantity":2,
+                              "price_per_unit":1.99,"line_total":3.98}],
+                 "total_amount":32.01,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().purchaseDate()).isBetween(before, LocalDate.now());
+    }
+
+    @Test
+    void nullPurchaseDateDefaultsToToday() throws Exception {
+        // Same incident, second run: the model resolved the
+        // "required + don't guess" contradiction by emitting
+        // "purchase_date": null. Null must behave like absent.
+        LocalDate before = LocalDate.now();
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"ALDI","purchase_date":null,
+                 "products":[{"name":"BEURRE GASTRO DOUX 250G","quantity":2,
+                              "price_per_unit":1.99,"line_total":3.98}],
+                 "total_amount":32.01,"currency":"EUR"}
+                """);
+
+        ReceiptExtraction result = extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+
+        assertThat(result.result().purchaseDate()).isBetween(before, LocalDate.now());
     }
 
     @Test
