@@ -114,7 +114,7 @@ ticketApp/
 │   └── local.properties             # gitignored: sdk.dir, web origin, OAuth client id
 ├── local-environment/
 ├── .github/
-│   ├── workflows/                   # ci.yml, sonar-manual.yml, ai-review.yml, fly-deploy.yml
+│   ├── workflows/                   # ci.yml, sonar-manual.yml, ai-review.yml, docker-publish.yml
 │   ├── ISSUE_TEMPLATE/              # bug_report.yml, feature_request.yml, config.yml
 │   ├── CODEOWNERS                   # auto review requests per path
 │   ├── dependabot.yml
@@ -214,8 +214,7 @@ GitHub Actions secrets (repo Settings → Secrets and variables → Actions, nev
 |--------|---------|
 | `SONAR_TOKEN` / `SONAR_HOST_URL` / `SONAR_ORGANIZATION` | `ci.yml` sonar job (scanner side of the Sonar variables) |
 | `AI_API_KEY` (+ `AI_API_ENDPOINT`/`AI_MODEL` as vars) | `ai-review.yml` |
-| `FLY_API_TOKEN` | `fly-deploy.yml` |
-| `VITE_GOOGLE_CLIENT_ID` | `fly-deploy.yml` and `docker-publish.yml` (front build-arg) |
+| `VITE_GOOGLE_CLIENT_ID` | `docker-publish.yml` (front build-arg) |
 | `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` | `docker-publish.yml` (push to Docker Hub as user `arepresas`) |
 
 **Two different variable families — do not mix them up.** Sonar-related
@@ -249,7 +248,7 @@ Tests under `bff/` ignore these and spin up Postgres via Testcontainers.
 4. **commitlint** — PR-only; validates commit messages against Conventional Commits (CONVENTIONS.md §11.1).
 5. **format** — `mvn spotless:check` + `pnpm format:check`.
 
-Post-merge on `main` (separate workflows): **fly-deploy** ships both apps to Fly.io; **docker-publish** builds the `ticketapp-bff` and `ticketapp-front` images and pushes them to Docker Hub (`arepresas/*:latest`).
+Post-merge on `main` (separate workflow): **docker-publish** builds the `ticketapp-bff` and `ticketapp-front` images and pushes them to Docker Hub (`arepresas/*:latest`).
 
 Manual trigger: `.github/workflows/sonar-manual.yml` (re-runs the scanner without rebuilding).
 

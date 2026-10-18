@@ -107,31 +107,14 @@ start, so editing `.env` does not reach an already-running container — restart
 the MCP server (or opencode) after rotating the token. The back-end
 reads `POSTGRES_*` via docker compose variable substitution.
 
-## Deploy to Fly.io
+## Deploy
 
-Two apps: `ticketapp-bff` (root `fly.toml`) and `ticketapp-front`
-(`front/fly.toml`, nginx serving the bundle + proxying `/api/*` to the
-BFF over private networking). Deploys run from CI
-(`.github/workflows/fly-deploy.yml`) on every `main` push. One-time
-setup, run locally with a logged-in `flyctl`:
-
-```bash
-fly apps create ticketapp-bff
-fly apps create ticketapp-front
-fly pg create --name ticketapp-db --region ams
-fly secrets set -a ticketapp-bff \
-  DB_URL='jdbc:postgresql://<host>:5432/<db>' \
-  DB_USER='<user>' DB_PASSWORD='<pass>' \
-  GOOGLE_CLIENT_ID='<...>.apps.googleusercontent.com' \
-  BFF_JWT_SECRET="$(openssl rand -base64 32)" \
-  OPENAI_API_KEY='<provider-api-key>'
-```
-
-CI also needs two repo secrets: `FLY_API_TOKEN` (`fly auth token`) and
-`VITE_GOOGLE_CLIENT_ID` (public OAuth client id, baked into the frontend
-bundle at build time). Non-secret tunables (`TICKETAPP_AI_*`,
-`OPENAI_*` except the key) already have production defaults in the
-root `fly.toml` `[env]`.
+Production images are built and pushed to Docker Hub on every `main` push
+(`.github/workflows/docker-publish.yml`): `arepresas/ticketapp-bff` and
+`arepresas/ticketapp-front`, both tagged `latest`. The front build needs the
+`VITE_GOOGLE_CLIENT_ID` repo secret (public OAuth client id, baked into the
+bundle at build time). Pull the images from Docker Hub and run them in
+whatever orchestrator hosts production.
 
 ## Package registry
 

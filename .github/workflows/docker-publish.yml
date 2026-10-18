@@ -1,7 +1,7 @@
 name: Docker publish
 
 # Builds both production images and pushes them to Docker Hub (user: arepresas)
-# on every merge to main. Fly deploys are handled separately by fly-deploy.yml.
+# on every merge to main.
 on:
   push:
     branches: [main]
