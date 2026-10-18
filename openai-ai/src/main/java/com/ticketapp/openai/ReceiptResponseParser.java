@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -38,6 +39,11 @@ public class ReceiptResponseParser {
 
     private final ObjectMapper objectMapper;
 
+    /** Clock for the {@code purchase_date} fallback — injected so the
+     *  "extraction day" is explicit (Sonar java:S8688) and tests can
+     *  pin it. */
+    private final Clock clock;
+
     /**
      * Parse the raw reply into a {@link ReceiptExtractionResult}.
      *
@@ -62,79 +68,81 @@ public class ReceiptResponseParser {
                             + " (token budget likely exhausted mid-reasoning): "
                             + truncate(raw, 4096));
         }
+        JsonNode root;
+        Exception structuralFailure = null;
         try {
-            return parseJsonNode(stripped);
-        } catch (ReceiptExtractionException primaryFailure) {
-            if (!(primaryFailure instanceof NonJsonStructureException)) {
-                // The reply parsed as JSON — the payload just does not
-                // match the schema (missing required field, bad date...).
-                // Substring recovery cannot help (the reply IS the
-                // object), and wrapping this as "non-JSON reply" hides
-                // the real cause from operators (2026-10-18 ALDI
-                // incident: model omitted purchase_date, log blamed
-                // JSON it never inspected).
-                throw new ReceiptExtractionException(0, false,
-
-                    "the provider returned JSON that does not match"
-                            + " the expected schema: "
-                            + stripSchemaPrefix(primaryFailure.getMessage())
-                            + "; reply: " + truncate(raw, 4096),
-                        primaryFailure);
-            }
-            ReceiptExtractionResult recovered = recoverFromSubstring(stripped, primaryFailure);
-            if (recovered != null) {
-                return recovered;
-            }
-            throw new ReceiptExtractionException(0, false,
-
-                "the provider returned a non-JSON reply: " + truncate(raw, 4096),
-                    primaryFailure);
+            root = objectMapper.readTree(stripped);
+        } catch (Exception e) {
+            root = null;
+            structuralFailure = e;
         }
-    }
+        if (root != null) {
+            // The reply IS JSON — a payload problem is a schema
+            // mismatch, and naming the missing field matters: wrapping
+            // this as "non-JSON reply" hides the real cause from
+            // operators (2026-10-18 ALDI incident: log blamed JSON it
+            // never inspected). Substring recovery cannot help when the
+            // reply already parsed — the object IS the object.
+            return toResult(root, raw);
+        }
+        ReceiptExtractionResult recovered =
+                recoverFromSubstring(stripped, structuralFailure, raw);
+        if (recovered != null) {
+            return recovered;
+        }
+        throw new ReceiptExtractionException(0, false,
 
-    /** Prefix used by {@link #parseJsonNode} on semantic failures; stripped
-     *  when the cause is re-wrapped with the schema-mismatch headline. */
-    private static String stripSchemaPrefix(String message) {
-        String prefix = "Invalid extraction payload: ";
-        return message != null && message.startsWith(prefix)
-                ? message.substring(prefix.length())
-                : message;
+            "the provider returned a non-JSON reply: " + truncate(raw, 4096),
+                structuralFailure);
     }
 
     /**
-     * Internal marker: {@code readTree} failed — the reply is not JSON
-     * at all. Distinguishes "structural" failures (prose, truncated
-     * object: substring recovery may still help) from "semantic" ones
-     * (valid JSON, invalid payload: recovery is pointless).
+     * Lift the first balanced JSON object out of markup-wrapped or
+     * truncated replies and parse it.
+     *
+     * @return the recovered result, or {@code null} when recovery is
+     *         impossible — the original structural failure then keeps
+     *         any suppressed secondary failure for the diagnostic
      */
-    private static final class NonJsonStructureException extends ReceiptExtractionException {
-        NonJsonStructureException(Throwable cause) {
-            super(0, false, "Invalid JSON payload", cause);
-        }
-    }
-
     private ReceiptExtractionResult recoverFromSubstring(String stripped,
-                                                         ReceiptExtractionException primaryFailure) {
+                                                         Exception structuralFailure,
+                                                         String raw) {
         String lifted = extractFirstJsonObject(stripped);
         if (lifted == null || lifted.equals(stripped)) {
             return null;
         }
+        JsonNode recoveredRoot;
         try {
-            log.debug("Primary JSON parse failed — recovered via substring extraction");
-            return parseJsonNode(lifted);
+            recoveredRoot = objectMapper.readTree(lifted);
+        } catch (Exception readFailure) {
+            structuralFailure.addSuppressed(readFailure);
+            return null;
+        }
+        log.debug("Primary JSON parse failed — recovered via substring extraction");
+        try {
+            return toResult(recoveredRoot, raw);
         } catch (ReceiptExtractionException secondaryFailure) {
-            primaryFailure.addSuppressed(secondaryFailure);
+            // Valid JSON recovered from inside the reply, but the
+            // payload does not match the schema — record it on the
+            // structural failure and let the caller report the reply
+            // as unusable.
+            structuralFailure.addSuppressed(secondaryFailure);
             return null;
         }
     }
 
-    private ReceiptExtractionResult parseJsonNode(String json) throws ReceiptExtractionException {
-        final JsonNode root;
-        try {
-            root = objectMapper.readTree(json);
-        } catch (Exception e) {
-            throw new NonJsonStructureException(e);
-        }
+    /**
+     * Map a parsed JSON object to the domain result.
+     *
+     * <p>Every payload problem (missing field, bad date, non-numeric
+     * total…) surfaces as one schema-mismatch message that names the
+     * field and keeps the raw reply snippet for the DEBUG diagnostic.
+     *
+     * @throws ReceiptExtractionException when the payload does not match
+     *         the extraction schema
+     */
+    private ReceiptExtractionResult toResult(JsonNode root, String raw)
+            throws ReceiptExtractionException {
         try {
             String merchant = requireText(root, "merchant");
             LocalDate purchaseDate = purchaseDateOrDefault(root);
@@ -155,8 +163,9 @@ public class ReceiptResponseParser {
                     merchant, purchaseDate, category, products, totalAmount, currency);
         } catch (IllegalStateException | IllegalArgumentException | DateTimeException e) {
             throw new ReceiptExtractionException(0, false,
-                
-                "Invalid extraction payload: " + e.getMessage(), e);
+                "the provider returned JSON that does not match"
+                        + " the expected schema: " + e.getMessage()
+                        + "; reply: " + truncate(raw, 4096), e);
         }
     }
 
@@ -252,11 +261,11 @@ public class ReceiptResponseParser {
      * an unreadable-but-present value ({@code "n/a"}) still fails so
      * garbage does not silently become "today".
      */
-    private static LocalDate purchaseDateOrDefault(JsonNode parent) {
+    private LocalDate purchaseDateOrDefault(JsonNode parent) {
         String raw = optionalText(parent, "purchase_date");
         if (raw == null || raw.isBlank()) {
             log.debug("purchase_date absent in provider reply — defaulting to extraction day");
-            return LocalDate.now();
+            return LocalDate.now(clock);
         }
         return parseDate(raw);
     }

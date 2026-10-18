@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.time.Clock;
 import java.time.Duration;
 
 /**
@@ -96,7 +97,7 @@ public class OpenAiAutoConfiguration {
 
     @Bean
     public ReceiptResponseParser receiptResponseParser(ObjectMapper objectMapper) {
-        return new ReceiptResponseParser(objectMapper);
+        return new ReceiptResponseParser(objectMapper, Clock.systemDefaultZone());
     }
 
     @Bean
