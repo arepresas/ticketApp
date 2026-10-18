@@ -56,6 +56,22 @@
             there is no 4.1.2 release yet.
         -->
         <tomcat.version>11.0.25</tomcat.version>
+        <!--
+            Jackson patch overrides. Spring Boot 4.1.1 manages Jackson
+            2.21.5 / 3.1.5, which are affected by seven open
+            advisories (DoS via quadratic forward-reference completion,
+            unbounded Duration/XMLGregorianCalendar parsing, ReDoS in
+            NumberInput.PATTERN_FLOAT, unbounded error-token
+            StringBuilder growth, raw type id retention, Path scheme
+            allowlist, incomplete PolymorphicTypeValidator denylist —
+            Dependabot #47-#81). Fixed in the 2.21.7 / 3.1.7 patches
+            of the same minor lines. Same override mechanism as
+            tomcat.version: a property of the Boot parent, so the BOMs
+            stay in charge and the pins die with the next Boot release
+            that ships them.
+        -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
         <jacoco.version>0.8.15</jacoco.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <openai-java.version>4.79.0</openai-java.version>
