@@ -515,7 +515,17 @@ public final class OpenAiApiClient {
             3. Output ONLY the JSON object. No prose, no markdown
                fences (no ```), no trailing text, no "Here is the
                result:" preamble.
-            4. If a field is unreadable, omit it (don't guess).
+            4. REQUIRED fields — always emit them, never omit:
+               merchant, purchase_date, total_amount, currency, and
+               for every product: name, quantity, price_per_unit,
+               line_total. Search the whole receipt for the purchase
+               date (header or footer; formats such as DD/MM/YYYY,
+               DD.MM.YYYY, YYYY-MM-DD, "Fecha:", "Date:") and convert
+               it to YYYY-MM-DD. When no currency symbol is visible,
+               emit "EUR".
+            5. OPTIONAL fields — if unreadable, omit them (don't
+               guess): category, the shop object and its fields, and
+               each product's unit.
 
             Schema (return exactly this shape):
 

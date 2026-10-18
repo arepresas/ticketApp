@@ -65,14 +65,51 @@ public class ReceiptResponseParser {
         try {
             return parseJsonNode(stripped);
         } catch (ReceiptExtractionException primaryFailure) {
+            if (!(primaryFailure instanceof NonJsonStructureException)) {
+                // The reply parsed as JSON — the payload just does not
+                // match the schema (missing required field, bad date...).
+                // Substring recovery cannot help (the reply IS the
+                // object), and wrapping this as "non-JSON reply" hides
+                // the real cause from operators (2026-10-18 ALDI
+                // incident: model omitted purchase_date, log blamed
+                // JSON it never inspected).
+                throw new ReceiptExtractionException(0, false,
+
+                    "the provider returned JSON that does not match"
+                            + " the expected schema: "
+                            + stripSchemaPrefix(primaryFailure.getMessage())
+                            + "; reply: " + truncate(raw, 4096),
+                        primaryFailure);
+            }
             ReceiptExtractionResult recovered = recoverFromSubstring(stripped, primaryFailure);
             if (recovered != null) {
                 return recovered;
             }
             throw new ReceiptExtractionException(0, false,
-                
+
                 "the provider returned a non-JSON reply: " + truncate(raw, 4096),
                     primaryFailure);
+        }
+    }
+
+    /** Prefix used by {@link #parseJsonNode} on semantic failures; stripped
+     *  when the cause is re-wrapped with the schema-mismatch headline. */
+    private static String stripSchemaPrefix(String message) {
+        String prefix = "Invalid extraction payload: ";
+        return message != null && message.startsWith(prefix)
+                ? message.substring(prefix.length())
+                : message;
+    }
+
+    /**
+     * Internal marker: {@code readTree} failed — the reply is not JSON
+     * at all. Distinguishes "structural" failures (prose, truncated
+     * object: substring recovery may still help) from "semantic" ones
+     * (valid JSON, invalid payload: recovery is pointless).
+     */
+    private static final class NonJsonStructureException extends ReceiptExtractionException {
+        NonJsonStructureException(Throwable cause) {
+            super(0, false, "Invalid JSON payload", cause);
         }
     }
 
@@ -96,9 +133,7 @@ public class ReceiptResponseParser {
         try {
             root = objectMapper.readTree(json);
         } catch (Exception e) {
-            throw new ReceiptExtractionException(0, false,
-                
-                "Invalid JSON payload", e);
+            throw new NonJsonStructureException(e);
         }
         try {
             String merchant = requireText(root, "merchant");
