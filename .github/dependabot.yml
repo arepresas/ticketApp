@@ -15,7 +15,8 @@ updates:
     open-pull-requests-limit: 5
     labels: ["dependencies", "java"]
     commit-message:
-      prefix: "deps(maven)"
+      # Valid Conventional Commit type — commitlint rejects bare `deps(...)`.
+      prefix: "build(deps-maven)"
     target-branch: main
     groups:
       minor-and-patch:
@@ -34,13 +35,39 @@ updates:
     open-pull-requests-limit: 5
     labels: ["dependencies", "frontend"]
     commit-message:
-      prefix: "deps(front)"
+      prefix: "build(deps-front)"
     target-branch: main
     groups:
       minor-and-patch:
         applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  # Android client (Gradle / AGP — ADR 0009). Keeps the toolchain and
+  # the AndroidX surface current; the module has no CI gate of its own
+  # yet, so this is the only automated signal it gets.
+  - package-ecosystem: "gradle"
+    directory: "/app-android"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Europe/Madrid"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "android"]
+    commit-message:
+      prefix: "build(deps-android)"
+    target-branch: main
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # AGP majors change the build DSL (AGP 9 dropped kotlin.android,
+      # for one) — those need a human, not a bot.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
 
   # Docker base images used in local-environment/docker-compose.yml.
   - package-ecosystem: "docker"
@@ -53,7 +80,7 @@ updates:
     open-pull-requests-limit: 3
     labels: ["dependencies", "docker"]
     commit-message:
-      prefix: "deps(docker)"
+      prefix: "build(deps-docker)"
     ignore:
       - dependency-name: "postgres"
         update-types: ["version-update:semver-major"]
@@ -71,7 +98,7 @@ updates:
     open-pull-requests-limit: 3
     labels: ["dependencies", "docker", "ci"]
     commit-message:
-      prefix: "deps(docker-bff)"
+      prefix: "build(deps-docker-bff)"
     ignore:
       - dependency-name: "eclipse-temurin"
         update-types: ["version-update:semver-major"]
