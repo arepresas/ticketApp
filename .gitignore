@@ -27,6 +27,11 @@ target/
 hs_err_pid*
 replay_pid*
 
+# The Gradle wrapper JAR is the one jar that must be committed —
+# `./gradlew` cannot bootstrap without it. Narrow exception for the
+# wrapper only; every other jar stays ignored.
+!app-android/gradle/wrapper/gradle-wrapper.jar
+
 ### Logs ###
 *.log
 
@@ -64,6 +69,18 @@ front/package-lock.json
 local-environment/.data/
 local-environment/volumes/
 local-environment/docker-ticketApp/pg-data/
+
+### Android / Gradle (app-android — ADR 0009) ###
+# local.properties carries sdk.dir and the OAuth web client id:
+# machine-specific and environment-specific, never committed.
+app-android/local.properties
+app-android/.gradle/
+app-android/build/
+app-android/app/build/
+app-android/.kotlin/
+# The wrapper JAR is committed on purpose — `./gradlew` cannot
+# bootstrap without it.
+# Keystore material: *.jks / *.keystore are already covered globally.
 
 ### Temporary files ###
 .tmp

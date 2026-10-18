@@ -11,6 +11,7 @@ Multi-module project: Spring Boot 4 BFF + Svelte 5 web components + PostgreSQL.
 | `openai-ai/` | OpenAI-compatible provider implementation of the `ReceiptExtractor` port |
 | `bff/` | Spring Boot 4 backend-for-frontend; orchestrates against the port |
 | `front/` | Svelte 5 + Vite 8 web components |
+| `app-android/` | Native Android shell (Kotlin + Compose) hosting the SPA in a WebView — ADR 0009 |
 | `local-environment/` | docker-compose (PostgreSQL 18) |
 | `.github/` | CI workflows, Dependabot, PR template |
 
@@ -56,7 +57,26 @@ vars.
 ```bash
 mvn -B verify
 cd front && pnpm build
+
+# Android client (separate Gradle project — ADR 0009).
+# Needs an SDK with platform 37 + build-tools 37.0.0; set sdk.dir and
+# the two app keys in app-android/local.properties (see its README).
+cd app-android && ./gradlew testDebugUnitTest lintDebug assembleDebug
 ```
+
+The Android module is not part of the Maven reactor — it has its own
+CI workflow (`android.yml`) and its own quality gate.
+
+## Clients
+
+| Client | Code | Notes |
+|--------|------|-------|
+| Web | `front/` | Svelte SPA, served by nginx, proxies `/api` to the BFF |
+| Android | `app-android/` | Native Google sign-in + WebView hosting the same SPA (ADR 0009) |
+
+Both talk to the same BFF through the same origin and the same
+`Authorization: Bearer` contract, so the API stays single-origin
+(ADR 0008) — no CORS allow-list entry is needed for the Android client.
 
 ## Quality
 

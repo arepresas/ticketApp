@@ -18,6 +18,15 @@
 /domain/src/main/java/com/ticketapp/domain/ai/** @arepresas
 /openai-ai/**                                    @arepresas
 
+# Android client (ADR 0009). The auth folder holds the OAuth
+# credential request and the encrypted session token, so it carries the
+# same "needs a security reviewer" weight as bff/auth.
+/app-android/app/src/main/java/com/ticketapp/android/auth/** @arepresas
+# The WebView session hand-off is a security boundary too: it injects
+# the token into the page and pins navigation to one origin.
+/app-android/app/src/main/java/com/ticketapp/android/web/** @arepresas
+/app-android/gradle/libs.versions.toml              @arepresas
+
 # CI, deploy and review automation.
 /.github/workflows/**                            @arepresas
 /.github/CODEOWNERS                              @arepresas

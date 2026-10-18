@@ -1,0 +1,13 @@
+### Android (app-android) ###
+# local.properties holds sdk.dir + the OAuth web client id — machine
+# specific and environment specific, never committed.
+app-android/local.properties
+app-android/.gradle/
+app-android/build/
+app-android/app/build/
+app-android/captures/
+# Gradle wrapper JAR is committed (the standard, required exception:
+# `./gradlew` cannot bootstrap without it).
+app-android/.kotlin/
+app-android/*.jks
+app-android/*.keystore

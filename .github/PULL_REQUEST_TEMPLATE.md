@@ -19,6 +19,7 @@
 - [ ] `openai-ai` (or other AI provider module)
 - [ ] `bff`
 - [ ] `front`
+- [ ] `app-android`
 - [ ] `local-environment`
 - [ ] `.github` / CI
 
@@ -47,6 +48,7 @@
 
 - [ ] `mvn -B verify` passes locally
 - [ ] `cd front && pnpm test && pnpm build` passes locally
+- [ ] `cd app-android && ./gradlew test lint assembleDebug` passes locally (only if `app-android` is touched)
 - [ ] SonarQube quality gate not worsened
 - [ ] New tests cover the change
 - [ ] No new Sonar smells / security hotspots introduced

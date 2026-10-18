@@ -182,8 +182,6 @@ Keep these terms stable across code, commits, and PR descriptions:
 - **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`openai-ai` today, future `anthropic-ai`, `local-llm-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
 - **Android shell** — `app-android/`. Native Google sign-in + WebView hosting the SPA. It is a *client* of the BFF, not a second backend: the ticket/dashboard surfaces are the SPA's (ADR 0009).
 - **Session hand-off** — How the Android shell gives its BFF JWT to the SPA: a document-start script writing `sessionStorage['ticketapp.session']` before any page JS. The key name is owned by `front/src/lib/auth/store.svelte.ts`; renaming it breaks Android login silently (ADR 0009 §D3).
-- **Android client** — `app-android/`. A native shell that signs in with Google (GIS cannot run in a WebView) and hosts the *same* SPA in a WebView. Never a second implementation of the front or the BFF.
-- **Session hand-off** — The Android shell writes the BFF JWT into `sessionStorage['ticketapp.session']` via a document-start script before the SPA boots. Renaming that key in `front/src/lib/auth/store.svelte.ts` breaks Android login (ADR 0009 §D3).
 
 ---
 
@@ -244,9 +242,10 @@ Tests under `bff/` ignore these and spin up Postgres via Testcontainers.
 
 1. **backend** — `mvn -B -ntp verify` on JDK 25. Publishes surefire/failsafe reports + jacoco XML.
 2. **frontend** — pnpm install → `pnpm test:ci` → `pnpm build` → `pnpm test:coverage`. Publishes junit XML + lcov.
-3. **sonar** — depends on both above. Single `sonar` scanner invocation; fails if quality gate is RED.
-4. **commitlint** — PR-only; validates commit messages against Conventional Commits (CONVENTIONS.md §11.1).
-5. **format** — `mvn spotless:check` + `pnpm format:check`.
+3. **android** — `testDebugUnitTest` → `lintDebug` → `assembleDebug assembleRelease`. Own workflow (`.github/workflows/android.yml`) because `app-android/` is Gradle, not Maven. Publishes junit XML + lint HTML + both APKs.
+4. **sonar** — depends on both above. Single `sonar` scanner invocation; fails if quality gate is RED. Scans `domain/`, `persistence/`, `openai-ai/`, `bff/` and `front/` only — `app-android/` is deliberately out of scope (no Kotlin coverage report is produced by the Android workflow yet; see ADR 0009).
+5. **commitlint** — PR-only; validates commit messages against Conventional Commits (CONVENTIONS.md §11.1).
+6. **format** — `mvn spotless:check` + `pnpm format:check`.
 
 Post-merge on `main` (separate workflow): **docker-publish** builds the `ticketapp-bff` and `ticketapp-front` images and pushes them to Docker Hub (`arepresas/*:latest`).
 
