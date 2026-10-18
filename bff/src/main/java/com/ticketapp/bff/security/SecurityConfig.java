@@ -151,11 +151,11 @@ public class SecurityConfig {
     @Bean
     @Order(Ordered.LOWEST_PRECEDENCE)
     SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher("/**")
-                .authorizeHttpRequests(a -> a
-                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
-                        .anyRequest().denyAll())
+        http.securityMatcher("/**")
+                .authorizeHttpRequests(a -> a.dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR)
+                        .permitAll()
+                        .anyRequest()
+                        .denyAll())
                 // codeql[java/spring-csrf-protection-disabled] — ADR 0008;
                 // this chain denies everything anyway.
                 .csrf(AbstractHttpConfigurer::disable)

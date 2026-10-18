@@ -116,10 +116,16 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
         // instead of overwriting the genuine extraction flow.
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_SQL);
-            bindEditableFields(ps, 1, new EditableColumns(extraction.merchant(),
-                    extraction.purchaseDate(), extraction.category(),
-                    extraction.products(), extraction.totalAmount(),
-                    extraction.currency()));
+            bindEditableFields(
+                    ps,
+                    1,
+                    new EditableColumns(
+                            extraction.merchant(),
+                            extraction.purchaseDate(),
+                            extraction.category(),
+                            extraction.products(),
+                            extraction.totalAmount(),
+                            extraction.currency()));
             ps.setLong(7, extraction.ticketId());
             return ps;
         });
@@ -133,9 +139,16 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     public boolean updateEditableFields(long ticketId, long ownerId, TicketExtraction.EditableFields fields) {
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_EDITABLE_SQL);
-            bindEditableFields(ps, 1, new EditableColumns(fields.merchant(),
-                    fields.purchaseDate(), fields.category(), fields.products(),
-                    fields.totalAmount(), fields.currency()));
+            bindEditableFields(
+                    ps,
+                    1,
+                    new EditableColumns(
+                            fields.merchant(),
+                            fields.purchaseDate(),
+                            fields.category(),
+                            fields.products(),
+                            fields.totalAmount(),
+                            fields.currency()));
             ps.setLong(7, ticketId);
             ps.setLong(8, ownerId);
             return ps;
@@ -177,16 +190,14 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             SpendCategory category,
             List<ProductLine> products,
             java.math.BigDecimal totalAmount,
-            String currency
-    ) {}
+            String currency) {}
 
     /**
      * Bind the six editable columns starting at {@code base} (1 for
      * both update statements). Shared so the two write paths cannot
      * drift on null handling or JSONB wrapping.
      */
-    private void bindEditableFields(PreparedStatement ps, int base,
-                                    EditableColumns c) throws java.sql.SQLException {
+    private void bindEditableFields(PreparedStatement ps, int base, EditableColumns c) throws java.sql.SQLException {
         ps.setString(base, c.merchant());
         ps.setObject(base + 1, c.purchaseDate());
         bindCategory(ps, base + 2, c.category());
