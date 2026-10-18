@@ -12,3 +12,12 @@
 # opens the PR the day a new version ships; the merge button unlocks once the
 # 24h window has elapsed (re-run the workflow or wait).
 minimumReleaseAge: 24
+
+# Security overrides (pnpm 11 reads them here, not in package.json).
+# source-map-js: Dependabot #82 (GHSA-68fv-2mgg-jv7q) — event-loop DoS
+# via indexed source-map section offsets, fixed in 1.2.2. Several
+# transitive parents (@tailwindcss/node, css-tree/jsdom, magicast)
+# still declare ranges that resolve to 1.2.1; the override pins the
+# whole graph to the patched release.
+overrides:
+  source-map-js: 1.2.2
