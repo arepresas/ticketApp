@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -63,7 +64,9 @@ class OpenAiReceiptExtractorTest {
         properties = new OpenAiProperties(
                 "https://api.openai.com/v1", "k", MODEL, 30_000L, 0.0, 16384, 65_536, "low", "", false);
         extractor = new OpenAiReceiptExtractor(
-                client, pdfExtractor, new ReceiptResponseParser(new ObjectMapper()), properties);
+                client, pdfExtractor,
+                new ReceiptResponseParser(new ObjectMapper(), Clock.systemDefaultZone()),
+                properties);
     }
 
     @Test
