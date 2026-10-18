@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.util.List;
 import java.util.Optional;
 
-
 /**
  * Outbound port for the {@link LineTicket} per-ticket line table.
  *

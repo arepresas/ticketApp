@@ -14,8 +14,4 @@ import java.math.BigDecimal;
  * which folds anything unrecognised rather than rejecting the edit.
  */
 public record ProductLineDto(
-        String name,
-        BigDecimal quantity,
-        String unit,
-        BigDecimal pricePerUnit,
-        BigDecimal lineTotal) { }
+        String name, BigDecimal quantity, String unit, BigDecimal pricePerUnit, BigDecimal lineTotal) {}

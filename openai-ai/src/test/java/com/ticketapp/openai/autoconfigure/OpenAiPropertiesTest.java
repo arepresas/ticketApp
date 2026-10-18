@@ -1,9 +1,9 @@
 package com.ticketapp.openai.autoconfigure;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link OpenAiProperties}. Focus is the reasoning-effort
@@ -23,7 +23,7 @@ class OpenAiPropertiesTest {
 
     @Test
     void acceptsEverySdkVocabularyExceptNone() {
-        for (String effort : new String[]{"minimal", "low", "medium", "high", "xhigh", "max"}) {
+        for (String effort : new String[] {"minimal", "low", "medium", "high", "xhigh", "max"}) {
             assertThat(propsWithEffort(effort).reasoningEffort()).isEqualTo(effort);
         }
     }
@@ -60,11 +60,15 @@ class OpenAiPropertiesTest {
 
     private static OpenAiProperties propsWithEffort(String reasoningEffort) {
         return new OpenAiProperties(
-                "https://api.openai.com/v1", "test-api-key", "gpt-4o-mini",
-                30_000L, 0.0,
-                16_384,      // extraction budget
-                65_536,      // OCR budget
+                "https://api.openai.com/v1",
+                "test-api-key",
+                "gpt-4o-mini",
+                30_000L,
+                0.0,
+                16_384, // extraction budget
+                65_536, // OCR budget
                 reasoningEffort,
-                "", false);
+                "",
+                false);
     }
 }

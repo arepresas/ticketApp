@@ -76,6 +76,5 @@ public interface DocumentTextExtractor {
      *         (HTTP 4xx/5xx, timeout, network, etc.). Provider-specific
      *         exception classes must not leak across the port.
      */
-    String extract(byte[] bytes, String contentType)
-            throws DocumentTextExtractionException;
+    String extract(byte[] bytes, String contentType) throws DocumentTextExtractionException;
 }

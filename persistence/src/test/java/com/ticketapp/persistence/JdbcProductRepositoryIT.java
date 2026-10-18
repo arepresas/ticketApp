@@ -1,20 +1,17 @@
 package com.ticketapp.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.domain.Product;
-import com.ticketapp.domain.ProductRepository;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * IT for {@link JdbcProductRepository#searchByNormalisedName(String, int)}.
@@ -52,10 +49,10 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
      * told what it is becoming.
      */
     private long seedProduct(String name, String unit) {
-        return jdbc.queryForObject("""
+        return jdbc.queryForObject(
+                """
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
-                Timestamp.from(Instant.now()));
+                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit, Timestamp.from(Instant.now()));
     }
 
     @Test
@@ -69,8 +66,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
         List<Product> got = repository.searchByNormalisedName("b", 10);
 
-        assertThat(got).extracting(Product::name)
-                .containsExactlyInAnyOrder("Bread", "Banana");
+        assertThat(got).extracting(Product::name).containsExactlyInAnyOrder("Bread", "Banana");
     }
 
     @Test
@@ -84,13 +80,12 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // ordering the SPA relies on for the dropdown.
         List<Product> got = repository.searchByNormalisedName("b", 10);
 
-        assertThat(got).extracting(Product::name)
-                .containsExactly("Banana", "Beef", "Bread");
+        assertThat(got).extracting(Product::name).containsExactly("Banana", "Beef", "Bread");
     }
 
     @Test
     void prefixSearchRespectsLimit() {
-        for (String n : new String[]{"Apple", "Avocado", "Almond", "Artichoke", "Aubergine", "Apricot"}) {
+        for (String n : new String[] {"Apple", "Avocado", "Almond", "Artichoke", "Aubergine", "Apricot"}) {
             seedProduct(n, "unit");
         }
 
@@ -117,8 +112,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
 
         List<Product> got = repository.searchByNormalisedName("%", 10);
 
-        assertThat(got).extracting(Product::name)
-                .containsExactly("%50-off coupon");
+        assertThat(got).extracting(Product::name).containsExactly("%50-off coupon");
     }
 
     @Test
@@ -158,21 +152,17 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // ORIGINAL id, so returning the argument's freshly minted
         // UUID would hand the caller a dangling id to write into
         // line_tickets.product_id.
-        Product first = repository.save(
-                new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
+        Product first = repository.save(new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
 
-        Product second = repository.save(
-                new Product(nextId(), "bread", "bread", QuantityUnit.KG, Instant.now()));
+        Product second = repository.save(new Product(nextId(), "bread", "bread", QuantityUnit.KG, Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
     }
 
     @Test
     void saveDistinguishesTheSameNameWithADifferentUnit() {
-        Product byPiece = repository.save(
-                new Product(nextId(), "Bread", "bread", QuantityUnit.UNIT, Instant.now()));
-        Product byWeight = repository.save(
-                new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
+        Product byPiece = repository.save(new Product(nextId(), "Bread", "bread", QuantityUnit.UNIT, Instant.now()));
+        Product byWeight = repository.save(new Product(nextId(), "Bread", "bread", QuantityUnit.KG, Instant.now()));
 
         assertThat(byWeight.id()).isNotEqualTo(byPiece.id());
     }
@@ -182,11 +172,9 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
         // The conflict target uses COALESCE(unit, ''), so the
         // re-read must apply the same normalisation or it would miss
         // the row it just wrote and fall back to the argument.
-        Product first = repository.save(
-                new Product(nextId(), "Banana", "banana", QuantityUnit.UNIT, Instant.now()));
+        Product first = repository.save(new Product(nextId(), "Banana", "banana", QuantityUnit.UNIT, Instant.now()));
 
-        Product second = repository.save(
-                new Product(nextId(), "banana", "banana", QuantityUnit.UNIT, Instant.now()));
+        Product second = repository.save(new Product(nextId(), "banana", "banana", QuantityUnit.UNIT, Instant.now()));
 
         assertThat(second.id()).isEqualTo(first.id());
     }
@@ -196,11 +184,11 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     // no database predates the enum, so every row was written under it.
     @Test
     void aUnitProductIsStoredUnderItsOwnName() {
-        long id = repository.save(
-                new Product(nextId(), "Rice", "rice", QuantityUnit.UNIT, Instant.now())).id();
+        long id = repository
+                .save(new Product(nextId(), "Rice", "rice", QuantityUnit.UNIT, Instant.now()))
+                .id();
 
-        String stored = jdbc.queryForObject(
-                "SELECT unit FROM products WHERE id = ?", String.class, id);
+        String stored = jdbc.queryForObject("SELECT unit FROM products WHERE id = ?", String.class, id);
 
         assertThat(stored).isEqualTo("unit");
         assertThat(repository.findByNormalisedName("rice", QuantityUnit.UNIT))
@@ -210,7 +198,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     // A pre-enum row carrying a label the enum no longer holds still
-// loads — folding is why the column cannot make the catalogue
+    // loads — folding is why the column cannot make the catalogue
     // The two spellings of "no unit" that coexisted while the column
     // was NULLable — a row filed under no unit and one under the
     // literal "unit" — are now the same row. With a native type there
@@ -218,10 +206,12 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     // the first instead of leaving a duplicate row behind.
     @Test
     void savingTheSameNameTwiceUnderUnitResolvesToOneRow() {
-        long first = repository.save(
-                new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now())).id();
-        long second = repository.save(
-                new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now())).id();
+        long first = repository
+                .save(new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now()))
+                .id();
+        long second = repository
+                .save(new Product(nextId(), "Milk 1L", "milk 1l", QuantityUnit.UNIT, Instant.now()))
+                .id();
 
         assertThat(second).isEqualTo(first);
         assertThat(repository.findByNormalisedName("milk 1l", QuantityUnit.UNIT))
@@ -242,8 +232,7 @@ class JdbcProductRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

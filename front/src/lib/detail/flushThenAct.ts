@@ -25,12 +25,12 @@
  * @returns `true` when the transition ran, `false` when it was skipped.
  */
 export async function flushThenAct(
-	flush: (() => Promise<boolean>) | null,
-	act: () => Promise<void>
+  flush: (() => Promise<boolean>) | null,
+  act: () => Promise<void>
 ): Promise<boolean> {
-	if (flush && !(await flush())) {
-		return false;
-	}
-	await act();
-	return true;
+  if (flush && !(await flush())) {
+    return false;
+  }
+  await act();
+  return true;
 }

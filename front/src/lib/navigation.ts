@@ -34,15 +34,15 @@
  */
 
 export type Route =
-	| { kind: 'dashboard' }
-	| { kind: 'pending' }
-	| { kind: 'new' }
-	| { kind: 'detail'; ticketId: number };
+  | { kind: 'dashboard' }
+  | { kind: 'pending' }
+  | { kind: 'new' }
+  | { kind: 'detail'; ticketId: number };
 
 const TICKET_HASH_RE = /^#?ticket\/(\d+)$/;
 
 function readHash(): string {
-	return window.location.hash;
+  return window.location.hash;
 }
 
 /**
@@ -51,39 +51,39 @@ function readHash(): string {
  * authenticated view.
  */
 export function parseRoute(): Route {
-	const h = readHash();
-	if (h === '' || h === '#' || h === '#dashboard') return { kind: 'dashboard' };
-	if (h === '#pending') return { kind: 'pending' };
-	if (h === '#new') return { kind: 'new' };
-	const m = TICKET_HASH_RE.exec(h);
-	if (m) return { kind: 'detail', ticketId: Number(m[1]) };
-	return { kind: 'dashboard' };
+  const h = readHash();
+  if (h === '' || h === '#' || h === '#dashboard') return { kind: 'dashboard' };
+  if (h === '#pending') return { kind: 'pending' };
+  if (h === '#new') return { kind: 'new' };
+  const m = TICKET_HASH_RE.exec(h);
+  if (m) return { kind: 'detail', ticketId: Number(m[1]) };
+  return { kind: 'dashboard' };
 }
 
 function bodyClassFor(route: Route): string | null {
-	switch (route.kind) {
-		case 'dashboard':
-			return null;
-		case 'pending':
-			return 'is-pending';
-		case 'new':
-			return 'is-new';
-		case 'detail':
-			return 'is-detail';
-	}
+  switch (route.kind) {
+    case 'dashboard':
+      return null;
+    case 'pending':
+      return 'is-pending';
+    case 'new':
+      return 'is-new';
+    case 'detail':
+      return 'is-detail';
+  }
 }
 
 function hashFor(route: Route): string {
-	switch (route.kind) {
-		case 'dashboard':
-			return '';
-		case 'pending':
-			return '#pending';
-		case 'new':
-			return '#new';
-		case 'detail':
-			return `#ticket/${route.ticketId}`;
-	}
+  switch (route.kind) {
+    case 'dashboard':
+      return '';
+    case 'pending':
+      return '#pending';
+    case 'new':
+      return '#new';
+    case 'detail':
+      return `#ticket/${route.ticketId}`;
+  }
 }
 
 /**
@@ -93,37 +93,35 @@ function hashFor(route: Route): string {
  * listener (back/forward).
  */
 export function applyRoute(route: Route): void {
-	document.body.classList.remove('is-pending', 'is-new', 'is-detail');
-	const cls = bodyClassFor(route);
-	if (cls) document.body.classList.add(cls);
-	switch (route.kind) {
-		case 'dashboard':
-			// Self-fetching screens need a signal to re-pull their
-			// data when the dashboard becomes the active route,
-			// regardless of how the user got there — forward
-			// navigation, same-route re-click, or back/forward.
-			// Centralising the dispatch here (instead of in
-			// `navigate`) means the popstate path also fires it,
-			// which is the only way the dashboard refreshes after
-			// a `history.back()` from the new-ticket screen or
-			// any other screen that back-navigates to the dashboard.
-			// The listener in RecentTicketsTable skips the event
-			// while the initial mount fetch is in flight, so the
-			// boot-time applyRoute call (no listener yet) is
-			// harmless.
-			window.dispatchEvent(new CustomEvent('dashboard:refresh'));
-			break;
-		case 'pending':
-			window.dispatchEvent(new CustomEvent('pending:open'));
-			break;
-		case 'new':
-			break;
-		case 'detail':
-			window.dispatchEvent(
-				new CustomEvent('detail:open', { detail: { id: route.ticketId } })
-			);
-			break;
-	}
+  document.body.classList.remove('is-pending', 'is-new', 'is-detail');
+  const cls = bodyClassFor(route);
+  if (cls) document.body.classList.add(cls);
+  switch (route.kind) {
+    case 'dashboard':
+      // Self-fetching screens need a signal to re-pull their
+      // data when the dashboard becomes the active route,
+      // regardless of how the user got there — forward
+      // navigation, same-route re-click, or back/forward.
+      // Centralising the dispatch here (instead of in
+      // `navigate`) means the popstate path also fires it,
+      // which is the only way the dashboard refreshes after
+      // a `history.back()` from the new-ticket screen or
+      // any other screen that back-navigates to the dashboard.
+      // The listener in RecentTicketsTable skips the event
+      // while the initial mount fetch is in flight, so the
+      // boot-time applyRoute call (no listener yet) is
+      // harmless.
+      window.dispatchEvent(new CustomEvent('dashboard:refresh'));
+      break;
+    case 'pending':
+      window.dispatchEvent(new CustomEvent('pending:open'));
+      break;
+    case 'new':
+      break;
+    case 'detail':
+      window.dispatchEvent(new CustomEvent('detail:open', { detail: { id: route.ticketId } }));
+      break;
+  }
 }
 
 /**
@@ -136,18 +134,18 @@ export function applyRoute(route: Route): void {
  * paths produce the same effect.
  */
 export function navigate(target: Route): void {
-	const targetHash = hashFor(target);
-	const sameRoute = readHash() === targetHash;
-	if (!sameRoute) {
-		const url = targetHash === '' ? window.location.pathname + window.location.search : targetHash;
-		history.pushState({ route: target }, '', url);
-	}
-	applyRoute(target);
+  const targetHash = hashFor(target);
+  const sameRoute = readHash() === targetHash;
+  if (!sameRoute) {
+    const url = targetHash === '' ? window.location.pathname + window.location.search : targetHash;
+    history.pushState({ route: target }, '', url);
+  }
+  applyRoute(target);
 }
 
 /** Equivalent to the browser's back button. */
 export function navigateBack(): void {
-	history.back();
+  history.back();
 }
 
 let installed = false;
@@ -160,10 +158,10 @@ let installed = false;
  * Side-effect-only — call once from `host.ts`.
  */
 export function setupHistoryBridge(): void {
-	if (installed) return;
-	installed = true;
-	window.addEventListener('popstate', () => {
-		applyRoute(parseRoute());
-	});
-	applyRoute(parseRoute());
+  if (installed) return;
+  installed = true;
+  window.addEventListener('popstate', () => {
+    applyRoute(parseRoute());
+  });
+  applyRoute(parseRoute());
 }

@@ -1,13 +1,13 @@
 package com.ticketapp.domain;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @DisplayName("SpendCategory")
 class SpendCategoryTest {
@@ -40,13 +40,13 @@ class SpendCategoryTest {
     @ParameterizedTest
     @DisplayName("folds the labels the old prompt asked the model for")
     @CsvSource({
-            "restaurant, FOOD",
-            "fuel, TRANSPORT",
-            "gasoline, TRANSPORT",
-            "taxi, TRANSPORT",
-            "hotel, LODGING",
-            "health, PHARMACY",
-            "beauty, PHARMACY"
+        "restaurant, FOOD",
+        "fuel, TRANSPORT",
+        "gasoline, TRANSPORT",
+        "taxi, TRANSPORT",
+        "hotel, LODGING",
+        "health, PHARMACY",
+        "beauty, PHARMACY"
     })
     void foldsLegacyPromptLabels(String legacy, SpendCategory expected) {
         assertEquals(expected, SpendCategory.fromExtractionValue(legacy));

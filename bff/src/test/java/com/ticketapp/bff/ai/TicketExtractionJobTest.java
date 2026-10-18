@@ -1,24 +1,9 @@
 package com.ticketapp.bff.ai;
 
-import com.ticketapp.domain.Ticket;
-import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketExtractionQueue;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.mockito.InOrder;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -26,6 +11,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.Ticket.Status;
+import com.ticketapp.domain.TicketExtractionQueue;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 /**
  * Unit tests for {@link TicketExtractionJob}.
@@ -56,11 +53,11 @@ class TicketExtractionJobTest {
         tickets = mock(TicketExtractionQueue.class);
         service = mock(TicketExtractionService.class);
         properties = new AiProperties(
-                true,                                  // enabled
+                true, // enabled
                 "0 */15 * * * *",
-                5,                                     // batchSize
-                2,                                     // retryAttempts
-                Duration.ofMinutes(10));               // staleAnalysisTimeout
+                5, // batchSize
+                2, // retryAttempts
+                Duration.ofMinutes(10)); // staleAnalysisTimeout
         job = new TicketExtractionJob(tickets, service, properties);
     }
 
@@ -102,8 +99,21 @@ class TicketExtractionJobTest {
         // change to findOpenForExtraction that loosens the WHERE
         // doesn't silently start processing DONE/ON_ERROR tickets.
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Status.DONE, Instant.now(), Instant.now(),
-                null, null, null, null, 0, null, null, 0);
+                nextId(),
+                OWNER,
+                "x",
+                "",
+                Status.DONE,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -120,8 +130,7 @@ class TicketExtractionJobTest {
         // filtering catches the eye.
         Ticket t1 = openTicket();
         Ticket t2 = openTicket();
-        when(tickets.findOpenForExtraction(properties.batchSize()))
-                .thenReturn(List.of(t1, t2));
+        when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t1, t2));
 
         job.tick();
 
@@ -137,8 +146,7 @@ class TicketExtractionJobTest {
         // return exactly batchSize rows; a wider return would be a
         // contract violation by the impl, not something the job
         // can defend against.
-        List<Ticket> capped = List.of(openTicket(), openTicket(), openTicket(),
-                openTicket(), openTicket());
+        List<Ticket> capped = List.of(openTicket(), openTicket(), openTicket(), openTicket(), openTicket());
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(capped);
 
         job.tick();
@@ -151,8 +159,21 @@ class TicketExtractionJobTest {
     @Test
     void inProgressTicketsAreAlsoFilteredOut() {
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Status.IN_PROGRESS,
-                Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
+                nextId(),
+                OWNER,
+                "x",
+                "",
+                Status.IN_PROGRESS,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -166,9 +187,21 @@ class TicketExtractionJobTest {
         // only so a failed ticket is never picked up automatically
         // (would loop forever on a broken receipt).
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Status.ON_ERROR,
-                Instant.now(), Instant.now(), null, null, null,
-                "previous failure", 0, null, null, 0);
+                nextId(),
+                OWNER,
+                "x",
+                "",
+                Status.ON_ERROR,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null,
+                "previous failure",
+                0,
+                null,
+                null,
+                0);
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(t));
 
         job.tick();
@@ -186,8 +219,7 @@ class TicketExtractionJobTest {
         Ticket bad = openTicket();
         when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(good, bad));
         when(service.processTicket(good)).thenReturn(true);
-        when(service.processTicket(bad))
-                .thenThrow(new DataAccessResourceFailureException("DB down"));
+        when(service.processTicket(bad)).thenThrow(new DataAccessResourceFailureException("DB down"));
 
         job.tick();
 
@@ -214,20 +246,19 @@ class TicketExtractionJobTest {
     @Test
     void abandonedClaimsAreRequeuedBeforeCandidatesArePicked() {
         Ticket stuck = openTicket();
-        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt()))
-                .thenReturn(List.of(stuck));
-        when(tickets.findOpenForExtraction(properties.batchSize()))
-                .thenReturn(List.of(stuck.withStatus(Status.OPEN)));
+        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt())).thenReturn(List.of(stuck));
+        when(tickets.findOpenForExtraction(properties.batchSize())).thenReturn(List.of(stuck.withStatus(Status.OPEN)));
 
         job.tick();
 
         // The cutoff must sit one timeout in the past (10 min, with
         // slack so the assertion can't race the clock), and the
         // batch cap must bound how many rows one tick can re-queue.
-        verify(tickets).requeueAbandonedAnalysis(
-                argThat(cutoff -> cutoff.isBefore(Instant.now().minusSeconds(60))
-                        && cutoff.isAfter(Instant.now().minusSeconds(660))),
-                eq(5));
+        verify(tickets)
+                .requeueAbandonedAnalysis(
+                        argThat(cutoff -> cutoff.isBefore(Instant.now().minusSeconds(60))
+                                && cutoff.isAfter(Instant.now().minusSeconds(660))),
+                        eq(5));
     }
 
     @Test
@@ -242,8 +273,7 @@ class TicketExtractionJobTest {
     @Test
     void requeueHappensBeforeCandidateSelection() {
         Ticket stuck = openTicket();
-        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt()))
-                .thenReturn(List.of(stuck));
+        when(tickets.requeueAbandonedAnalysis(any(Instant.class), anyInt())).thenReturn(List.of(stuck));
         when(tickets.findOpenForExtraction(anyInt())).thenReturn(List.of());
 
         job.tick();
@@ -260,22 +290,30 @@ class TicketExtractionJobTest {
     }
 
     private static Ticket openTicket(long id) {
-        return new Ticket(id, OWNER, "title", "", Status.OPEN,
-                Instant.now(), Instant.now(), null, null, null, null, 0, null, null, 0);
+        return new Ticket(
+                id,
+                OWNER,
+                "title",
+                "",
+                Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     private static AiProperties withEnabled(boolean enabled) {
-        return new AiProperties(
-                enabled,
-                "0 0 0 * * *",
-                5,
-                2,
-                Duration.ofMinutes(10));
+        return new AiProperties(enabled, "0 0 0 * * *", 5, 2, Duration.ofMinutes(10));
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

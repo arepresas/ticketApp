@@ -1,22 +1,15 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.domain.identity.AuthenticatedUser;
-import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.bff.api.dto.ProductSearchResponse;
-import com.ticketapp.domain.Product;
+import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.ProductRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
 
 /**
  * REST surface for the product catalogue.
@@ -58,8 +51,7 @@ public class ProductController {
      */
     @GetMapping("/search")
     public List<ProductSearchResponse> search(
-            @RequestParam("name") String name,
-            @RequestParam(value = "limit", required = false) Integer limit) {
+            @RequestParam("name") String name, @RequestParam(value = "limit", required = false) Integer limit) {
         // CurrentUser.get() throws 401 by itself, so there is no
         // null case to guard here.
         CurrentUser.get();
@@ -77,5 +69,4 @@ public class ProductController {
         if (limit == null || limit <= 0) return DEFAULT_LIMIT;
         return Math.min(limit, MAX_LIMIT);
     }
-
 }

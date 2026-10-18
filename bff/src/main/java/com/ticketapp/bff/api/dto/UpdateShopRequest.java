@@ -16,5 +16,4 @@ public record UpdateShopRequest(
         String country,
         String phone,
         String taxId,
-        String website
-) { }
+        String website) {}

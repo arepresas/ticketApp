@@ -2,8 +2,6 @@ package com.ticketapp.bff.api.dto;
 
 import com.ticketapp.domain.Product;
 
-
-
 /**
  * Wire shape for the autocomplete payload. Trims the columns
  * to just what the SPA renders: id (used as the datalist
@@ -14,11 +12,7 @@ import com.ticketapp.domain.Product;
  * not exposed — it's a detail of the match logic, not a UI
  * concern.
  */
-public record ProductSearchResponse(
-        long id,
-        String name,
-        String unit,
-        String label) {
+public record ProductSearchResponse(long id, String name, String unit, String label) {
 
     public static ProductSearchResponse of(Product p) {
         // Rendered label = "Name (kg)" for a weighed product, bare name

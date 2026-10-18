@@ -1,12 +1,12 @@
 package com.ticketapp.domain.ai;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link ReceiptExtractionException} (ADR 0007).
@@ -22,8 +22,7 @@ class ReceiptExtractionExceptionTest {
 
     @Test
     void carriesStatusCodeRetryabilityAndMessage() {
-        ReceiptExtractionException e = new ReceiptExtractionException(
-                502, true, "provider returned 502");
+        ReceiptExtractionException e = new ReceiptExtractionException(502, true, "provider returned 502");
 
         assertEquals(502, e.statusCode());
         assertTrue(e.retryable());
@@ -33,8 +32,7 @@ class ReceiptExtractionExceptionTest {
 
     @Test
     void carriesAStableCodeForTheApi() {
-        ReceiptExtractionException e = new ReceiptExtractionException(
-                400, false, "bad request");
+        ReceiptExtractionException e = new ReceiptExtractionException(400, false, "bad request");
 
         assertEquals(ReceiptExtractionException.ERROR_CODE, e.code());
         assertFalse(e.retryable());
@@ -43,8 +41,7 @@ class ReceiptExtractionExceptionTest {
     @Test
     void carriesCauseWhenProvided() {
         IllegalStateException cause = new IllegalStateException("upstream boom");
-        ReceiptExtractionException e = new ReceiptExtractionException(
-                0, true, "provider call failed", cause);
+        ReceiptExtractionException e = new ReceiptExtractionException(0, true, "provider call failed", cause);
 
         assertEquals(0, e.statusCode());
         assertEquals("provider call failed", e.getMessage());
@@ -56,8 +53,7 @@ class ReceiptExtractionExceptionTest {
         // The contract documented on the field: 0 means the failure
         // did not involve an HTTP response (DNS, parse error, etc.).
         // Verify a fresh construction preserves that sentinel value.
-        ReceiptExtractionException e = new ReceiptExtractionException(0, false,
-                "x");
+        ReceiptExtractionException e = new ReceiptExtractionException(0, false, "x");
 
         assertEquals(0, e.statusCode());
     }
@@ -69,13 +65,10 @@ class ReceiptExtractionExceptionTest {
         // Throwable.message. Verify the statusCode (the only
         // domain-specific field) appears — that's the actionable
         // datum in a WARN log line.
-        ReceiptExtractionException e = new ReceiptExtractionException(500, false,
-                "boom");
+        ReceiptExtractionException e = new ReceiptExtractionException(500, false, "boom");
 
         String rendered = e.toString();
-        assertTrue(rendered.contains("500"),
-                "expected statusCode in toString: " + rendered);
-        assertTrue(rendered.contains("ReceiptExtractionException"),
-                "expected class name in toString: " + rendered);
+        assertTrue(rendered.contains("500"), "expected statusCode in toString: " + rendered);
+        assertTrue(rendered.contains("ReceiptExtractionException"), "expected class name in toString: " + rendered);
     }
 }

@@ -2,20 +2,18 @@ package com.ticketapp.bff.security;
 
 import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.domain.identity.SessionRepository;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
-
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
-import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * Converts a verified Spring Security {@link Jwt} into the application's
@@ -51,8 +49,7 @@ import java.util.UUID;
  */
 @Component
 @Slf4j
-public class JwtToAuthenticatedUserConverter
-        implements Converter<Jwt, AbstractAuthenticationToken> {
+public class JwtToAuthenticatedUserConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     static final String CLAIM_JTI = "jti";
 
@@ -71,12 +68,10 @@ public class JwtToAuthenticatedUserConverter
                 .filter(u -> u.id() == userId)
                 .orElseThrow(() -> {
                     log.warn("JWT rejected: no live session {} for user {}", jti, userId);
-                    return new InvalidBearerTokenException(
-                            "session has been revoked, expired, or does not exist");
+                    return new InvalidBearerTokenException("session has been revoked, expired, or does not exist");
                 });
 
-        Collection<GrantedAuthority> authorities = List.of(
-                new SimpleGrantedAuthority("ROLE_USER"));
+        Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
 
         // Stamp `authenticatedAt` for downstream audit log lines —
         // not part of the security contract, just a convenience.
@@ -119,10 +114,8 @@ public class JwtToAuthenticatedUserConverter
         private final AuthenticatedUser principal;
         private final UUID jti;
 
-        BearerTokenAuthentication(Jwt jwt,
-                                   Collection<? extends GrantedAuthority> authorities,
-                                   AuthenticatedUser principal,
-                                   UUID jti) {
+        BearerTokenAuthentication(
+                Jwt jwt, Collection<? extends GrantedAuthority> authorities, AuthenticatedUser principal, UUID jti) {
             super(authorities);
             this.jwt = jwt;
             this.principal = principal;

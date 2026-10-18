@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.time.Instant;
 import java.util.Locale;
 
-
 /**
  * Master catalogue entry. The canonical "thing" a receipt line
  * refers to ("Bread", "Milk 1L"). Multiple tickets share the same
@@ -22,13 +21,7 @@ import java.util.Locale;
  * <p>Created oppotunistically by {@link com.ticketapp.bff.extraction.TicketExtractionNormaliser}
  * the first time the normaliser sees the line, on ticket DONE.
  */
-public record Product(
-        long id,
-        String name,
-        String normalisedName,
-        QuantityUnit unit,
-        Instant createdAt
-) {
+public record Product(long id, String name, String normalisedName, QuantityUnit unit, Instant createdAt) {
     public Product {
         if (name == null) throw new NullPointerException("name");
         if (normalisedName == null) {

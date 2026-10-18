@@ -5,31 +5,28 @@ import com.ticketapp.bff.security.JwtToAuthenticatedUserConverter;
 import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.domain.identity.SessionRepository;
 import com.ticketapp.domain.identity.UserRepository;
-import lombok.extern.slf4j.Slf4j;
-
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ProblemDetail;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -39,6 +36,7 @@ public class AuthController {
     /** Mirror of {@code bff.jwt.ttl-hours:24}. Kept on the controller so
      * the test slice can override it without touching properties. */
     private final Duration sessionTtl;
+
     private final GoogleTokenVerifier google;
     private final UserRepository users;
     private final SessionRepository sessions;
@@ -65,8 +63,7 @@ public class AuthController {
         this.sessions = sessions;
         this.jwtEncoder = jwtEncoder;
         this.localProfile = "local".equals(activeProfile)
-                || java.util.Arrays.stream(activeProfile.split(","))
-                        .anyMatch("local"::equals);
+                || java.util.Arrays.stream(activeProfile.split(",")).anyMatch("local"::equals);
     }
 
     /**
@@ -77,14 +74,15 @@ public class AuthController {
     public ResponseEntity<?> exchangeGoogleIdToken(@Valid @RequestBody GoogleLoginRequest req) {
         AtomicReference<String> reason = new AtomicReference<>();
         AtomicReference<String> details = new AtomicReference<>();
-        Optional<GoogleIdToken.Payload> verified = google.verify(req.idToken(),
-                (r, d) -> { reason.set(r); details.set(d); });
+        Optional<GoogleIdToken.Payload> verified = google.verify(req.idToken(), (r, d) -> {
+            reason.set(r);
+            details.set(d);
+        });
         if (verified.isEmpty()) {
             String r = reason.get() == null ? "verify_failed" : reason.get();
             String d = details.get() == null ? "" : details.get();
             log.warn("Google id_token rejected: reason={} details={}", r, d);
-            ProblemDetail body = ProblemDetail.forStatusAndDetail(
-                    HttpStatus.UNAUTHORIZED, "invalid_google_token");
+            ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "invalid_google_token");
             // The reason code is ours and safe to expose; the
             // details come from Google's SDK and our own exception
             // messages, so they stay server-side outside local.
@@ -96,17 +94,11 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
         }
         GoogleIdToken.Payload p = verified.get();
-        AuthenticatedUser user = users.upsertFromGoogle(
-                p.getSubject(),
-                p.getEmail(),
-                (String) p.get("name"),
-                (String) p.get("picture")
-        );
+        AuthenticatedUser user =
+                users.upsertFromGoogle(p.getSubject(), p.getEmail(), (String) p.get("name"), (String) p.get("picture"));
         Issued issued = issue(user);
         return ResponseEntity.ok(new SessionResponse(
-                issued.token(),
-                new UserDto(user.id(), user.email(), user.name(), user.pictureUrl())
-        ));
+                issued.token(), new UserDto(user.id(), user.email(), user.name(), user.pictureUrl())));
     }
 
     /**
@@ -128,7 +120,8 @@ public class AuthController {
      */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication();
         if (auth instanceof JwtToAuthenticatedUserConverter.BearerTokenAuthentication bta) {
             sessions.revoke(bta.jti());
         }
@@ -159,18 +152,19 @@ public class AuthController {
                 .id(jti.toString())
                 .build();
         JwtEncoderParameters params = JwtEncoderParameters.from(
-                JwsHeader.with(org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build(),
+                JwsHeader.with(org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256)
+                        .build(),
                 claims);
         Jwt jwt = jwtEncoder.encode(params);
         return new Issued(jwt.getTokenValue(), jti, exp);
     }
 
-    public record GoogleLoginRequest(@NotBlank String idToken) { }
+    public record GoogleLoginRequest(@NotBlank String idToken) {}
 
-    public record SessionResponse(String token, UserDto user) { }
+    public record SessionResponse(String token, UserDto user) {}
 
-    public record UserDto(long id, String email, String name, String pictureUrl) { }
+    public record UserDto(long id, String email, String name, String pictureUrl) {}
 
     /** Internal: what {@code POST /api/auth/google} hands back to the SPA. */
-    public record Issued(String token, UUID jti, Instant expiresAt) { }
+    public record Issued(String token, UUID jti, Instant expiresAt) {}
 }

@@ -16,13 +16,13 @@ import type { SpendCategory } from './spendCategory';
 const API_BASE = '/api/dashboard';
 
 export class DashboardApiError extends Error {
-	constructor(
-		message: string,
-		readonly status: number
-	) {
-		super(message);
-		this.name = 'DashboardApiError';
-	}
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'DashboardApiError';
+  }
 }
 
 export type Kpi = {

@@ -16,17 +16,14 @@ import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Supplier;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Snapshots the structured payload of a validated ticket into the
@@ -86,8 +83,8 @@ public class TicketExtractionNormaliser {
     @Transactional
     public void normaliseOnDone(Ticket ticket) {
         long ticketId = ticket.id();
-        TicketExtraction extraction = extractions
-                .findByTicketId(ticketId, ticket.ownerId()).orElse(null);
+        TicketExtraction extraction =
+                extractions.findByTicketId(ticketId, ticket.ownerId()).orElse(null);
         if (extraction == null) {
             log.debug("Skip normalisation: no extraction row for ticket {}", ticketId);
             return;
@@ -147,12 +144,10 @@ public class TicketExtractionNormaliser {
         // order instead of receipt order.
         for (var line : extraction.products()) {
             Instant lineNow = Instant.now();
-            Resolved<Product> product = resolveProduct(
-                    line.name(), line.unit(), lineNow);
+            Resolved<Product> product = resolveProduct(line.name(), line.unit(), lineNow);
             if (product.created()) persistedProducts++;
 
-            Resolved<Price> price = resolvePrice(
-                    product.value().id(), ticketId, line.pricePerUnit(), lineNow);
+            Resolved<Price> price = resolvePrice(product.value().id(), ticketId, line.pricePerUnit(), lineNow);
             if (price.created()) persistedPrices++;
 
             LineTicket lineTicket = lineTickets.save(new LineTicket(
@@ -165,12 +160,21 @@ public class TicketExtractionNormaliser {
                     lineNow,
                     lineNow));
             persistedLines++;
-            log.debug("Linked line_ticket {} (ticket={}, product={}, price={})",
-                    lineTicket.id(), ticketId, product.value().id(), price.value().id());
+            log.debug(
+                    "Linked line_ticket {} (ticket={}, product={}, price={})",
+                    lineTicket.id(),
+                    ticketId,
+                    product.value().id(),
+                    price.value().id());
         }
 
-        log.info("Normalised ticket {} (shop={}): +{} product(s), +{} price(s), +{} line(s)",
-                ticketId, shop.id(), persistedProducts, persistedPrices, persistedLines);
+        log.info(
+                "Normalised ticket {} (shop={}): +{} product(s), +{} price(s), +{} line(s)",
+                ticketId,
+                shop.id(),
+                persistedProducts,
+                persistedPrices,
+                persistedLines);
     }
 
     private Resolved<Shop> resolveShop(String merchantName, ShopContact contact, Instant now) {
@@ -178,11 +182,12 @@ public class TicketExtractionNormaliser {
             // Defensive: extraction validation upstream would have
             // 400'd on this. If somehow we got here, skip the shop
             // anchor rather than create an empty row.
-            throw new IllegalStateException(
-                    "Cannot normalise ticket without a merchant name");
+            throw new IllegalStateException("Cannot normalise ticket without a merchant name");
         }
         String normalised = Shop.normalisedNameOf(merchantName);
-        return resolve(shops.findByNormalisedName(normalised), () -> shops.save(new Shop(
+        return resolve(
+                shops.findByNormalisedName(normalised),
+                () -> shops.save(new Shop(
                         0L,
                         merchantName,
                         normalised,
@@ -209,7 +214,7 @@ public class TicketExtractionNormaliser {
     }
 
     /** A resolved catalogue row plus whether this call created it. */
-    private record Resolved<T>(T value, boolean created) { }
+    private record Resolved<T>(T value, boolean created) {}
 
     /**
      * Lift shop contact info from the provider's raw reply.
@@ -256,8 +261,7 @@ public class TicketExtractionNormaliser {
                     textOrNull(shop.get("tax_id")),
                     textOrNull(shop.get("website")));
         } catch (JsonProcessingException e) {
-            log.warn("Skipping shop contact extraction: malformed provider reply",
-                    e);
+            log.warn("Skipping shop contact extraction: malformed provider reply", e);
             return ShopContact.EMPTY;
         }
     }
@@ -288,22 +292,14 @@ public class TicketExtractionNormaliser {
 
     private Resolved<Product> resolveProduct(String name, QuantityUnit unit, Instant now) {
         String normalised = Product.normalisedNameOf(name);
-        return resolve(products.findByNormalisedName(normalised, unit), () -> products.save(new Product(
-                0L,
-                name,
-                normalised,
-                unit,
-                now)));
+        return resolve(
+                products.findByNormalisedName(normalised, unit),
+                () -> products.save(new Product(0L, name, normalised, unit, now)));
     }
 
     private Resolved<Price> resolvePrice(long productId, long ticketId, BigDecimal amount, Instant now) {
-        return resolve(prices.findByProductAndTicket(productId, ticketId, amount),
-                () -> prices.save(new Price(
-                        0L,
-                        productId,
-                        ticketId,
-                        amount,
-                        now,
-                        now)));
+        return resolve(
+                prices.findByProductAndTicket(productId, ticketId, amount),
+                () -> prices.save(new Price(0L, productId, ticketId, amount, now, now)));
     }
 }

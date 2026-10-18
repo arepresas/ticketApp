@@ -2,7 +2,6 @@ package com.ticketapp.domain;
 
 import java.time.Instant;
 
-
 /**
  * Lightweight ticket projection for list views. Carries every
  * {@link Ticket} field the dashboard renders except the heavy
@@ -28,8 +27,7 @@ public record TicketSummary(
         Long sizeBytes,
         String errorMessage,
         int attempts,
-        Long shopId
-) {
+        Long shopId) {
     public TicketSummary {
         if (title == null) throw new NullPointerException("title");
         if (description == null) description = "";

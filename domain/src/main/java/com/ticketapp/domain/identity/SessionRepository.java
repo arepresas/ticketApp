@@ -32,9 +32,5 @@ public interface SessionRepository {
     /** Mark a single session revoked. Idempotent. */
     void revoke(UUID jti);
 
-    record Session(UUID jti,
-                   long userId,
-                   Instant issuedAt,
-                   Instant expiresAt,
-                   Instant revokedAt) { }
+    record Session(UUID jti, long userId, Instant issuedAt, Instant expiresAt, Instant revokedAt) {}
 }

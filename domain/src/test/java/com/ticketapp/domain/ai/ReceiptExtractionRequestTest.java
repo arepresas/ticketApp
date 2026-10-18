@@ -1,12 +1,12 @@
 package com.ticketapp.domain.ai;
 
-import org.junit.jupiter.api.Test;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link ReceiptExtractionRequest} (ADR 0007).
@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class ReceiptExtractionRequestTest {
 
-    private static final byte[] PNG = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+    private static final byte[] PNG = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
 
     @Test
     void carriesContentAndContentType() {
@@ -37,26 +37,22 @@ class ReceiptExtractionRequestTest {
 
     @Test
     void rejectsNullContent() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtractionRequest(null, "image/png"));
+        assertThrows(IllegalArgumentException.class, () -> new ReceiptExtractionRequest(null, "image/png"));
     }
 
     @Test
     void rejectsEmptyContent() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtractionRequest(new byte[0], "image/png"));
+        assertThrows(IllegalArgumentException.class, () -> new ReceiptExtractionRequest(new byte[0], "image/png"));
     }
 
     @Test
     void rejectsBlankContentType() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtractionRequest(PNG, "  "));
+        assertThrows(IllegalArgumentException.class, () -> new ReceiptExtractionRequest(PNG, "  "));
     }
 
     @Test
     void rejectsNullContentType() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtractionRequest(PNG, null));
+        assertThrows(IllegalArgumentException.class, () -> new ReceiptExtractionRequest(PNG, null));
     }
 
     @Test
@@ -70,8 +66,7 @@ class ReceiptExtractionRequestTest {
     void isPdfHandlesMimeWithParameters() {
         // Browsers sometimes send "application/pdf; charset=binary" —
         // the prefix check must tolerate that.
-        ReceiptExtractionRequest r = new ReceiptExtractionRequest(
-                PNG, "application/pdf; charset=binary");
+        ReceiptExtractionRequest r = new ReceiptExtractionRequest(PNG, "application/pdf; charset=binary");
 
         assertTrue(r.isPdf());
     }
@@ -105,8 +100,7 @@ class ReceiptExtractionRequestTest {
     @Test
     void equalsDistinguishesDifferentContent() {
         ReceiptExtractionRequest a = new ReceiptExtractionRequest(PNG, "image/png");
-        ReceiptExtractionRequest b = new ReceiptExtractionRequest(
-                new byte[]{1, 2, 3}, "image/png");
+        ReceiptExtractionRequest b = new ReceiptExtractionRequest(new byte[] {1, 2, 3}, "image/png");
 
         assertNotEquals(a, b);
     }

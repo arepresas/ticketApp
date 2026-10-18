@@ -4,12 +4,11 @@ import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.persistence.JdbcTicketExtractionRepository;
+import java.util.Optional;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.Optional;
 
 /**
  * Failure injection for the transaction tests: an extraction repository
@@ -35,18 +34,15 @@ public class FailingExtractionUpdateConfig {
      */
     @Bean
     @Primary
-    TicketExtractionRepository failingExtractionRepository(
-            JdbcTicketExtractionRepository delegate, JdbcTemplate jdbc) {
+    TicketExtractionRepository failingExtractionRepository(JdbcTicketExtractionRepository delegate, JdbcTemplate jdbc) {
         return new DelegatingExtractionRepository(delegate) {
             @Override
-            public boolean updateEditableFields(long ticketId, long ownerId,
-                                                EditableFields fields) {
-                String currentTitle = jdbc.queryForObject(
-                        "SELECT title FROM tickets WHERE id = ?", String.class, ticketId);
+            public boolean updateEditableFields(long ticketId, long ownerId, EditableFields fields) {
+                String currentTitle =
+                        jdbc.queryForObject("SELECT title FROM tickets WHERE id = ?", String.class, ticketId);
                 if (!"Weekly shop".equals(currentTitle)) {
                     throw new AssertionError(
-                            "metadata write must land before the extraction update; saw: "
-                                    + currentTitle);
+                            "metadata write must land before the extraction update; saw: " + currentTitle);
                 }
                 throw new IllegalStateException("simulated extraction write failure");
             }
@@ -54,8 +50,7 @@ public class FailingExtractionUpdateConfig {
     }
 
     /** Delegates everything; the override above is the only behaviour. */
-    abstract static class DelegatingExtractionRepository
-            implements TicketExtractionRepository {
+    abstract static class DelegatingExtractionRepository implements TicketExtractionRepository {
 
         private final TicketExtractionRepository delegate;
 
@@ -79,8 +74,7 @@ public class FailingExtractionUpdateConfig {
         }
 
         @Override
-        public boolean updateEditableFields(long ticketId, long ownerId,
-                                            EditableFields fields) {
+        public boolean updateEditableFields(long ticketId, long ownerId, EditableFields fields) {
             return delegate.updateEditableFields(ticketId, ownerId, fields);
         }
     }

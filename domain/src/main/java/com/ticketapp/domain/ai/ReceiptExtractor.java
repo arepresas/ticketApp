@@ -39,6 +39,5 @@ public interface ReceiptExtractor {
      *
      * @throws ReceiptExtractionException on any provider failure
      */
-    ReceiptExtraction extract(ReceiptExtractionRequest request)
-            throws ReceiptExtractionException;
+    ReceiptExtraction extract(ReceiptExtractionRequest request) throws ReceiptExtractionException;
 }

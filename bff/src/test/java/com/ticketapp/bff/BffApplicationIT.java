@@ -1,13 +1,14 @@
 package com.ticketapp.bff;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.ChangeStatusRequest;
 import com.ticketapp.bff.api.dto.TicketResponse;
-import com.ticketapp.bff.api.TicketController;
-import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.bff.auth.AuthController;
-import com.ticketapp.domain.identity.UserRepository;
+import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.identity.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,10 +22,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end integration test: real Postgres (testcontainers) + Liquibase migration
@@ -48,13 +45,12 @@ class BffApplicationIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    // Postgres 18 stores data under a major-version subdir.
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            // Postgres 18 stores data under a major-version subdir.
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     @LocalServerPort
     int port;
@@ -84,16 +80,16 @@ class BffApplicationIT {
     }
 
     private WebTestClient web() {
-        return WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -105,8 +101,8 @@ class BffApplicationIT {
      * the google-sub in the upsert flow). */
     private long ownerId() {
         return users.findByGoogleSub("google-sub-stub")
-                .orElseThrow(() -> new IllegalStateException(
-                        "test setup: user row not created — call loginAndGetToken first"))
+                .orElseThrow(() ->
+                        new IllegalStateException("test setup: user row not created — call loginAndGetToken first"))
                 .id();
     }
 
@@ -117,9 +113,7 @@ class BffApplicationIT {
 
     @Test
     void healthEndpointIsUp() {
-        web().get().uri("/actuator/health")
-                .exchange()
-                .expectStatus().is2xxSuccessful();
+        web().get().uri("/actuator/health").exchange().expectStatus().is2xxSuccessful();
     }
 
     @Test
@@ -128,9 +122,7 @@ class BffApplicationIT {
         // /api/** except /actuator/health: metrics must not leak
         // without a session (it was reachable before the catch-all
         // chain existed because no chain matched it).
-        web().get().uri("/actuator/metrics")
-                .exchange()
-                .expectStatus().isForbidden();
+        web().get().uri("/actuator/metrics").exchange().expectStatus().isForbidden();
     }
 
     @Test
@@ -142,33 +134,41 @@ class BffApplicationIT {
         Ticket seeded = tickets.save(Ticket.open(owner, "smoke", "smoke test"));
 
         // GET
-        web().get().uri("/api/tickets/{id}", seeded.id())
+        web().get()
+                .uri("/api/tickets/{id}", seeded.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .value(t -> assertThat(t.title()).isEqualTo("smoke"));
 
         // CHANGE STATUS
-        web().patch().uri("/api/tickets/{id}/status", seeded.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", seeded.id())
                 .header("authorization", "Bearer " + token)
                 .bodyValue(new ChangeStatusRequest(Ticket.Status.IN_PROGRESS))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .value(t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
 
         // DELETE
-        web().delete().uri("/api/tickets/{id}", seeded.id())
+        web().delete()
+                .uri("/api/tickets/{id}", seeded.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus()
+                .isNoContent();
 
         // 404 after delete
-        web().get().uri("/api/tickets/{id}", seeded.id())
+        web().get()
+                .uri("/api/tickets/{id}", seeded.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
@@ -177,10 +177,14 @@ class BffApplicationIT {
         long owner = ownerId();
         tickets.save(Ticket.open(owner, "list-seed", "x"));
 
-        web().get().uri("/api/tickets")
+        web().get()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
-                .exchange().expectStatus().isOk()
+                .exchange()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
-                .value(list -> assertThat(list).extracting(TicketResponse::title).contains("list-seed"));
+                .value(list ->
+                        assertThat(list).extracting(TicketResponse::title).contains("list-seed"));
     }
 }

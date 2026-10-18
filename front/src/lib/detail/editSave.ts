@@ -39,9 +39,9 @@ export type EditSection = 'metadata' | 'extraction';
 
 /** Sparse payload for {@code PUT /api/tickets/{id}}. */
 export type EditPayload = {
-	title?: string;
-	description?: string;
-	extraction: EditableExtraction | null;
+  title?: string;
+  description?: string;
+  extraction: EditableExtraction | null;
 };
 
 /**
@@ -52,45 +52,45 @@ export type EditPayload = {
  * typed during the save" from "something was".
  */
 export type SaveState = {
-	/** Record an edit to {@code section}. Bumps the generation. */
-	markDirty(section: EditSection): void;
-	/** Edits made since the last successful save. */
-	isDirty(): boolean;
-	/** Which sections have unsaved edits. */
-	dirtySections(): ReadonlySet<EditSection>;
-	/** Monotonic edit counter. */
-	generation(): number;
-	/** Drop every dirty flag (called only after a stable save). */
-	clear(): void;
+  /** Record an edit to {@code section}. Bumps the generation. */
+  markDirty(section: EditSection): void;
+  /** Edits made since the last successful save. */
+  isDirty(): boolean;
+  /** Which sections have unsaved edits. */
+  dirtySections(): ReadonlySet<EditSection>;
+  /** Monotonic edit counter. */
+  generation(): number;
+  /** Drop every dirty flag (called only after a stable save). */
+  clear(): void;
 };
 
 export function createSaveState(): SaveState {
-	let generation = 0;
-	let metadataDirty = false;
-	let extractionDirty = false;
-	return {
-		markDirty(section: EditSection): void {
-			generation += 1;
-			if (section === 'extraction') extractionDirty = true;
-			else metadataDirty = true;
-		},
-		isDirty(): boolean {
-			return metadataDirty || extractionDirty;
-		},
-		dirtySections(): ReadonlySet<EditSection> {
-			return new Set<EditSection>([
-				...(metadataDirty ? (['metadata'] as const) : []),
-				...(extractionDirty ? (['extraction'] as const) : [])
-			]);
-		},
-		generation(): number {
-			return generation;
-		},
-		clear(): void {
-			metadataDirty = false;
-			extractionDirty = false;
-		}
-	};
+  let generation = 0;
+  let metadataDirty = false;
+  let extractionDirty = false;
+  return {
+    markDirty(section: EditSection): void {
+      generation += 1;
+      if (section === 'extraction') extractionDirty = true;
+      else metadataDirty = true;
+    },
+    isDirty(): boolean {
+      return metadataDirty || extractionDirty;
+    },
+    dirtySections(): ReadonlySet<EditSection> {
+      return new Set<EditSection>([
+        ...(metadataDirty ? (['metadata'] as const) : []),
+        ...(extractionDirty ? (['extraction'] as const) : [])
+      ]);
+    },
+    generation(): number {
+      return generation;
+    },
+    clear(): void {
+      metadataDirty = false;
+      extractionDirty = false;
+    }
+  };
 }
 
 /** How many times one {@link runEditSave} call may re-issue the PUT
@@ -106,66 +106,62 @@ const MAX_ATTEMPTS = 3;
  * never as "clear it".
  */
 export function buildEditPayload(
-	ticket: Pick<CreatedTicket, 'title' | 'description'>,
-	extraction: TicketExtraction | null,
-	sections: ReadonlySet<EditSection>
+  ticket: Pick<CreatedTicket, 'title' | 'description'>,
+  extraction: TicketExtraction | null,
+  sections: ReadonlySet<EditSection>
 ): EditPayload {
-	const metadata = sections.has('metadata');
-	const payload: EditPayload = { extraction: null };
-	if (metadata) {
-		payload.title = ticket.title;
-		payload.description = ticket.description;
-	}
-	if (extraction && sections.has('extraction')) {
-		payload.extraction = {
-			merchant: extraction.merchant,
-			purchaseDate: extraction.purchaseDate,
-			// Narrowed on the way out: a payload from a build that knew
-			// fewer categories (or a hand-edited one) must not put a
-			// value on the wire the constrained column would reject.
-			category: asSpendCategory(extraction.category),
-			products: extraction.products.map((p) => ({
-				name: p.name,
-				quantity: p.quantity ?? 1,
-				unit: p.unit,
-				pricePerUnit: p.pricePerUnit ?? 0,
-				// lineTotal is derived, never read back: qty × €/unit.
-				lineTotal: (p.quantity ?? 1) * (p.pricePerUnit ?? 0)
-			})),
-			totalAmount: extraction.totalAmount,
-			currency: extraction.currency
-		};
-	}
-	return payload;
+  const metadata = sections.has('metadata');
+  const payload: EditPayload = { extraction: null };
+  if (metadata) {
+    payload.title = ticket.title;
+    payload.description = ticket.description;
+  }
+  if (extraction && sections.has('extraction')) {
+    payload.extraction = {
+      merchant: extraction.merchant,
+      purchaseDate: extraction.purchaseDate,
+      // Narrowed on the way out: a payload from a build that knew
+      // fewer categories (or a hand-edited one) must not put a
+      // value on the wire the constrained column would reject.
+      category: asSpendCategory(extraction.category),
+      products: extraction.products.map((p) => ({
+        name: p.name,
+        quantity: p.quantity ?? 1,
+        unit: p.unit,
+        pricePerUnit: p.pricePerUnit ?? 0,
+        // lineTotal is derived, never read back: qty × €/unit.
+        lineTotal: (p.quantity ?? 1) * (p.pricePerUnit ?? 0)
+      })),
+      totalAmount: extraction.totalAmount,
+      currency: extraction.currency
+    };
+  }
+  return payload;
 }
 
 /** The two HTTP calls a save makes, injected so tests never fetch. */
 export type EditSaveApi = {
-	applyEdit: (
-		token: string,
-		id: number,
-		payload: EditPayload
-	) => Promise<CreatedTicket>;
-	getExtraction: (token: string, id: number) => Promise<TicketExtraction | null>;
+  applyEdit: (token: string, id: number, payload: EditPayload) => Promise<CreatedTicket>;
+  getExtraction: (token: string, id: number) => Promise<TicketExtraction | null>;
 };
 
 export type RunEditSaveArgs = {
-	token: string;
-	api: EditSaveApi;
-	state: SaveState;
-	/** Read at the start of every attempt, so the newest local values ship. */
-	currentTicket: () => CreatedTicket | null;
-	currentExtraction: () => TicketExtraction | null;
-	/**
-	 * Stable generation reached. Adopt the server's ticket, clear the
-	 * dirty flags and flash the "saved" pill.
-	 */
-	onCommitted: (ticket: CreatedTicket, extraction: TicketExtraction | null) => void;
-	/** The PUT failed; the caller surfaces the error. */
-	onSaveFailed: (err: unknown) => void;
-	/** The save gave up because the user kept typing. */
-	onUnstable: () => void;
-	maxAttempts?: number;
+  token: string;
+  api: EditSaveApi;
+  state: SaveState;
+  /** Read at the start of every attempt, so the newest local values ship. */
+  currentTicket: () => CreatedTicket | null;
+  currentExtraction: () => TicketExtraction | null;
+  /**
+   * Stable generation reached. Adopt the server's ticket, clear the
+   * dirty flags and flash the "saved" pill.
+   */
+  onCommitted: (ticket: CreatedTicket, extraction: TicketExtraction | null) => void;
+  /** The PUT failed; the caller surfaces the error. */
+  onSaveFailed: (err: unknown) => void;
+  /** The save gave up because the user kept typing. */
+  onUnstable: () => void;
+  maxAttempts?: number;
 };
 
 /**
@@ -176,47 +172,47 @@ export type RunEditSaveArgs = {
  * view": either the write failed, or the user out-ran the retries.
  */
 export async function runEditSave(args: RunEditSaveArgs): Promise<boolean> {
-	const maxAttempts = args.maxAttempts ?? MAX_ATTEMPTS;
-	for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-		const ticket = args.currentTicket();
-		if (!ticket) return true;
-		const generationAtStart = args.state.generation();
-		const sections = args.state.dirtySections();
-		if (sections.size === 0) return true;
+  const maxAttempts = args.maxAttempts ?? MAX_ATTEMPTS;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const ticket = args.currentTicket();
+    if (!ticket) return true;
+    const generationAtStart = args.state.generation();
+    const sections = args.state.dirtySections();
+    if (sections.size === 0) return true;
 
-		let saved: CreatedTicket;
-		try {
-			saved = await args.api.applyEdit(args.token, ticket.id, buildEditPayload(
-				ticket,
-				args.currentExtraction(),
-				sections
-			));
-		} catch (err) {
-			args.onSaveFailed(err);
-			return false;
-		}
+    let saved: CreatedTicket;
+    try {
+      saved = await args.api.applyEdit(
+        args.token,
+        ticket.id,
+        buildEditPayload(ticket, args.currentExtraction(), sections)
+      );
+    } catch (err) {
+      args.onSaveFailed(err);
+      return false;
+    }
 
-		// The PUT committed. Re-reading the audit fields is a
-		// convenience, never part of the commit: a failure here leaves
-		// the local copy (which still has the user's values) in place.
-		let refreshed: TicketExtraction | null = null;
-		if (sections.has('extraction')) {
-			try {
-				refreshed = await args.api.getExtraction(args.token, saved.id);
-			} catch {
-				// Swallowed deliberately — the durable write already
-				// happened; only the "extracted by X on Y" stamp is
-				// stale on screen.
-			}
-		}
+    // The PUT committed. Re-reading the audit fields is a
+    // convenience, never part of the commit: a failure here leaves
+    // the local copy (which still has the user's values) in place.
+    let refreshed: TicketExtraction | null = null;
+    if (sections.has('extraction')) {
+      try {
+        refreshed = await args.api.getExtraction(args.token, saved.id);
+      } catch {
+        // Swallowed deliberately — the durable write already
+        // happened; only the "extracted by X on Y" stamp is
+        // stale on screen.
+      }
+    }
 
-		if (args.state.generation() === generationAtStart) {
-			args.state.clear();
-			args.onCommitted(saved, refreshed);
-			return true;
-		}
-		// Edited mid-flight: loop and ship the newer values.
-	}
-	args.onUnstable();
-	return false;
+    if (args.state.generation() === generationAtStart) {
+      args.state.clear();
+      args.onCommitted(saved, refreshed);
+      return true;
+    }
+    // Edited mid-flight: loop and ship the newer values.
+  }
+  args.onUnstable();
+  return false;
 }

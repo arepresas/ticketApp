@@ -1,13 +1,12 @@
 package com.ticketapp.bff.ai;
 
 import com.ticketapp.domain.ai.DocumentTextExtractor;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 /**
  * Reusable test double for {@link DocumentTextExtractor} — the port
@@ -41,8 +40,7 @@ public class TestDocumentTextExtractorConfig {
 
     /** Text the next call returns; {@code null} simulates a
      *  provider that transcribed nothing. */
-    private static final AtomicReference<String> NEXT_TEXT =
-            new AtomicReference<>("");
+    private static final AtomicReference<String> NEXT_TEXT = new AtomicReference<>("");
 
     public static void reset() {
         CALLS.clear();

@@ -1,5 +1,12 @@
 package com.ticketapp.openai;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.openai.client.OpenAIClient;
 import com.openai.core.JsonValue;
 import com.openai.core.http.HttpResponseFor;
@@ -10,19 +17,11 @@ import com.openai.services.blocking.ChatService;
 import com.openai.services.blocking.chat.ChatCompletionService;
 import com.ticketapp.openai.OpenAiApiClient.OpenAiApiException;
 import com.ticketapp.openai.OpenAiApiClient.ReceiptInput;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link OpenAiApiClient}. The {@link OpenAIClient} is
@@ -53,19 +52,30 @@ class OpenAiApiClientTest {
         when(client.chat()).thenReturn(chat);
         when(chat.completions()).thenReturn(completions);
         when(completions.withRawResponse()).thenReturn(completionsRaw);
-        api = new OpenAiApiClient(client, new com.ticketapp.openai.autoconfigure.OpenAiProperties(
-                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536, "low", "", false));
+        api = new OpenAiApiClient(
+                client,
+                new com.ticketapp.openai.autoconfigure.OpenAiProperties(
+                        "https://api.openai.com/v1",
+                        "k",
+                        "gpt-4o-mini",
+                        30_000L,
+                        0.0,
+                        16384,
+                        65_536,
+                        "low",
+                        "",
+                        false));
     }
 
     @Test
     void imageInputSendsUserMessageWithImageUrlContentPart() throws Exception {
-        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
-        byte[] png = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+        stubOk(
+                "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
+        byte[] png = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
 
         api.extractReceipt(ReceiptInput.image("gpt-4o-mini", png, "image/png"));
 
-        ArgumentCaptor<ChatCompletionCreateParams> cap =
-                ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
+        ArgumentCaptor<ChatCompletionCreateParams> cap = ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
         verify(completionsRaw).create(cap.capture());
         ChatCompletionCreateParams params = cap.getValue();
         assertThat(params.model().toString()).isEqualTo("gpt-4o-mini");
@@ -91,12 +101,12 @@ class OpenAiApiClientTest {
 
     @Test
     void pdfTextInputSendsTextPartNotImage() throws Exception {
-        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
+        stubOk(
+                "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"X\"},\"finish_reason\":\"stop\"}]}");
 
         api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA\nTotal: 25,28"));
 
-        ArgumentCaptor<ChatCompletionCreateParams> cap =
-                ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
+        ArgumentCaptor<ChatCompletionCreateParams> cap = ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
         verify(completionsRaw).create(cap.capture());
         var messages = cap.getValue().messages();
         assertThat(messages).hasSize(2);
@@ -115,8 +125,9 @@ class OpenAiApiClientTest {
         // against the model's reasoning channel, so it must NOT share
         // the (smaller) extraction budget and must not run at the
         // provider's default — highest — effort.
-        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"LIDL\"},\"finish_reason\":\"stop\"}]}");
-        byte[] jpeg = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+        stubOk(
+                "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"LIDL\"},\"finish_reason\":\"stop\"}]}");
+        byte[] jpeg = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
 
         api.transcribeImage("gpt-4o-mini", jpeg, "image/jpeg");
 
@@ -128,7 +139,8 @@ class OpenAiApiClientTest {
 
     @Test
     void extractionRequestSendsTheExtractionBudgetAndTheSameReasoningEffort() throws Exception {
-        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{}\"},\"finish_reason\":\"stop\"}]}");
+        stubOk(
+                "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{}\"},\"finish_reason\":\"stop\"}]}");
 
         api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x"));
 
@@ -150,8 +162,7 @@ class OpenAiApiClientTest {
                 + "\"usage\":{\"completion_tokens\":16384,"
                 + "\"completion_tokens_details\":{\"reasoning_tokens\":16383}}}");
 
-        assertThatThrownBy(() ->
-                api.transcribeImage("gpt-4o-mini", new byte[]{1}, "image/jpeg"))
+        assertThatThrownBy(() -> api.transcribeImage("gpt-4o-mini", new byte[] {1}, "image/jpeg"))
                 .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("finishReason=length")
                 .hasMessageContaining("reasoningTokens=16383")
@@ -162,8 +173,7 @@ class OpenAiApiClientTest {
     void emptyContentStaysTolerantWhenTheGatewayOmitsUsage() throws Exception {
         stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null}}]}");
 
-        assertThatThrownBy(() ->
-                api.transcribeImage("gpt-4o-mini", new byte[]{1}, "image/jpeg"))
+        assertThatThrownBy(() -> api.transcribeImage("gpt-4o-mini", new byte[] {1}, "image/jpeg"))
                 .isInstanceOf(OpenAiApiException.class)
                 .hasMessageContaining("finishReason=absent")
                 .hasMessageContaining("completionTokens=unknown");
@@ -171,7 +181,8 @@ class OpenAiApiClientTest {
 
     @Test
     void returnsAssistantContentOn2xx() throws Exception {
-        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"merchant\\\":\\\"X\\\"}\"},\"finish_reason\":\"stop\"}]}");
+        stubOk(
+                "{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"merchant\\\":\\\"X\\\"}\"},\"finish_reason\":\"stop\"}]}");
 
         String content = api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x"));
 
@@ -237,7 +248,7 @@ class OpenAiApiClientTest {
 
     @Test
     void receiptInputImageFactoryCarriesImageFields() {
-        byte[] bytes = new byte[]{1, 2, 3};
+        byte[] bytes = new byte[] {1, 2, 3};
         ReceiptInput input = ReceiptInput.image("gpt-4o-mini", bytes, "image/png");
 
         assertThat(input.model()).isEqualTo("gpt-4o-mini");
@@ -261,7 +272,7 @@ class OpenAiApiClientTest {
         // The override matters: two ReceiptInputs with the same
         // image bytes must compare as equal even when constructed
         // independently.
-        byte[] bytes = new byte[]{1, 2, 3};
+        byte[] bytes = new byte[] {1, 2, 3};
         ReceiptInput a = ReceiptInput.image("gpt-4o-mini", bytes, "image/png");
         ReceiptInput b = ReceiptInput.image("gpt-4o-mini", bytes.clone(), "image/png");
 
@@ -271,8 +282,8 @@ class OpenAiApiClientTest {
 
     @Test
     void receiptInputEqualsDistinguishesDifferentBytes() {
-        ReceiptInput a = ReceiptInput.image("gpt-4o-mini", new byte[]{1, 2, 3}, "image/png");
-        ReceiptInput b = ReceiptInput.image("gpt-4o-mini", new byte[]{4, 5, 6}, "image/png");
+        ReceiptInput a = ReceiptInput.image("gpt-4o-mini", new byte[] {1, 2, 3}, "image/png");
+        ReceiptInput b = ReceiptInput.image("gpt-4o-mini", new byte[] {4, 5, 6}, "image/png");
 
         assertThat(a).isNotEqualTo(b);
     }
@@ -283,7 +294,7 @@ class OpenAiApiClientTest {
         // override distinguishes them (otherwise a record carrying
         // pdfText would compare as equal to one carrying image bytes,
         // since both would have non-null content fields).
-        ReceiptInput image = ReceiptInput.image("gpt-4o-mini", new byte[]{1, 2, 3}, "image/png");
+        ReceiptInput image = ReceiptInput.image("gpt-4o-mini", new byte[] {1, 2, 3}, "image/png");
         ReceiptInput text = ReceiptInput.pdfText("gpt-4o-mini", "MERCADONA");
 
         assertThat(image).isNotEqualTo(text);
@@ -294,8 +305,7 @@ class OpenAiApiClientTest {
     void receiptInputToStringShowsByteCountNotRawBytes() {
         // Critical: the bytes may contain a receipt image — toString
         // must not dump them into a log line.
-        ReceiptInput input = ReceiptInput.image("gpt-4o-mini",
-                new byte[]{(byte) 0x89, 'P', 'N', 'G'}, "image/png");
+        ReceiptInput input = ReceiptInput.image("gpt-4o-mini", new byte[] {(byte) 0x89, 'P', 'N', 'G'}, "image/png");
 
         String rendered = input.toString();
         assertThat(rendered).contains("4 bytes").contains("image/png").contains("gpt-4o-mini");
@@ -348,8 +358,7 @@ class OpenAiApiClientTest {
      * {@code sendChatRequest} calls.
      */
     private ChatCompletionCreateParams captureParams() throws Exception {
-        ArgumentCaptor<ChatCompletionCreateParams> cap =
-                ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
+        ArgumentCaptor<ChatCompletionCreateParams> cap = ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
         verify(completionsRaw).create(cap.capture());
         return cap.getValue();
     }

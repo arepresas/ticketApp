@@ -1,19 +1,18 @@
 package com.ticketapp.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.ticketapp.domain.Product;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
+import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.time.Instant;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies V23, which made {@code products.unit} {@code NOT NULL}, and
@@ -46,8 +45,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
         // Liquibase splits `--changeset ticketapp:<id>` into an author
         // column and an id column, so the filter is on the id half.
         List<String> ids = jdbc.queryForList(
-                "SELECT id FROM databasechangelog WHERE author = 'ticketapp' AND id LIKE '20261011%'",
-                String.class);
+                "SELECT id FROM databasechangelog WHERE author = 'ticketapp' AND id LIKE '20261011%'", String.class);
 
         assertThat(ids).containsExactly("20261011120100-products-unit-not-null");
     }
@@ -57,8 +55,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     void unitColumnRejectsNull() {
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES ('Rice', 'rice', NULL, now())"""))
-                .hasMessageContaining("unit");
+                VALUES ('Rice', 'rice', NULL, now())""")).hasMessageContaining("unit");
     }
 
     @Test
@@ -66,8 +63,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     void unitColumnIsNotNull() {
         String nullable = jdbc.queryForObject("""
                 SELECT is_nullable FROM information_schema.columns
-                WHERE table_name = 'products' AND column_name = 'unit'""",
-                String.class);
+                WHERE table_name = 'products' AND column_name = 'unit'""", String.class);
 
         assertThat(nullable).isEqualTo("NO");
     }
@@ -75,15 +71,12 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     @Test
     @DisplayName("the repository writes a unit and reads the same one back")
     void repositoryRoundTripsAUnit() {
-        Product piece = repository.save(
-                new Product(0L, "Rice", "rice", QuantityUnit.UNIT, Instant.now()));
-        Product weight = repository.save(
-                new Product(0L, "Flour", "flour", QuantityUnit.KG, Instant.now()));
+        Product piece = repository.save(new Product(0L, "Rice", "rice", QuantityUnit.UNIT, Instant.now()));
+        Product weight = repository.save(new Product(0L, "Flour", "flour", QuantityUnit.KG, Instant.now()));
 
         assertThat(piece.unit()).isEqualTo(QuantityUnit.UNIT);
         assertThat(weight.unit()).isEqualTo(QuantityUnit.KG);
-        assertThat(jdbc.queryForObject(
-                "SELECT unit FROM products WHERE id = ?", String.class, piece.id()))
+        assertThat(jdbc.queryForObject("SELECT unit FROM products WHERE id = ?", String.class, piece.id()))
                 .isEqualTo("unit");
     }
 
@@ -100,8 +93,7 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
     void legacyLabelIsRejectedByTheType() {
         assertThatThrownBy(() -> jdbc.update("""
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES ('Milk 1L', 'milk 1l', 'L', now())"""))
-                .hasMessageContaining("quantity_unit");
+                VALUES ('Milk 1L', 'milk 1l', 'L', now())""")).hasMessageContaining("quantity_unit");
     }
 
     @Test
@@ -111,8 +103,6 @@ class ProductsUnitMigrationIT extends AbstractPostgresIntegrationTest {
         // character varying here; the type is the point.
         assertThat(jdbc.queryForObject("""
                 SELECT udt_name FROM information_schema.columns
-                WHERE table_name = 'products' AND column_name = 'unit'""",
-                String.class))
-                .isEqualTo("quantity_unit");
+                WHERE table_name = 'products' AND column_name = 'unit'""", String.class)).isEqualTo("quantity_unit");
     }
 }

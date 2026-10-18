@@ -24,11 +24,7 @@ package com.ticketapp.domain.ai;
  * and the model id are unambiguously associated with the result
  * they produced.
  */
-public record ReceiptExtraction(
-        ReceiptExtractionResult result,
-        String rawReply,
-        String model
-) {
+public record ReceiptExtraction(ReceiptExtractionResult result, String rawReply, String model) {
     public ReceiptExtraction {
         if (result == null) throw new NullPointerException("result");
         if (model == null || model.isBlank()) {

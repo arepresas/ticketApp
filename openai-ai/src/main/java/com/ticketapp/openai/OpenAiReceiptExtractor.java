@@ -45,8 +45,7 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
     private final OpenAiProperties properties;
 
     @Override
-    public ReceiptExtraction extract(ReceiptExtractionRequest request)
-            throws ReceiptExtractionException {
+    public ReceiptExtraction extract(ReceiptExtractionRequest request) throws ReceiptExtractionException {
         OpenAiApiClient.ReceiptInput input = toInput(request);
 
         final String raw;
@@ -56,20 +55,20 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
             // The provider knows whether its own failure is worth
             // another attempt, so it says so here instead of leaving
             // the caller to read the status code.
-            throw new ReceiptExtractionException(mae.statusCode(),
+            throw new ReceiptExtractionException(
+                    mae.statusCode(),
                     isRetriableStatus(mae.statusCode()),
                     "the extraction failed: " + mae.getMessage(),
-                    safeMessageFor(mae.statusCode()), mae);
+                    safeMessageFor(mae.statusCode()),
+                    mae);
         } catch (IOException ioe) {
-            throw new ReceiptExtractionException(0, true,
-                    "the extraction failed: " + ioe.getMessage(),
-                    "the AI provider could not be reached", ioe);
+            throw new ReceiptExtractionException(
+                    0, true, "the extraction failed: " + ioe.getMessage(), "the AI provider could not be reached", ioe);
         } catch (RuntimeException e) {
             // Provider-call bugs (mock failures in tests, SDK transport
             // errors) are retriable provider failures — wrap them so the
             // orchestrator marks ON_ERROR.
-            throw new ReceiptExtractionException(0, true,
-                    "the extraction failed: " + e.getMessage(), e);
+            throw new ReceiptExtractionException(0, true, "the extraction failed: " + e.getMessage(), e);
         }
         try {
             // Parsing and domain validation are inside the guard on
@@ -81,8 +80,8 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
         } catch (ReceiptExtractionException e) {
             throw e;
         } catch (RuntimeException e) {
-            throw new ReceiptExtractionException(0, false,
-                    "the provider returned an unusable extraction: " + e.getMessage(), e);
+            throw new ReceiptExtractionException(
+                    0, false, "the provider returned an unusable extraction: " + e.getMessage(), e);
         }
     }
 
@@ -92,11 +91,9 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
      * so the orchestration method stays a linear read of the failure
      * contract instead of a nest of preprocessing branches.
      */
-    private OpenAiApiClient.ReceiptInput toInput(ReceiptExtractionRequest request)
-            throws ReceiptExtractionException {
+    private OpenAiApiClient.ReceiptInput toInput(ReceiptExtractionRequest request) throws ReceiptExtractionException {
         if (!request.isPdf()) {
-            return OpenAiApiClient.ReceiptInput.image(properties.model(),
-                    request.content(), request.contentType());
+            return OpenAiApiClient.ReceiptInput.image(properties.model(), request.content(), request.contentType());
         }
 
         // PDF preprocessing is a provider concern: the provider's
@@ -115,8 +112,9 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
         // first. 200 DPI is high enough to keep small print legible;
         // the resulting PNG is sent through the same image_url branch
         // as a normal photo upload.
-        log.warn("PDF text extraction returned empty for {} bytes — "
-                + "rasterizing first page as PNG", request.content().length);
+        log.warn(
+                "PDF text extraction returned empty for {} bytes — " + "rasterizing first page as PNG",
+                request.content().length);
         byte[] pngBytes = rasterizeFirstPage(request.content());
         return OpenAiApiClient.ReceiptInput.image(properties.model(), pngBytes, "image/png");
     }
@@ -125,8 +123,7 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
         try {
             return pdfExtractor.extract(content);
         } catch (IOException ioe) {
-            throw new ReceiptExtractionException(0, false,
-                    "PDF text extraction failed: " + ioe.getMessage(), ioe);
+            throw new ReceiptExtractionException(0, false, "PDF text extraction failed: " + ioe.getMessage(), ioe);
         }
     }
 
@@ -135,15 +132,13 @@ public final class OpenAiReceiptExtractor implements ReceiptExtractor {
         try {
             pngBytes = pdfExtractor.rasterizeFirstPageAsPng(content);
         } catch (IOException ioe) {
-            throw new ReceiptExtractionException(0, false,
-                    "PDF rasterization failed: " + ioe.getMessage(), ioe);
+            throw new ReceiptExtractionException(0, false, "PDF rasterization failed: " + ioe.getMessage(), ioe);
         }
         if (pngBytes == null) {
             // Either empty bytes (caught at the call site
             // above) or zero-page document — both surface as
             // the same "nothing to extract" hard failure.
-            throw new ReceiptExtractionException(0, false,
-                    "PDF has no pages to rasterize");
+            throw new ReceiptExtractionException(0, false, "PDF has no pages to rasterize");
         }
         return pngBytes;
     }

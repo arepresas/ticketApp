@@ -14,8 +14,4 @@ package com.ticketapp.bff.api.dto;
  * explicit: the extraction is the other half of the same edit, not an
  * independent request.
  */
-public record UpdateTicketAndExtractionRequest(
-        String title,
-        String description,
-        UpdateExtractionRequest extraction) {
-}
+public record UpdateTicketAndExtractionRequest(String title, String description, UpdateExtractionRequest extraction) {}

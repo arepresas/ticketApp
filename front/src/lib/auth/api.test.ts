@@ -2,7 +2,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AuthApiError, exchangeIdToken, fetchMe, logout } from './api';
 import type { SessionResponse, AuthUser } from './types';
 
-const mockFetch = (responder: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>): void => {
+const mockFetch = (
+  responder: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+): void => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(responder);
 };
 

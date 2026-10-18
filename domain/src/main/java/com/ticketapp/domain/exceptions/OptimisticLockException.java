@@ -1,7 +1,5 @@
 package com.ticketapp.domain.exceptions;
 
-
-
 /**
  * Thrown when a guarded write loses a read-modify-write race: the
  * row's version moved underneath the caller between read and save.

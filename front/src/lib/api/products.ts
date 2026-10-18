@@ -9,13 +9,13 @@
 import type { QuantityUnit } from './quantityUnit';
 
 export class ProductApiError extends Error {
-	constructor(
-		message: string,
-		readonly status: number
-	) {
-		super(message);
-		this.name = 'ProductApiError';
-	}
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'ProductApiError';
+  }
 }
 
 /**
@@ -25,22 +25,22 @@ export class ProductApiError extends Error {
  * recompute the match status when the user picks an entry.
  */
 export type ProductSummary = {
-	id: number;
-	/** Display name as printed on past receipts. */
-	name: string;
-	/** Unit the catalogue stores this product under ("kg" or "unit"). */
-	unit: QuantityUnit;
-	/** Pre-rendered display label: "Name (kg)" or just "Name". */
-	label: string;
+  id: number;
+  /** Display name as printed on past receipts. */
+  name: string;
+  /** Unit the catalogue stores this product under ("kg" or "unit"). */
+  unit: QuantityUnit;
+  /** Pre-rendered display label: "Name (kg)" or just "Name". */
+  label: string;
 };
 
 const parseError = async (res: Response): Promise<string> => {
-	try {
-		const body = (await res.json()) as { message?: string; error?: string };
-		return body.message ?? body.error ?? `HTTP ${res.status}`;
-	} catch {
-		return `HTTP ${res.status}`;
-	}
+  try {
+    const body = (await res.json()) as { message?: string; error?: string };
+    return body.message ?? body.error ?? `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
 };
 
 /**
@@ -56,28 +56,28 @@ const parseError = async (res: Response): Promise<string> => {
  * @throws ProductApiError on 4xx/5xx.
  */
 export const searchProducts = async (
-	token: string,
-	name: string,
-	limit?: number
+  token: string,
+  name: string,
+  limit?: number
 ): Promise<ProductSummary[]> => {
-	const qs = new URLSearchParams();
-	qs.set('name', name);
-	if (limit !== undefined) qs.set('limit', String(limit));
+  const qs = new URLSearchParams();
+  qs.set('name', name);
+  if (limit !== undefined) qs.set('limit', String(limit));
 
-	const res = await fetch(`/api/products/search?${qs.toString()}`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (res.status === 401) {
-		// Mirror tickets.ts: surface a 401 to the auth host so the
-		// dashboard can clear the session and route back to landing.
-		if (typeof window !== 'undefined') {
-			window.dispatchEvent(new CustomEvent('auth:expired'));
-		}
-		throw new ProductApiError(await parseError(res), res.status);
-	}
-	if (!res.ok) {
-		throw new ProductApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as ProductSummary[];
+  const res = await fetch(`/api/products/search?${qs.toString()}`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (res.status === 401) {
+    // Mirror tickets.ts: surface a 401 to the auth host so the
+    // dashboard can clear the session and route back to landing.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:expired'));
+    }
+    throw new ProductApiError(await parseError(res), res.status);
+  }
+  if (!res.ok) {
+    throw new ProductApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as ProductSummary[];
 };

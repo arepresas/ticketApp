@@ -1,13 +1,11 @@
 package com.ticketapp.domain;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 /**
  * Product master row. Match key is {@code (normalised_name, unit)}
@@ -40,20 +38,17 @@ class ProductTest {
         // null here would put "Bread" and "Bread (unit)" into two
         // different match keys and split the catalogue in two.
         Instant now = Instant.now();
-        assertThrows(IllegalArgumentException.class,
-                () -> new Product(nextId(), "Bread", "bread", null, now));
+        assertThrows(IllegalArgumentException.class, () -> new Product(nextId(), "Bread", "bread", null, now));
     }
 
     @Test
     void constructorRejectsNullName() {
         Instant now = Instant.now();
-        assertThrows(NullPointerException.class,
-                () -> new Product(nextId(), null, null, QuantityUnit.UNIT, now));
+        assertThrows(NullPointerException.class, () -> new Product(nextId(), null, null, QuantityUnit.UNIT, now));
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

@@ -40,8 +40,7 @@ public record MonthlyTicketCount(YearMonth month, long count) {
      * @param to    last month of the series, inclusive
      * @param rows  sparse counts, typically straight from the adapter
      */
-    public static List<MonthlyTicketCount> complete(YearMonth from, YearMonth to,
-                                                    List<MonthlyTicketCount> rows) {
+    public static List<MonthlyTicketCount> complete(YearMonth from, YearMonth to, List<MonthlyTicketCount> rows) {
         if (from == null || to == null) {
             throw new IllegalArgumentException("from and to must not be null");
         }

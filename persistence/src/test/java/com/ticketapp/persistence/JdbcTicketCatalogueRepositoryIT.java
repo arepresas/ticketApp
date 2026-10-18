@@ -1,17 +1,13 @@
 package com.ticketapp.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.domain.TicketCatalogueRepository.TicketCatalogue;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Contract of {@link TicketCatalogueRepository} against a real
@@ -142,8 +138,7 @@ class JdbcTicketCatalogueRepositoryIT extends AbstractPostgresIntegrationTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

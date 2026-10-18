@@ -1,12 +1,15 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.bff.api.dto.ChangeStatusRequest;
-import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
+import com.ticketapp.bff.api.dto.ChangeStatusRequest;
+import com.ticketapp.bff.api.dto.ProductLineDto;
+import com.ticketapp.bff.api.dto.TicketResponse;
+import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
+import com.ticketapp.bff.api.dto.UpdateTicketAndExtractionRequest;
 import com.ticketapp.bff.api.dto.UpdateTicketRequest;
 import com.ticketapp.bff.application.TicketApplicationService;
 import com.ticketapp.bff.application.TicketEditService;
-import com.ticketapp.bff.api.dto.ProductLineDto;
+import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
@@ -14,13 +17,12 @@ import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.exceptions.ResourceNotFoundException;
-import com.ticketapp.bff.api.dto.UpdateExtractionRequest;
-import com.ticketapp.bff.api.dto.UpdateTicketAndExtractionRequest;
 import com.ticketapp.domain.identity.AuthenticatedUser;
-import com.ticketapp.bff.security.CurrentUser;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -28,20 +30,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.List;
-import java.util.Set;
-
-import java.util.stream.Collectors;
 
 /**
  * REST surface for tickets: lists, single reads, upload, metadata
@@ -122,10 +119,7 @@ public class TicketController {
         // currently feeding to the provider — useful for "is this
         // stuck?" triage while a long extract is in flight.
         Set<Ticket.Status> pending = Set.of(
-                Ticket.Status.OPEN,
-                Ticket.Status.IN_ANALYSIS,
-                Ticket.Status.IN_PROGRESS,
-                Ticket.Status.ON_ERROR);
+                Ticket.Status.OPEN, Ticket.Status.IN_ANALYSIS, Ticket.Status.IN_PROGRESS, Ticket.Status.ON_ERROR);
         return repository.findSummariesByStatusIn(pending, user.id()).stream()
                 .map(TicketResponse::of)
                 .collect(Collectors.toList());
@@ -137,7 +131,8 @@ public class TicketController {
         // Owner-scoped: returns 404 when the ticket doesn't exist OR
         // belongs to a different user. Same response shape for both
         // cases — never leak existence to another tenant.
-        return repository.findById(id, user.id())
+        return repository
+                .findById(id, user.id())
                 .map(t -> ResponseEntity.ok(TicketResponse.of(t)))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
     }
@@ -156,8 +151,8 @@ public class TicketController {
         // failed" from "pre-OCR row" from "AI disabled", so claiming
         // a status there would be a guess. The failure *reason* stays
         // in the log (see DocumentTextExtractionSyncService.Outcome).
-        return ResponseEntity.status(201).body(TicketResponse.of(
-                outcome.ticket(), outcome.status().name()));
+        return ResponseEntity.status(201)
+                .body(TicketResponse.of(outcome.ticket(), outcome.status().name()));
     }
 
     /**
@@ -168,8 +163,8 @@ public class TicketController {
      * different user.
      */
     @PatchMapping("/{id}/status")
-    public ResponseEntity<TicketResponse> changeStatus(@PathVariable long id,
-                                                       @RequestBody ChangeStatusRequest changeReq) {
+    public ResponseEntity<TicketResponse> changeStatus(
+            @PathVariable long id, @RequestBody ChangeStatusRequest changeReq) {
         AuthenticatedUser user = CurrentUser.get();
         Ticket updated = applicationService.changeStatus(id, user, changeReq.status());
         return ResponseEntity.ok(TicketResponse.of(updated));
@@ -190,15 +185,15 @@ public class TicketController {
      * <p>Owner-scoped: same 404 rule as the read paths.
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<TicketResponse> update(@PathVariable long id,
-                                                 @RequestBody UpdateTicketRequest body) {
+    public ResponseEntity<TicketResponse> update(@PathVariable long id, @RequestBody UpdateTicketRequest body) {
         // No null-body check: @RequestBody is required by default,
         // so Spring rejects a missing body before this runs.
         if (body.title() != null && body.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
         }
         AuthenticatedUser user = CurrentUser.get();
-        return repository.findById(id, user.id())
+        return repository
+                .findById(id, user.id())
                 .map(t -> {
                     Ticket next = t;
                     if (body.title() != null) {
@@ -233,21 +228,19 @@ public class TicketController {
      * answer for "does not exist" and "not yours".
      */
     @PutMapping("/{id}")
-    public ResponseEntity<TicketResponse> applyEdit(@PathVariable long id,
-                                                    @RequestBody UpdateTicketAndExtractionRequest body) {
+    public ResponseEntity<TicketResponse> applyEdit(
+            @PathVariable long id, @RequestBody UpdateTicketAndExtractionRequest body) {
         // No null-body check: @RequestBody is required by default, so
         // Spring rejects a missing body before this runs.
         if (body.title() != null && body.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title must not be blank");
         }
-        EditableFields extraction = body.extraction() == null
-                ? null
-                : toExtractionEdit(body.extraction());
+        EditableFields extraction = body.extraction() == null ? null : toExtractionEdit(body.extraction());
 
         AuthenticatedUser user = CurrentUser.get();
         try {
-            return ResponseEntity.ok(TicketResponse.of(editService.applyEdit(
-                    id, user.id(), body.title(), body.description(), extraction)));
+            return ResponseEntity.ok(TicketResponse.of(
+                    editService.applyEdit(id, user.id(), body.title(), body.description(), extraction)));
         } catch (ResourceNotFoundException e) {
             // 404, not the 422 the global domain handler would give.
             // Every other read and write path on this controller
@@ -275,36 +268,37 @@ public class TicketController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "totalAmount must be >= 0");
         }
         if (body.currency() == null || !body.currency().matches("[A-Za-z]{3}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "currency must be an ISO 4217 code (3 letters)");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "currency must be an ISO 4217 code (3 letters)");
         }
         List<ProductLineDto> lineDtos = body.products() == null ? List.of() : body.products();
         for (int i = 0; i < lineDtos.size(); i++) {
             ProductLineDto p = lineDtos.get(i);
             if (p == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "] must not be null");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "products[" + i + "] must not be null");
             }
             if (p.name() == null || p.name().isBlank()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "].name must not be blank");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "products[" + i + "].name must not be blank");
             }
             if (p.quantity() == null || p.quantity().signum() <= 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "products[" + i + "].quantity must be > 0");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "products[" + i + "].quantity must be > 0");
             }
         }
 
         List<TicketExtraction.ProductLine> lines = lineDtos.stream()
                 .map(p -> new TicketExtraction.ProductLine(
-                        p.name(), p.quantity(), QuantityUnit.fromLabel(p.unit()),
+                        p.name(),
+                        p.quantity(),
+                        QuantityUnit.fromLabel(p.unit()),
                         p.pricePerUnit() == null ? java.math.BigDecimal.ZERO : p.pricePerUnit(),
                         p.lineTotal() == null ? java.math.BigDecimal.ZERO : p.lineTotal()))
                 .toList();
         return new EditableFields(
-                body.merchant(), body.purchaseDate(),
+                body.merchant(),
+                body.purchaseDate(),
                 SpendCategory.fromExtractionValue(body.category()),
-                lines, body.totalAmount(), body.currency().toUpperCase(java.util.Locale.ROOT));
+                lines,
+                body.totalAmount(),
+                body.currency().toUpperCase(java.util.Locale.ROOT));
     }
 
     @DeleteMapping("/{id}")
@@ -351,8 +345,10 @@ public class TicketController {
             try {
                 mediaType = MediaType.parseMediaType(ticket.contentType());
             } catch (org.springframework.util.InvalidMimeTypeException e) {
-                log.warn("Ticket {} has malformed contentType '{}', falling back to octet-stream",
-                        ticket.id(), ticket.contentType());
+                log.warn(
+                        "Ticket {} has malformed contentType '{}', falling back to octet-stream",
+                        ticket.id(),
+                        ticket.contentType());
             }
         }
         // Force Content-Disposition: inline so the browser renders
@@ -362,8 +358,7 @@ public class TicketController {
         String filename = ticket.fileName() == null ? "ticket-" + ticket.id() : ticket.fileName();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(mediaType);
-        headers.set(HttpHeaders.CONTENT_DISPOSITION,
-                "inline; filename=\"" + filename.replace("\"", "") + "\"");
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename.replace("\"", "") + "\"");
         headers.setContentLength(bytes.length);
         return new ResponseEntity<>(bytes, headers, HttpStatus.OK);
     }

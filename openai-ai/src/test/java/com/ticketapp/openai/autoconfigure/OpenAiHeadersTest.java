@@ -1,11 +1,10 @@
 package com.ticketapp.openai.autoconfigure;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 
 /**
  * Tests for {@link OpenAiHeaders#parse(String)}.
@@ -36,24 +35,17 @@ class OpenAiHeadersTest {
     void parsesMultipleHeadersInOrder() {
         // LinkedHashMap preserves insertion order so the log line
         // listing header names is deterministic.
-        Map<String, String> parsed = OpenAiHeaders.parse(
-                "X-OpenCode-Session=ses-abc123,X-Org-Id=org-1");
+        Map<String, String> parsed = OpenAiHeaders.parse("X-OpenCode-Session=ses-abc123,X-Org-Id=org-1");
 
         assertThat(parsed)
-                .containsExactly(
-                        Map.entry("X-OpenCode-Session", "ses-abc123"),
-                        Map.entry("X-Org-Id", "org-1"));
+                .containsExactly(Map.entry("X-OpenCode-Session", "ses-abc123"), Map.entry("X-Org-Id", "org-1"));
     }
 
     @Test
     void trimsWhitespaceAroundKeysAndValues() {
-        Map<String, String> parsed = OpenAiHeaders.parse(
-                "  X-Header = value-with-spaces ,  X-Other=other  ");
+        Map<String, String> parsed = OpenAiHeaders.parse("  X-Header = value-with-spaces ,  X-Other=other  ");
 
-        assertThat(parsed)
-                .containsExactly(
-                        Map.entry("X-Header", "value-with-spaces"),
-                        Map.entry("X-Other", "other"));
+        assertThat(parsed).containsExactly(Map.entry("X-Header", "value-with-spaces"), Map.entry("X-Other", "other"));
     }
 
     @Test
@@ -61,8 +53,7 @@ class OpenAiHeadersTest {
         // Some headers carry an empty value on purpose (e.g. Content-Length
         // defaults from a gateway). Treat the absence of `=` as the
         // malformed case, but `name=` is a valid empty value.
-        assertThat(OpenAiHeaders.parse("X-Empty=")).containsExactly(
-                Map.entry("X-Empty", ""));
+        assertThat(OpenAiHeaders.parse("X-Empty=")).containsExactly(Map.entry("X-Empty", ""));
     }
 
     @Test
@@ -82,8 +73,7 @@ class OpenAiHeadersTest {
 
     @Test
     void rejectsEntryThatIsOnlyEquals() {
-        assertThatThrownBy(() -> OpenAiHeaders.parse("=,"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> OpenAiHeaders.parse("=,")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

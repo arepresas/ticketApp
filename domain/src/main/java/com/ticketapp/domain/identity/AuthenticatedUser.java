@@ -2,7 +2,6 @@ package com.ticketapp.domain.identity;
 
 import java.time.Instant;
 
-
 /**
  * Domain-level representation of an authenticated user.
  *
@@ -16,5 +15,4 @@ public record AuthenticatedUser(
         String name,
         String pictureUrl,
         Instant createdAt,
-        Instant lastLoginAt
-) { }
+        Instant lastLoginAt) {}

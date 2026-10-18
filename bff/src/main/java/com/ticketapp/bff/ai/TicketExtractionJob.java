@@ -3,15 +3,13 @@ package com.ticketapp.bff.ai;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.Ticket.Status;
 import com.ticketapp.domain.TicketExtractionQueue;
+import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.dao.DataAccessException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
-import java.util.List;
 
 /**
  * Scheduled bean that drives the AI extraction pipeline (ADR 0006).
@@ -72,8 +70,10 @@ public class TicketExtractionJob {
         // cycle for nothing.
         int requeued = requeueAbandonedClaims();
         if (requeued > 0) {
-            log.warn("Re-queued {} ticket(s) abandoned in IN_ANALYSIS for more than {}",
-                    requeued, properties.staleAnalysisTimeout());
+            log.warn(
+                    "Re-queued {} ticket(s) abandoned in IN_ANALYSIS for more than {}",
+                    requeued,
+                    properties.staleAnalysisTimeout());
         }
 
         long started = System.currentTimeMillis();
@@ -103,13 +103,15 @@ public class TicketExtractionJob {
                 // reverts the ticket itself. Reaching here means the
                 // database is the problem: log it and bail on the
                 // rest of the batch, the next tick resumes.
-                log.error("Tick aborted after processing {} tickets: {}",
-                        processed, e.getMessage(), e);
+                log.error("Tick aborted after processing {} tickets: {}", processed, e.getMessage(), e);
                 break;
             }
         }
-        log.info("Extraction tick finished: processed={} candidates={} elapsedMs={}",
-                processed, candidates.size(), System.currentTimeMillis() - started);
+        log.info(
+                "Extraction tick finished: processed={} candidates={} elapsedMs={}",
+                processed,
+                candidates.size(),
+                System.currentTimeMillis() - started);
     }
 
     /**

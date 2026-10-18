@@ -1,9 +1,16 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.DashboardResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.domain.Ticket;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,11 +86,10 @@ class DashboardControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @LocalServerPort
     int port;
@@ -106,10 +112,13 @@ class DashboardControllerIT {
         // OAuth2 challenge header with an empty body — RFC 7807 applies
         // to failures the controller throws (`GlobalExceptionHandler`),
         // not to the filter chain that rejects before dispatch.
-        String body = web().get().uri("/api/dashboard")
+        String body = web().get()
+                .uri("/api/dashboard")
                 .exchange()
-                .expectStatus().isUnauthorized()
-                .expectHeader().exists(HttpHeaders.WWW_AUTHENTICATE)
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .exists(HttpHeaders.WWW_AUTHENTICATE)
                 .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
@@ -123,11 +132,14 @@ class DashboardControllerIT {
         // The missing-header case proves the chain runs; this proves it
         // rejects a token that is present but unusable, and that the SPA
         // cannot tell the two apart by accident.
-        web().get().uri("/api/dashboard")
+        web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer not-a-jwt")
                 .exchange()
-                .expectStatus().isUnauthorized()
-                .expectHeader().exists(HttpHeaders.WWW_AUTHENTICATE);
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .exists(HttpHeaders.WWW_AUTHENTICATE);
     }
 
     @Test
@@ -138,10 +150,12 @@ class DashboardControllerIT {
         seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food");
         seedTicketForCurrentUser(login.userId(), "open", Ticket.Status.OPEN, null, null, null);
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -162,24 +176,29 @@ class DashboardControllerIT {
         seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food",
                 LocalDate.of(2026, Month.JANUARY.getValue(), 12));
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
 
         assertThat(body).isNotNull();
-        assertThat(body.spendByCategory()).extracting(DashboardResponse.CategoryAmount::category)
+        assertThat(body.spendByCategory())
+                .extracting(DashboardResponse.CategoryAmount::category)
                 .containsExactly("food", "transport", "lodging", "pharmacy", "other");
         // Exact, not "isNotEmpty()": every month of the six-month window
         // in order, gap-filled, ending on the reporting month so the chart
         // is anchored to today rather than to the newest ticket. A window
         // that quietly grew to seven months, or lost February, fails here.
-        assertThat(body.ticketsPerMonth()).extracting(DashboardResponse.MonthlyTicket::month)
+        assertThat(body.ticketsPerMonth())
+                .extracting(DashboardResponse.MonthlyTicket::month)
                 .containsExactly("2026-01", "2026-02", "2026-03", "2026-04", "2026-05", REPORTING_MONTH);
-        assertThat(body.ticketsPerMonth()).extracting(DashboardResponse.MonthlyTicket::count)
+        assertThat(body.ticketsPerMonth())
+                .extracting(DashboardResponse.MonthlyTicket::count)
                 .containsExactly(1L, 0L, 0L, 0L, 0L, 0L);
     }
 
@@ -203,10 +222,12 @@ class DashboardControllerIT {
                 LocalDate.of(2026, Month.MAY.getValue(), 2));
         seedTicketForCurrentUser(owner, "jun-pending", Ticket.Status.OPEN, null, null, null);
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -237,9 +258,11 @@ class DashboardControllerIT {
 
         // The monthly axis counts extracted tickets only: June holds the
         // unextracted one and must still read zero.
-        assertThat(body.ticketsPerMonth()).extracting(DashboardResponse.MonthlyTicket::month)
+        assertThat(body.ticketsPerMonth())
+                .extracting(DashboardResponse.MonthlyTicket::month)
                 .containsExactly("2026-01", "2026-02", "2026-03", "2026-04", "2026-05", REPORTING_MONTH);
-        assertThat(body.ticketsPerMonth()).extracting(DashboardResponse.MonthlyTicket::count)
+        assertThat(body.ticketsPerMonth())
+                .extracting(DashboardResponse.MonthlyTicket::count)
                 .containsExactly(2L, 0L, 1L, 0L, 1L, 0L);
     }
 
@@ -255,10 +278,12 @@ class DashboardControllerIT {
         seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food",
                 LocalDate.of(2026, Month.MARCH.getValue(), 9));
 
-        String json = web().get().uri("/api/dashboard")
+        String json = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + login.token())
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
@@ -280,10 +305,12 @@ class DashboardControllerIT {
     void returnsZerosForEmptyAccount() {
         String token = loginAndGetTokenAndUser().token();
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -320,10 +347,12 @@ class DashboardControllerIT {
         seedTicketForCurrentUser(login.userId(), "gbp", Ticket.Status.DONE, "40.00", "GBP", "food");
         seedTicketForCurrentUser(login.userId(), "open-gbp", Ticket.Status.OPEN, null, null, null);
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -351,10 +380,12 @@ class DashboardControllerIT {
         // this is the test that would notice if it were not.
         seedUnrelatedUserWithTicket("theirs", "999.00");
 
-        DashboardResponse body = web().get().uri("/api/dashboard")
+        DashboardResponse body = web().get()
+                .uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(DashboardResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -395,14 +426,15 @@ class DashboardControllerIT {
      * created by an earlier test can carry the highest id and silently
      * receive the next test's tickets.
      */
-    private record Login(String token, long userId) {
-    }
+    private record Login(String token, long userId) {}
 
     private Login loginAndGetTokenAndUser() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -421,15 +453,20 @@ class DashboardControllerIT {
      * whenever the suite runs in a later month, and the monthly
      * assertions silently start reading zeros.
      */
-    private void seedTicketForCurrentUser(long ownerId, String title, Ticket.Status status,
-                                          String amount, String currency, String category) {
-        seedTicketForCurrentUser(ownerId, title, status, amount, currency, category,
-                LocalDate.ofInstant(NOW, ZoneOffset.UTC));
+    private void seedTicketForCurrentUser(
+            long ownerId, String title, Ticket.Status status, String amount, String currency, String category) {
+        seedTicketForCurrentUser(
+                ownerId, title, status, amount, currency, category, LocalDate.ofInstant(NOW, ZoneOffset.UTC));
     }
 
-    private void seedTicketForCurrentUser(long ownerId, String title, Ticket.Status status,
-                                          String amount, String currency, String category,
-                                          LocalDate purchaseDate) {
+    private void seedTicketForCurrentUser(
+            long ownerId,
+            String title,
+            Ticket.Status status,
+            String amount,
+            String currency,
+            String category,
+            LocalDate purchaseDate) {
         seedTicketFor(ownerId, title, status, amount, currency, category, purchaseDate);
     }
 
@@ -444,29 +481,33 @@ class DashboardControllerIT {
      * test was actually about.
      */
     private void seedUnrelatedUserWithTicket(String title, String amount) {
-        Long otherOwner = jdbc.queryForObject("""
+        Long otherOwner =
+                jdbc.queryForObject("""
                 INSERT INTO app_users (google_sub, email, name, created_at, last_login_at)
                 VALUES (?, ?, 'Someone Else', now(), now())
                 ON CONFLICT (google_sub) DO UPDATE
                     SET email = EXCLUDED.email, last_login_at = EXCLUDED.last_login_at
-                RETURNING id""",
-                Long.class, "unrelated-" + title, "unrelated-" + title + "@example.com");
-        seedTicketFor(otherOwner, title, Ticket.Status.DONE, amount, "EUR", "food",
-                LocalDate.ofInstant(NOW, ZoneOffset.UTC));
+                RETURNING id""", Long.class, "unrelated-" + title, "unrelated-" + title + "@example.com");
+        seedTicketFor(
+                otherOwner, title, Ticket.Status.DONE, amount, "EUR", "food", LocalDate.ofInstant(NOW, ZoneOffset.UTC));
     }
 
-    private void seedTicketFor(Long ownerId, String title, Ticket.Status status, String amount,
-                               String currency, String category) {
-        seedTicketFor(ownerId, title, status, amount, currency, category,
-                LocalDate.ofInstant(NOW, ZoneOffset.UTC));
+    private void seedTicketFor(
+            Long ownerId, String title, Ticket.Status status, String amount, String currency, String category) {
+        seedTicketFor(ownerId, title, status, amount, currency, category, LocalDate.ofInstant(NOW, ZoneOffset.UTC));
     }
 
-    private void seedTicketFor(Long ownerId, String title, Ticket.Status status, String amount,
-                               String currency, String category, LocalDate purchaseDate) {
+    private void seedTicketFor(
+            Long ownerId,
+            String title,
+            Ticket.Status status,
+            String amount,
+            String currency,
+            String category,
+            LocalDate purchaseDate) {
         Long ticketId = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
-                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""",
-                Long.class, ownerId, title, status.name());
+                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""", Long.class, ownerId, title, status.name());
         if (amount != null) {
             jdbc.update("""
                     INSERT INTO ticket_extractions
@@ -474,8 +515,7 @@ class DashboardControllerIT {
                          total_amount, currency, model, extracted_at,
                          raw_response_text, extraction_payload)
                     VALUES (?, 'Test Merchant', ?, ?::spend_category, '[]'::jsonb, ?, ?, 'test-model', now(),
-                            NULL, '{}'::jsonb)""",
-                    ticketId, purchaseDate, category, new BigDecimal(amount), currency);
+                            NULL, '{}'::jsonb)""", ticketId, purchaseDate, category, new BigDecimal(amount), currency);
         }
     }
 }

@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.time.Instant;
 import java.util.Arrays;
 
-
 /**
  * Pure domain entity. No framework annotations, no persistence concerns.
  *
@@ -33,8 +32,7 @@ public record Ticket(
         int attempts,
         Long shopId,
         String ocrText,
-        long version
-) {
+        long version) {
 
     public Ticket {
         if (title == null) throw new NullPointerException("title");
@@ -73,15 +71,25 @@ public record Ticket(
      * is preserved as-is — callers decide whether to use the upload's
      * original filename or a user-typed title.
      */
-    public static Ticket open(long ownerId,
-                              String title,
-                              String description,
-                              String contentType,
-                              String fileName,
-                              byte[] fileData) {
+    public static Ticket open(
+            long ownerId, String title, String description, String contentType, String fileName, byte[] fileData) {
         Instant now = Instant.now();
-        return new Ticket(0L, ownerId, title, description, Status.OPEN,
-                now, now, contentType, fileName, fileData, null, 0, null, null, 0);
+        return new Ticket(
+                0L,
+                ownerId,
+                title,
+                description,
+                Status.OPEN,
+                now,
+                now,
+                contentType,
+                fileName,
+                fileData,
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     /**
@@ -103,8 +111,22 @@ public record Ticket(
      */
     public Ticket withStatus(Status newStatus) {
         String cleared = (newStatus == Status.ON_ERROR) ? errorMessage : null;
-        return new Ticket(id, ownerId, title, description, newStatus, createdAt, Instant.now(),
-                contentType, fileName, fileData, cleared, attempts, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                newStatus,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                cleared,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -120,8 +142,22 @@ public record Ticket(
         if (newTitle == null || newTitle.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
         }
-        return new Ticket(id, ownerId, newTitle, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                newTitle,
+                description,
+                status,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -132,8 +168,22 @@ public record Ticket(
      */
     public Ticket withDescription(String newDescription) {
         String sanitized = newDescription == null ? "" : newDescription;
-        return new Ticket(id, ownerId, title, sanitized, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                sanitized,
+                status,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -152,9 +202,22 @@ public record Ticket(
      *                does not enforce a bound.
      */
     public Ticket markError(String message) {
-        return new Ticket(id, ownerId, title, description, Status.ON_ERROR,
-                createdAt, Instant.now(),
-                contentType, fileName, fileData, message, attempts, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                Status.ON_ERROR,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                message,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -171,8 +234,22 @@ public record Ticket(
      * would make the dashboard number harder to reason about.
      */
     public Ticket incrementAttempts() {
-        return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts + 1, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts + 1,
+                shopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -186,8 +263,22 @@ public record Ticket(
      * dashboard's sort picks up the change.
      */
     public Ticket withShopId(Long newShopId) {
-        return new Ticket(id, ownerId, title, description, status, createdAt, Instant.now(),
-                contentType, fileName, fileData, errorMessage, attempts, newShopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                Instant.now(),
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                newShopId,
+                ocrText,
+                version);
     }
 
     /**
@@ -206,8 +297,22 @@ public record Ticket(
      * for every image that happens to come back without text.
      */
     public Ticket withOcrText(String newOcrText) {
-        return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId, newOcrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                updatedAt,
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                newOcrText,
+                version);
     }
 
     /**
@@ -228,8 +333,22 @@ public record Ticket(
      * stamps 0 for a new row.
      */
     public Ticket withVersion(long newVersion) {
-        return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, newVersion);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                updatedAt,
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                newVersion);
     }
 
     @Override
@@ -255,9 +374,21 @@ public record Ticket(
 
     @Override
     public int hashCode() {
-        int h = java.util.Objects.hash(id, ownerId, title, description, status,
-                createdAt, updatedAt, contentType, fileName, errorMessage, attempts,
-                shopId, ocrText, version);
+        int h = java.util.Objects.hash(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                updatedAt,
+                contentType,
+                fileName,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                version);
         return 31 * h + Arrays.hashCode(fileData);
     }
 
@@ -313,7 +444,13 @@ public record Ticket(
      * </ul>
      */
     public enum Status {
-        OPEN, IN_ANALYSIS, IN_PROGRESS, ON_ERROR, DONE, CANCELLED, DELETED
+        OPEN,
+        IN_ANALYSIS,
+        IN_PROGRESS,
+        ON_ERROR,
+        DONE,
+        CANCELLED,
+        DELETED
     }
 
     /**
@@ -323,6 +460,21 @@ public record Ticket(
      * {@code save()}. Only the adapter calls this.
      */
     public Ticket withId(long newId) {
-        return new Ticket(newId, ownerId, title, description, status, createdAt, updatedAt, contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
+        return new Ticket(
+                newId,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                updatedAt,
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 }

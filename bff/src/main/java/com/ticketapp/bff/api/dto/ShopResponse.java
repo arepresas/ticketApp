@@ -1,9 +1,7 @@
 package com.ticketapp.bff.api.dto;
 
 import com.ticketapp.domain.Shop;
-
 import java.time.Instant;
-
 
 /**
  * Full read shape for shops — every column from {@link Shop}. The
@@ -20,8 +18,7 @@ public record ShopResponse(
         String phone,
         String taxId,
         String website,
-        Instant createdAt
-) {
+        Instant createdAt) {
     public static ShopResponse of(Shop shop) {
         return new ShopResponse(
                 shop.id(),

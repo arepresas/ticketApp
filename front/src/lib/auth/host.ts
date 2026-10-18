@@ -60,21 +60,21 @@ setupHistoryBridge();
  * from there.
  */
 window.addEventListener('auth:expired', () => {
-	clearSession();
-	try {
-		navigate({ kind: 'dashboard' });
-	} catch {
-		// Outside a browser (unit tests with no real router) —
-		// best-effort; clearing the session alone is the meaningful
-		// half of the contract.
-	}
+  clearSession();
+  try {
+    navigate({ kind: 'dashboard' });
+  } catch {
+    // Outside a browser (unit tests with no real router) —
+    // best-effort; clearing the session alone is the meaningful
+    // half of the contract.
+  }
 });
 
 export const dispose = (): void => {
-	unmount(instance);
-	target.remove();
+  unmount(instance);
+  target.remove();
 };
 
 if (import.meta.hot) {
-	import.meta.hot.dispose(dispose);
+  import.meta.hot.dispose(dispose);
 }

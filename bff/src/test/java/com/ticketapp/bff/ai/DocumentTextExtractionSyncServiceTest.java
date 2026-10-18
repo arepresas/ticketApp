@@ -1,17 +1,5 @@
 package com.ticketapp.bff.ai;
 
-import com.ticketapp.domain.Ticket;
-import com.ticketapp.domain.TicketRepository;
-import com.ticketapp.domain.ai.DocumentTextExtractionException;
-import com.ticketapp.domain.ai.DocumentTextExtractor;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -19,6 +7,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.ai.DocumentTextExtractionException;
+import com.ticketapp.domain.ai.DocumentTextExtractor;
+import java.time.Duration;
+import java.time.Instant;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link DocumentTextExtractionSyncService}.
@@ -81,22 +78,33 @@ class DocumentTextExtractionSyncServiceTest {
     }
 
     private static Ticket ticketWithFile(long id, String mime) {
-        return new Ticket(id, OWNER, "r.png", "", Ticket.Status.OPEN,
-                Instant.now(), Instant.now(),
-                mime, "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
+        return new Ticket(
+                id,
+                OWNER,
+                "r.png",
+                "",
+                Ticket.Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                mime,
+                "r.png",
+                new byte[] {1, 2, 3},
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     @Test
     void successfulOcrOnImageStampsTextOnTicketAndPersists() throws Exception {
         long id = nextId();
         Ticket png = ticketWithFile(id, "image/png");
-        when(extractor.extract(png.fileData(), "image/png"))
-                .thenReturn("MERCADONA\nTOTAL 12.34");
+        when(extractor.extract(png.fileData(), "image/png")).thenReturn("MERCADONA\nTOTAL 12.34");
 
         var outcome = service.runOnUpload(png);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
         assertThat(outcome.detail()).isNull();
         assertThat(outcome.ticket().ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34");
         verify(tickets).save(outcome.ticket());
@@ -111,13 +119,11 @@ class DocumentTextExtractionSyncServiceTest {
         // to the port.
         long id = nextId();
         Ticket pdf = ticketWithFile(id, "application/pdf");
-        when(extractor.extract(pdf.fileData(), "application/pdf"))
-                .thenReturn("MERCADONA\nTOTAL 12.34 EUR");
+        when(extractor.extract(pdf.fileData(), "application/pdf")).thenReturn("MERCADONA\nTOTAL 12.34 EUR");
 
         var outcome = service.runOnUpload(pdf);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
         assertThat(outcome.ticket().ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34 EUR");
         verify(tickets).save(outcome.ticket());
     }
@@ -135,11 +141,8 @@ class DocumentTextExtractionSyncServiceTest {
 
         var outcome = service.runOnUpload(png);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
-        assertThat(outcome.detail())
-                .contains("502")
-                .contains("the AI provider returned 502");
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.detail()).contains("502").contains("the AI provider returned 502");
         assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
     }
@@ -152,13 +155,11 @@ class DocumentTextExtractionSyncServiceTest {
         // absorbs it.
         long id = nextId();
         Ticket png = ticketWithFile(id, "image/png");
-        when(extractor.extract(any(), anyString()))
-                .thenThrow(new RuntimeException("SDK surprise"));
+        when(extractor.extract(any(), anyString())).thenThrow(new RuntimeException("SDK surprise"));
 
         var outcome = service.runOnUpload(png);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
         assertThat(outcome.detail()).contains("RuntimeException").contains("SDK surprise");
         assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
@@ -176,8 +177,7 @@ class DocumentTextExtractionSyncServiceTest {
 
         var outcome = service.runOnUpload(png);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.NO_TEXT);
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.NO_TEXT);
         assertThat(outcome.detail()).contains("no readable text");
         assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets).save(outcome.ticket());
@@ -189,9 +189,22 @@ class DocumentTextExtractionSyncServiceTest {
         // the entity unchanged is correct — the dashboard will show
         // the "no preview" state for metadata-only rows regardless.
         long id = nextId();
-        Ticket meta = new Ticket(id, OWNER, "title", "", Ticket.Status.OPEN,
-                Instant.now(), Instant.now(),
-                null, null, null, null, 0, null, null, 0);
+        Ticket meta = new Ticket(
+                id,
+                OWNER,
+                "title",
+                "",
+                Ticket.Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                null,
+                null,
+                null,
+                null,
+                0,
+                null,
+                null,
+                0);
 
         var outcome = service.runOnUpload(meta);
 
@@ -207,9 +220,22 @@ class DocumentTextExtractionSyncServiceTest {
         // contentType on every upload; a future controller-path
         // bypass that lands null must skip OCR rather than throw.
         long id = nextId();
-        Ticket broken = new Ticket(id, OWNER, "x", "", Ticket.Status.OPEN,
-                Instant.now(), Instant.now(),
-                null, "name.bin", new byte[]{1, 2, 3}, null, 0, null, null, 0);
+        Ticket broken = new Ticket(
+                id,
+                OWNER,
+                "x",
+                "",
+                Ticket.Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                null,
+                "name.bin",
+                new byte[] {1, 2, 3},
+                null,
+                0,
+                null,
+                null,
+                0);
 
         var outcome = service.runOnUpload(broken);
 
@@ -229,24 +255,21 @@ class DocumentTextExtractionSyncServiceTest {
         // operator to size the budget without opening the SDK trace.
         Ticket png = ticketWithFile(nextId(), "image/png");
         when(extractor.extract(png.fileData(), "image/png"))
-                .thenThrow(new DocumentTextExtractionException(502,
+                .thenThrow(new DocumentTextExtractionException(
+                        502,
                         "provider returned empty content (finishReason=length, "
                                 + "completionTokens=16384, reasoningTokens=16383)"));
 
         var outcome = service.runOnUpload(png);
 
-        assertThat(outcome.status())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
-        assertThat(outcome.detail())
-                .contains("finishReason=length")
-                .contains("reasoningTokens=16383");
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.detail()).contains("finishReason=length").contains("reasoningTokens=16383");
         assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

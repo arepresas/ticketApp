@@ -59,8 +59,7 @@ public final class OpenAiDocumentTextExtractor implements DocumentTextExtractor 
     private final PdfTextExtractor pdfExtractor;
 
     @Override
-    public String extract(byte[] bytes, String contentType)
-            throws DocumentTextExtractionException {
+    public String extract(byte[] bytes, String contentType) throws DocumentTextExtractionException {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("document bytes must not be empty");
         }
@@ -78,8 +77,7 @@ public final class OpenAiDocumentTextExtractor implements DocumentTextExtractor 
         // unknown media types; reaching here means a future
         // controller-path bypass. Fail loud rather than silently
         // return null.
-        throw new DocumentTextExtractionException(0,
-                "Unsupported content type for OCR: " + contentType);
+        throw new DocumentTextExtractionException(0, "Unsupported content type for OCR: " + contentType);
     }
 
     /**
@@ -89,22 +87,17 @@ public final class OpenAiDocumentTextExtractor implements DocumentTextExtractor 
      * stays in one method and the top-level {@link #extract} stays
      * flat.
      */
-    private String extractFromImage(byte[] bytes, String mime)
-            throws DocumentTextExtractionException {
+    private String extractFromImage(byte[] bytes, String mime) throws DocumentTextExtractionException {
         try {
-            String text = client.transcribeImage(
-                    properties.model(), bytes, mime);
+            String text = client.transcribeImage(properties.model(), bytes, mime);
             return collapseEmptyToNull(text);
         } catch (OpenAiApiClient.OpenAiApiException mae) {
-            throw new DocumentTextExtractionException(mae.statusCode(),
-                    "OCR failed: " + mae.getMessage(), mae);
+            throw new DocumentTextExtractionException(mae.statusCode(), "OCR failed: " + mae.getMessage(), mae);
         } catch (java.io.IOException ioe) {
-            throw new DocumentTextExtractionException(0,
-                    "OCR I/O failure: " + ioe.getMessage(), ioe);
+            throw new DocumentTextExtractionException(0, "OCR I/O failure: " + ioe.getMessage(), ioe);
         } catch (RuntimeException e) {
-            throw new DocumentTextExtractionException(0,
-                    "OCR failed (" + e.getClass().getSimpleName()
-                            + "): " + e.getMessage(), e);
+            throw new DocumentTextExtractionException(
+                    0, "OCR failed (" + e.getClass().getSimpleName() + "): " + e.getMessage(), e);
         }
     }
 
@@ -124,27 +117,25 @@ public final class OpenAiDocumentTextExtractor implements DocumentTextExtractor 
      * {@link DocumentTextExtractionException} with status 0 — no
      * provider call happened, the failure is user-supplied input.
      */
-    private String extractFromPdf(byte[] bytes)
-            throws DocumentTextExtractionException {
+    private String extractFromPdf(byte[] bytes) throws DocumentTextExtractionException {
         String pdfText;
         try {
             pdfText = pdfExtractor.extract(bytes);
         } catch (java.io.IOException ioe) {
             // PDFBox I/O — don't blame the model.
-            throw new DocumentTextExtractionException(0,
-                    "PDF text extraction failed: " + ioe.getMessage(), ioe);
+            throw new DocumentTextExtractionException(0, "PDF text extraction failed: " + ioe.getMessage(), ioe);
         }
         if (pdfText != null && !pdfText.isBlank()) {
             return pdfText;
         }
-        log.info("PDF text extraction returned empty for {} bytes — "
-                + "falling back to rasterize + vision OCR", bytes.length);
+        log.info(
+                "PDF text extraction returned empty for {} bytes — " + "falling back to rasterize + vision OCR",
+                bytes.length);
         byte[] png;
         try {
             png = pdfExtractor.rasterizeFirstPageAsPng(bytes);
         } catch (java.io.IOException ioe) {
-            throw new DocumentTextExtractionException(0,
-                    "PDF rasterization failed: " + ioe.getMessage(), ioe);
+            throw new DocumentTextExtractionException(0, "PDF rasterization failed: " + ioe.getMessage(), ioe);
         }
         if (png == null) {
             // Zero-page PDF or empty input — nothing to OCR. The

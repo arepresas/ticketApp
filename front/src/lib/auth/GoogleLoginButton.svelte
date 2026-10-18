@@ -151,5 +151,9 @@
     {/if}
   </div>
 {:else}
-  <div bind:this={buttonHost} class="inline-flex items-center" aria-label="Sign in with Google"></div>
+  <div
+    bind:this={buttonHost}
+    class="inline-flex items-center"
+    aria-label="Sign in with Google"
+  ></div>
 {/if}

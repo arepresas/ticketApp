@@ -1,29 +1,26 @@
 package com.ticketapp.persistence;
 
-import com.ticketapp.domain.Ticket;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.SpendCategory;
+import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.EditableFields;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Optional;
-
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * IT coverage for {@link JdbcTicketExtractionRepository}.
@@ -58,12 +55,23 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
     @Test
     void saveAndFindRoundTripsProductsJsonb() {
         Ticket t = tickets.save(Ticket.open(owner, "r.png", "receipt"));
-        TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
+        TicketExtraction ext = sample(
+                t.id(),
+                "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4),
                 List.of(
-                        new ProductLine("Tomatoes", new BigDecimal("1.200"), QuantityUnit.KG,
-                                new BigDecimal("2.50"), new BigDecimal("3.00")),
-                        new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
-                                new BigDecimal("1.20"), new BigDecimal("1.20"))));
+                        new ProductLine(
+                                "Tomatoes",
+                                new BigDecimal("1.200"),
+                                QuantityUnit.KG,
+                                new BigDecimal("2.50"),
+                                new BigDecimal("3.00")),
+                        new ProductLine(
+                                "Bread",
+                                new BigDecimal("1"),
+                                QuantityUnit.UNIT,
+                                new BigDecimal("1.20"),
+                                new BigDecimal("1.20"))));
 
         extractions.save(ext);
 
@@ -88,16 +96,14 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // The pre-check in the orchestrator stays the fast path;
         // this is the safety net for the race window.
         Ticket t = tickets.save(Ticket.open(owner, "r.png", "r"));
-        TicketExtraction ext = sample(t.id(), "Mercadona",
-                LocalDate.of(2026, Month.JULY, 4), List.of());
+        TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4), List.of());
 
         extractions.save(ext);
         extractions.save(ext);
 
         assertThat(extractions.findByTicketId(t.id(), owner)).isPresent();
         Integer rows = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?",
-                Integer.class, t.id());
+                "SELECT COUNT(*) FROM ticket_extractions WHERE ticket_id = ?", Integer.class, t.id());
         assertThat(rows).isEqualTo(1);
     }
 
@@ -107,20 +113,37 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // survive a user edit untouched — "extracted by X on Y" stays
         // truthful — and the write must not need to read them first.
         Ticket t = tickets.save(Ticket.open(owner, "r.png", "r"));
-        TicketExtraction ext = sample(t.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4),
-                List.of(new ProductLine("Tomatoes", new BigDecimal("1.200"), QuantityUnit.KG,
-                        new BigDecimal("2.50"), new BigDecimal("3.00"))));
+        TicketExtraction ext = sample(
+                t.id(),
+                "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4),
+                List.of(new ProductLine(
+                        "Tomatoes",
+                        new BigDecimal("1.200"),
+                        QuantityUnit.KG,
+                        new BigDecimal("2.50"),
+                        new BigDecimal("3.00"))));
         extractions.save(ext);
         // Read back before the edit: comparing against what the
         // database itself stored avoids asserting on sub-microsecond
         // timestamp rounding, which is not what this test is about.
         TicketExtraction before = extractions.findByTicketId(t.id(), owner).orElseThrow();
 
-        boolean updated = extractions.updateEditableFields(t.id(), owner, new EditableFields(
-                "Lidl", LocalDate.of(2026, Month.JULY, 5), SpendCategory.FOOD,
-                List.of(new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
-                        new BigDecimal("1.20"), new BigDecimal("1.20"))),
-                new BigDecimal("1.20"), "EUR"));
+        boolean updated = extractions.updateEditableFields(
+                t.id(),
+                owner,
+                new EditableFields(
+                        "Lidl",
+                        LocalDate.of(2026, Month.JULY, 5),
+                        SpendCategory.FOOD,
+                        List.of(new ProductLine(
+                                "Bread",
+                                new BigDecimal("1"),
+                                QuantityUnit.UNIT,
+                                new BigDecimal("1.20"),
+                                new BigDecimal("1.20"))),
+                        new BigDecimal("1.20"),
+                        "EUR"));
 
         assertThat(updated).isTrue();
         TicketExtraction got = extractions.findByTicketId(t.id(), owner).orElseThrow();
@@ -141,22 +164,28 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         // has not read yet reports the same false. The BFF maps both
         // to the one 404 every other path uses.
         Ticket mine = tickets.save(Ticket.open(owner, "mine.png", "r"));
-        extractions.save(sample(mine.id(), "Mercadona",
-                LocalDate.of(2026, Month.JULY, 4), List.of()));
+        extractions.save(sample(mine.id(), "Mercadona", LocalDate.of(2026, Month.JULY, 4), List.of()));
         long stranger = seedOwner(jdbc, "owner-it-stranger");
         Ticket theirs = tickets.save(Ticket.open(stranger, "theirs.png", "r"));
-        extractions.save(sample(theirs.id(), "Theirs",
-                LocalDate.of(2026, Month.JULY, 4), List.of()));
+        extractions.save(sample(theirs.id(), "Theirs", LocalDate.of(2026, Month.JULY, 4), List.of()));
         Ticket unextracted = tickets.save(Ticket.open(owner, "bare.png", "r"));
-        EditableFields edit = new EditableFields("Hijacked",
-                LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
-                new BigDecimal("0"), "EUR");
+        EditableFields edit = new EditableFields(
+                "Hijacked",
+                LocalDate.of(2026, Month.JULY, 4),
+                SpendCategory.FOOD,
+                List.of(),
+                new BigDecimal("0"),
+                "EUR");
 
         assertThat(extractions.updateEditableFields(theirs.id(), owner, edit)).isFalse();
-        assertThat(extractions.updateEditableFields(unextracted.id(), owner, edit)).isFalse();
+        assertThat(extractions.updateEditableFields(unextracted.id(), owner, edit))
+                .isFalse();
 
         // Neither refusal wrote anything.
-        assertThat(extractions.findByTicketId(theirs.id(), stranger).orElseThrow().merchant())
+        assertThat(extractions
+                        .findByTicketId(theirs.id(), stranger)
+                        .orElseThrow()
+                        .merchant())
                 .isEqualTo("Theirs");
         assertThat(extractions.findByTicketId(unextracted.id(), owner)).isEmpty();
     }
@@ -182,10 +211,17 @@ class JdbcTicketExtractionRepositoryIT extends AbstractPostgresIntegrationTest {
         assertThat(extractions.findByTicketId(t.id(), owner)).isPresent();
     }
 
-    private static TicketExtraction sample(long id, String merchant, LocalDate date,
-                                           List<ProductLine> products) {
-        return new TicketExtraction(id, merchant, date, SpendCategory.FOOD, products,
-                new BigDecimal("26.18"), "EUR", "gpt-4o-mini", Instant.now(),
+    private static TicketExtraction sample(long id, String merchant, LocalDate date, List<ProductLine> products) {
+        return new TicketExtraction(
+                id,
+                merchant,
+                date,
+                SpendCategory.FOOD,
+                products,
+                new BigDecimal("26.18"),
+                "EUR",
+                "gpt-4o-mini",
+                Instant.now(),
                 "{\"choices\":[]}");
     }
 }

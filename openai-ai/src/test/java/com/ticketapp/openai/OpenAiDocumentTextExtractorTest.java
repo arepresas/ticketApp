@@ -1,12 +1,5 @@
 package com.ticketapp.openai;
 
-import com.ticketapp.domain.ai.DocumentTextExtractionException;
-import com.ticketapp.openai.OpenAiApiClient.OpenAiApiException;
-import com.ticketapp.openai.autoconfigure.OpenAiProperties;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +8,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.ticketapp.domain.ai.DocumentTextExtractionException;
+import com.ticketapp.openai.OpenAiApiClient.OpenAiApiException;
+import com.ticketapp.openai.autoconfigure.OpenAiProperties;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link OpenAiDocumentTextExtractor}.
@@ -48,7 +47,7 @@ import static org.mockito.Mockito.when;
  */
 class OpenAiDocumentTextExtractorTest {
 
-    private static final byte[] ONE_PIXEL_PNG = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
+    private static final byte[] ONE_PIXEL_PNG = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
 
     private OpenAiApiClient client;
     private PdfTextExtractor pdfExtractor;
@@ -88,16 +87,14 @@ class OpenAiDocumentTextExtractorTest {
         // Some browsers / clients send `IMAGE/PNG` rather than
         // `image/png`. The port normalises to lowercase before
         // branching so the vision path still picks up.
-        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
-                .thenReturn("hi");
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png")).thenReturn("hi");
 
         assertThat(extractor.extract(ONE_PIXEL_PNG, "IMAGE/PNG")).isEqualTo("hi");
     }
 
     @Test
     void imageEmptyProviderReplyCollapsesToNull() throws Exception {
-        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
-                .thenReturn("   \n  ");
+        when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png")).thenReturn("   \n  ");
 
         assertThat(extractor.extract(ONE_PIXEL_PNG, "image/png")).isNull();
     }
@@ -111,8 +108,7 @@ class OpenAiDocumentTextExtractorTest {
         // The cheap PDFBox route must win when the PDF has text —
         // no model round-trip, less token burn, faster response.
         byte[] pdfBytes = "%PDF-1.4 fake".getBytes();
-        when(pdfExtractor.extract(pdfBytes))
-                .thenReturn("MERCADONA\nTOTAL 12.34 EUR");
+        when(pdfExtractor.extract(pdfBytes)).thenReturn("MERCADONA\nTOTAL 12.34 EUR");
 
         String got = extractor.extract(pdfBytes, "application/pdf");
 
@@ -127,11 +123,10 @@ class OpenAiDocumentTextExtractorTest {
         // extractor rasterizes the first page and feeds the PNG to
         // the same vision call that images use.
         byte[] pdfBytes = "%PDF-1.4 fake".getBytes();
-        byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};
+        byte[] pngBytes = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
         when(pdfExtractor.extract(pdfBytes)).thenReturn("   ");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdfBytes)).thenReturn(pngBytes);
-        when(client.transcribeImage("gpt-4o-mini", pngBytes, "image/png"))
-                .thenReturn("OCR FROM RASTERIZED PNG");
+        when(client.transcribeImage("gpt-4o-mini", pngBytes, "image/png")).thenReturn("OCR FROM RASTERIZED PNG");
 
         String got = extractor.extract(pdfBytes, "application/pdf");
 
@@ -160,14 +155,12 @@ class OpenAiDocumentTextExtractorTest {
         // failure. Status 0 lets the BFF log/return without
         // attributing it to the provider.
         byte[] pdfBytes = "%PDF-1.4 garbled".getBytes();
-        when(pdfExtractor.extract(pdfBytes))
-                .thenThrow(new java.io.IOException("malformed PDF trailer"));
+        when(pdfExtractor.extract(pdfBytes)).thenThrow(new java.io.IOException("malformed PDF trailer"));
 
         assertThatThrownBy(() -> extractor.extract(pdfBytes, "application/pdf"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isZero();
                     assertThat(ex.getMessage()).contains("malformed PDF trailer");
                 });
@@ -180,14 +173,12 @@ class OpenAiDocumentTextExtractorTest {
         // status-0 conditions — no provider call happened.
         byte[] pdfBytes = "%PDF-1.4 image-only".getBytes();
         when(pdfExtractor.extract(pdfBytes)).thenReturn("");
-        when(pdfExtractor.rasterizeFirstPageAsPng(pdfBytes))
-                .thenThrow(new java.io.IOException("PDFRenderer bombed"));
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdfBytes)).thenThrow(new java.io.IOException("PDFRenderer bombed"));
 
         assertThatThrownBy(() -> extractor.extract(pdfBytes, "application/pdf"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isZero();
                     assertThat(ex.getMessage()).contains("rasterization failed");
                 });
@@ -198,16 +189,14 @@ class OpenAiDocumentTextExtractorTest {
     // ------------------------------------------------------------------
 
     @Test
-    void providerHttpErrorSurfacesAsDocumentTextExtractionExceptionWithStatus()
-            throws Exception {
+    void providerHttpErrorSurfacesAsDocumentTextExtractionExceptionWithStatus() throws Exception {
         when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenThrow(new OpenAiApiException(502, "the provider returned 502: provider overloaded"));
 
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isEqualTo(502);
                     assertThat(ex.getMessage()).contains("502");
                 });
@@ -221,23 +210,20 @@ class OpenAiDocumentTextExtractorTest {
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isZero();
                 });
     }
 
     @Test
-    void unexpectedRuntimeExceptionStillBecomesDocumentTextExtractionException()
-            throws Exception {
+    void unexpectedRuntimeExceptionStillBecomesDocumentTextExtractionException() throws Exception {
         when(client.transcribeImage("gpt-4o-mini", ONE_PIXEL_PNG, "image/png"))
                 .thenThrow(new IllegalStateException("boom"));
 
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "image/png"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isZero();
                 });
     }
@@ -250,16 +236,13 @@ class OpenAiDocumentTextExtractorTest {
     void emptyBytesAreRejectedSynchronously() {
         assertThatThrownBy(() -> extractor.extract(new byte[0], "image/png"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> extractor.extract(null, "image/png"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> extractor.extract(null, "image/png")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void blankContentTypeIsRejectedSynchronously() {
-        assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, null))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "  "))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "  ")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -270,8 +253,7 @@ class OpenAiDocumentTextExtractorTest {
         assertThatThrownBy(() -> extractor.extract(ONE_PIXEL_PNG, "video/mp4"))
                 .isInstanceOf(DocumentTextExtractionException.class)
                 .satisfies(t -> {
-                    DocumentTextExtractionException ex =
-                            (DocumentTextExtractionException) t;
+                    DocumentTextExtractionException ex = (DocumentTextExtractionException) t;
                     assertThat(ex.statusCode()).isZero();
                     assertThat(ex.getMessage()).contains("Unsupported");
                 });

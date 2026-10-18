@@ -1,7 +1,5 @@
 package com.ticketapp.domain.exceptions;
 
-
-
 /**
  * A row the caller addressed by id (or by owner-scoped lookup) is
  * not there.

@@ -1,14 +1,13 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.domain.identity.AuthenticatedUser;
-import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.bff.api.dto.ShopResponse;
 import com.ticketapp.bff.api.dto.UpdateShopRequest;
+import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
+import com.ticketapp.domain.identity.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,8 +17,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-
 
 /**
  * REST surface for the shop master catalogue.
@@ -79,8 +76,8 @@ public class ShopController {
      * normalisation. The user typed it, we trust it.
      */
     @PatchMapping("/{id}")
-    public ResponseEntity<ShopResponse> patch(@PathVariable long id,
-                                              @RequestBody(required = false) UpdateShopRequest body) {
+    public ResponseEntity<ShopResponse> patch(
+            @PathVariable long id, @RequestBody(required = false) UpdateShopRequest body) {
         // CurrentUser.get() throws 401 by itself, so there is no
         // null case to guard here.
         AuthenticatedUser user = CurrentUser.get();
@@ -93,12 +90,12 @@ public class ShopController {
             // can't accidentally round-trip a "save" with nothing
             // to save. The 400 is friendlier than a 200 that did
             // nothing.
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "request body must include at least one contact field to update");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "request body must include at least one contact field to update");
         }
         if (body.country() != null && body.country().length() != 2) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "country must be an ISO 3166-1 alpha-2 code (2 letters)");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "country must be an ISO 3166-1 alpha-2 code (2 letters)");
         }
         return shops.findById(id)
                 .map(existing -> {
@@ -111,8 +108,11 @@ public class ShopController {
                             body.taxId(),
                             body.website());
                     Shop saved = shops.save(patched);
-                    log.info("User {} patched shop {} ({} contact fields updated)",
-                            user.id(), saved.id(), countApplied(body));
+                    log.info(
+                            "User {} patched shop {} ({} contact fields updated)",
+                            user.id(),
+                            saved.id(),
+                            countApplied(body));
                     return ResponseEntity.ok(ShopResponse.of(saved));
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -121,13 +121,12 @@ public class ShopController {
     private static int countApplied(UpdateShopRequest body) {
         int n = 0;
         if (body.addressLine() != null) n++;
-        if (body.postalCode()  != null) n++;
-        if (body.city()        != null) n++;
-        if (body.country()     != null) n++;
-        if (body.phone()       != null) n++;
-        if (body.taxId()       != null) n++;
-        if (body.website()     != null) n++;
+        if (body.postalCode() != null) n++;
+        if (body.city() != null) n++;
+        if (body.country() != null) n++;
+        if (body.phone() != null) n++;
+        if (body.taxId() != null) n++;
+        if (body.website() != null) n++;
         return n;
     }
-
 }

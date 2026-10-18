@@ -2,7 +2,6 @@ package com.ticketapp.domain;
 
 import java.util.Optional;
 
-
 /**
  * Outbound port for {@link TicketExtraction} persistence. Defined by
  * the domain; infrastructure implements it with JDBC. The contract is
@@ -67,6 +66,5 @@ public interface TicketExtractionRepository {
      *         {@code false} when the ticket has no extraction row or
      *         belongs to another owner
      */
-    boolean updateEditableFields(long ticketId, long ownerId,
-                                 TicketExtraction.EditableFields fields);
+    boolean updateEditableFields(long ticketId, long ownerId, TicketExtraction.EditableFields fields);
 }

@@ -1,7 +1,10 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.failureinjection.FailingExtractionUpdateConfig;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,10 +14,6 @@ import org.springframework.http.MediaType;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Proves the {@code @Transactional} boundary on
@@ -43,25 +42,25 @@ class TicketEditRollbackIT extends AbstractTicketEditIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @Test
     @DisplayName("rolls back the metadata write when the extraction update fails")
     void rollsBackBothWrites() {
-        long ticketId = seedTicketWithExtraction(
-                "Original title", "Original description", "Mercadona", "25.28");
+        long ticketId = seedTicketWithExtraction("Original title", "Original description", "Mercadona", "25.28");
         Map<String, String> extractionBefore = extractionSnapshot(ticketId);
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(editBody("Weekly shop", "edited by hand", "Should Not Persist", "45.60"))
                 .exchange()
-                .expectStatus().is5xxServerError();
+                .expectStatus()
+                .is5xxServerError();
 
         assertThat(storedTitle(ticketId))
                 .as("metadata write must not survive the failed extraction update")

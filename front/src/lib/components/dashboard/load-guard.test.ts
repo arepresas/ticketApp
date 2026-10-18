@@ -11,68 +11,68 @@ import { describe, expect, it } from 'vitest';
 import { createLoadGuard } from './load-guard';
 
 describe('createLoadGuard', () => {
-	it('hands out strictly increasing generations', () => {
-		const guard = createLoadGuard();
+  it('hands out strictly increasing generations', () => {
+    const guard = createLoadGuard();
 
-		const first = guard.begin();
-		const second = guard.begin();
+    const first = guard.begin();
+    const second = guard.begin();
 
-		expect(second.generation).toBeGreaterThan(first.generation);
-	});
+    expect(second.generation).toBeGreaterThan(first.generation);
+  });
 
-	it('treats only the newest generation as current', () => {
-		const guard = createLoadGuard();
+  it('treats only the newest generation as current', () => {
+    const guard = createLoadGuard();
 
-		const first = guard.begin();
-		expect(guard.isCurrent(first.generation)).toBe(true);
+    const first = guard.begin();
+    expect(guard.isCurrent(first.generation)).toBe(true);
 
-		const second = guard.begin();
-		expect(guard.isCurrent(first.generation)).toBe(false);
-		expect(guard.isCurrent(second.generation)).toBe(true);
-	});
+    const second = guard.begin();
+    expect(guard.isCurrent(first.generation)).toBe(false);
+    expect(guard.isCurrent(second.generation)).toBe(true);
+  });
 
-	// The regression this module exists for: a load that finds no token
-	// returns early without fetching anything, and used to leave the
-	// previous request "current" — so a late response repainted the
-	// previous user's totals over the signed-out state.
-	it('a load that issues no request still invalidates the one in flight', () => {
-		const guard = createLoadGuard();
+  // The regression this module exists for: a load that finds no token
+  // returns early without fetching anything, and used to leave the
+  // previous request "current" — so a late response repainted the
+  // previous user's totals over the signed-out state.
+  it('a load that issues no request still invalidates the one in flight', () => {
+    const guard = createLoadGuard();
 
-		const inFlight = guard.begin();
-		// `begin()` first, then the caller discovers there is no token and
-		// returns without ever awaiting anything.
-		const signedOut = guard.begin();
+    const inFlight = guard.begin();
+    // `begin()` first, then the caller discovers there is no token and
+    // returns without ever awaiting anything.
+    const signedOut = guard.begin();
 
-		expect(guard.isCurrent(inFlight.generation)).toBe(false);
-		expect(guard.isCurrent(signedOut.generation)).toBe(true);
-	});
+    expect(guard.isCurrent(inFlight.generation)).toBe(false);
+    expect(guard.isCurrent(signedOut.generation)).toBe(true);
+  });
 
-	it('aborts the superseded request so its 401 can never expire a new session', () => {
-		const guard = createLoadGuard();
+  it('aborts the superseded request so its 401 can never expire a new session', () => {
+    const guard = createLoadGuard();
 
-		const first = guard.begin();
-		expect(first.signal.aborted).toBe(false);
+    const first = guard.begin();
+    expect(first.signal.aborted).toBe(false);
 
-		guard.begin();
+    guard.begin();
 
-		expect(first.signal.aborted).toBe(true);
-	});
+    expect(first.signal.aborted).toBe(true);
+  });
 
-	it('aborts cancels the in-flight request and invalidates its handle', () => {
-		const guard = createLoadGuard();
+  it('aborts cancels the in-flight request and invalidates its handle', () => {
+    const guard = createLoadGuard();
 
-		const handle = guard.begin();
-		guard.abort();
+    const handle = guard.begin();
+    guard.abort();
 
-		expect(handle.signal.aborted).toBe(true);
-		expect(guard.isCurrent(handle.generation)).toBe(false);
-	});
+    expect(handle.signal.aborted).toBe(true);
+    expect(guard.isCurrent(handle.generation)).toBe(false);
+  });
 
-	it('does not abort the request it just started', () => {
-		const guard = createLoadGuard();
+  it('does not abort the request it just started', () => {
+    const guard = createLoadGuard();
 
-		const handle = guard.begin();
+    const handle = guard.begin();
 
-		expect(handle.signal.aborted).toBe(false);
-	});
+    expect(handle.signal.aborted).toBe(false);
+  });
 });

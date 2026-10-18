@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-
 /**
  * One line of a receipt, normalised. A ticket that bought a
  * product at a specific quantity and price-per-unit. Multiple
@@ -45,8 +44,7 @@ public record LineTicket(
         BigDecimal quantity,
         BigDecimal lineTotal,
         Instant createdAt,
-        Instant updatedAt
-) {
+        Instant updatedAt) {
     public LineTicket {
         if (quantity == null) throw new NullPointerException("quantity");
         if (lineTotal == null) throw new NullPointerException("lineTotal");

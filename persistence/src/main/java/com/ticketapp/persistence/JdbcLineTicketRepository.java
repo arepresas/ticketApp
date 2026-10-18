@@ -2,14 +2,13 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.LineTicket;
 import com.ticketapp.domain.LineTicketRepository;
+import java.sql.PreparedStatement;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-
-import java.sql.PreparedStatement;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * JDBC implementation of {@link LineTicketRepository}. Plain SQL, no ORM.
@@ -35,8 +34,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
     // Qualified with the alias used by FIND_BY_TICKET_SQL, which
     // joins tickets to apply the owner filter.
     private static final String LINE_COLS =
-            "l.id, l.ticket_id, l.product_id, l.price_id, " +
-            "l.quantity, l.line_total, l.created_at, l.updated_at";
+            "l.id, l.ticket_id, l.product_id, l.price_id, " + "l.quantity, l.line_total, l.created_at, l.updated_at";
 
     private static final String UPSERT_SQL = """
             INSERT INTO line_tickets
@@ -52,11 +50,9 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             """;
 
     private static final String FIND_SQL =
-            "SELECT " + LINE_COLS + " FROM line_tickets l " +
-            "WHERE l.ticket_id = :ticket AND l.product_id = :product";
+            "SELECT " + LINE_COLS + " FROM line_tickets l " + "WHERE l.ticket_id = :ticket AND l.product_id = :product";
 
-    private static final String DELETE_BY_TICKET_SQL =
-            "DELETE FROM line_tickets WHERE ticket_id = ?";
+    private static final String DELETE_BY_TICKET_SQL = "DELETE FROM line_tickets WHERE ticket_id = ?";
 
     @Override
     public void deleteByTicketId(long ticketId) {
@@ -65,9 +61,7 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
 
     @Override
     public Optional<LineTicket> findByTicketAndProduct(long ticketId, long productId) {
-        var params = new MapSqlParameterSource()
-                .addValue("ticket", ticketId)
-                .addValue("product", productId);
+        var params = new MapSqlParameterSource().addValue("ticket", ticketId).addValue("product", productId);
         var rows = namedJdbc.query(FIND_SQL, params, (rs, n) -> mapLine(rs));
         return rows.stream().findFirst();
     }
@@ -81,36 +75,37 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
     // Owner-scoped: the join to tickets is the tenant filter, so a
     // line can only be read by the ticket's owner.
     private static final String FIND_BY_TICKET_SQL =
-            "SELECT " + LINE_COLS + " FROM line_tickets l" +
-            " JOIN tickets t ON t.id = l.ticket_id" +
-            " WHERE l.ticket_id = :ticket AND t.owner_id = :owner" +
-            " ORDER BY l.created_at ASC, l.id ASC";
+            "SELECT " + LINE_COLS + " FROM line_tickets l" + " JOIN tickets t ON t.id = l.ticket_id"
+                    + " WHERE l.ticket_id = :ticket AND t.owner_id = :owner"
+                    + " ORDER BY l.created_at ASC, l.id ASC";
 
     @Override
     public List<LineTicket> findByTicketId(long ticketId, long ownerId) {
         return namedJdbc.query(
                 FIND_BY_TICKET_SQL,
-                new MapSqlParameterSource()
-                        .addValue("ticket", ticketId)
-                        .addValue("owner", ownerId),
+                new MapSqlParameterSource().addValue("ticket", ticketId).addValue("owner", ownerId),
                 (rs, _) -> mapLine(rs));
     }
 
     @Override
     public LineTicket save(LineTicket line) {
-return jdbc.query(
-                con -> {
-                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
-                ps.setLong(1, line.ticketId());
-                ps.setLong(2, line.productId());
-                ps.setLong(3, line.priceId());
-                ps.setBigDecimal(4, line.quantity());
-                ps.setBigDecimal(5, line.lineTotal());
-                ps.setTimestamp(6, java.sql.Timestamp.from(line.createdAt()));
-                ps.setTimestamp(7, java.sql.Timestamp.from(line.updatedAt()));
-                    return ps;
-                },
-                (rs, n) -> line.withId(rs.getLong(1))).stream().findFirst().orElse(line);
+        return jdbc
+                .query(
+                        con -> {
+                            PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                            ps.setLong(1, line.ticketId());
+                            ps.setLong(2, line.productId());
+                            ps.setLong(3, line.priceId());
+                            ps.setBigDecimal(4, line.quantity());
+                            ps.setBigDecimal(5, line.lineTotal());
+                            ps.setTimestamp(6, java.sql.Timestamp.from(line.createdAt()));
+                            ps.setTimestamp(7, java.sql.Timestamp.from(line.updatedAt()));
+                            return ps;
+                        },
+                        (rs, n) -> line.withId(rs.getLong(1)))
+                .stream()
+                .findFirst()
+                .orElse(line);
     }
 
     private static LineTicket mapLine(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -124,7 +119,6 @@ return jdbc.query(
         var updatedAtOdt = rs.getObject("updated_at", java.time.OffsetDateTime.class);
         var createdAt = createdAtOdt != null ? createdAtOdt.toInstant() : java.time.Instant.now();
         var updatedAt = updatedAtOdt != null ? updatedAtOdt.toInstant() : createdAt;
-        return new LineTicket(id, ticketId, productId, priceId,
-                quantity, lineTotal, createdAt, updatedAt);
+        return new LineTicket(id, ticketId, productId, priceId, quantity, lineTotal, createdAt, updatedAt);
     }
 }

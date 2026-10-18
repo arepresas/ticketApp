@@ -1,15 +1,21 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.ChangeStatusRequest;
 import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.auth.AuthController;
-import com.ticketapp.domain.identity.AuthenticatedUser;
-import com.ticketapp.domain.identity.SessionRepository;
 import com.ticketapp.bff.auth.TestGoogleConfig;
-import com.ticketapp.domain.identity.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtractionQueue;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import com.ticketapp.domain.identity.SessionRepository;
+import com.ticketapp.domain.identity.UserRepository;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,13 +35,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Cross-tenant isolation IT for {@link TicketController}.
@@ -60,12 +59,11 @@ class TicketOwnershipIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     @LocalServerPort
     int port;
@@ -97,18 +95,18 @@ class TicketOwnershipIT {
     }
 
     private WebTestClient web() {
-        return WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     /** Log in with the Google stub — returns a Bearer for the
      * implicitly-upserted "stub" user. */
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -125,8 +123,7 @@ class TicketOwnershipIT {
      * {@code sub} / {@code jti} claims.
      */
     private String createUserAndGetToken(String googleSub, String email, String name) {
-        AuthenticatedUser user = users.upsertFromGoogle(
-                googleSub, email, name, null);
+        AuthenticatedUser user = users.upsertFromGoogle(googleSub, email, name, null);
         return tokenFor(user);
     }
 
@@ -150,14 +147,14 @@ class TicketOwnershipIT {
                 .subject(Long.toString(user.id()))
                 .id(jti.toString())
                 .build();
-        Jwt jwt = jwtEncoder.encode(JwtEncoderParameters.from(
-                JwsHeader.with(MacAlgorithm.HS256).build(), claims));
+        Jwt jwt = jwtEncoder.encode(
+                JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims));
         return jwt.getTokenValue();
     }
 
     private Ticket seedTicket(long ownerId, String title) {
-        return tickets.save(Ticket.open(ownerId, title, "test",
-                "application/pdf", title + ".pdf", new byte[]{1, 2, 3}));
+        return tickets.save(
+                Ticket.open(ownerId, title, "test", "application/pdf", title + ".pdf", new byte[] {1, 2, 3}));
     }
 
     @Test
@@ -168,8 +165,7 @@ class TicketOwnershipIT {
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
         // User B must be created through upsertFromGoogle so its
         // session id matches the row id used on the ticket.
-        AuthenticatedUser userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other User", null);
+        AuthenticatedUser userB = users.upsertFromGoogle("google-sub-other", "other@example.com", "Other User", null);
         String tokenB = tokenFor(userB);
 
         Ticket a1 = seedTicket(userA.id(), "a1.pdf");
@@ -177,26 +173,32 @@ class TicketOwnershipIT {
         Ticket b1 = seedTicket(userB.id(), "b1.pdf");
 
         // User A: only a1 and a2.
-        List<TicketResponse> listA = web().get().uri("/api/tickets")
+        List<TicketResponse> listA = web().get()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(listA).extracting(TicketResponse::id)
+        assertThat(listA)
+                .extracting(TicketResponse::id)
                 .containsExactlyInAnyOrder(a1.id(), a2.id())
                 .doesNotContain(b1.id());
 
         // User B: only b1.
-        List<TicketResponse> listB = web().get().uri("/api/tickets")
+        List<TicketResponse> listB = web().get()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(listB).extracting(TicketResponse::id)
+        assertThat(listB)
+                .extracting(TicketResponse::id)
                 .containsExactly(b1.id())
                 .doesNotContain(a1.id(), a2.id());
     }
@@ -205,34 +207,37 @@ class TicketOwnershipIT {
     void pendingReturnsOnlyTheCallersTickets() {
         String tokenA = loginAndGetToken();
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
-        AuthenticatedUser userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other User", null);
+        AuthenticatedUser userB = users.upsertFromGoogle("google-sub-other", "other@example.com", "Other User", null);
         String tokenB = tokenFor(userB);
 
         Ticket aOpen = seedTicket(userA.id(), "a-open.pdf");
         Ticket bOpen = seedTicket(userB.id(), "b-open.pdf");
 
-        List<TicketResponse> pendingA = web()
-                .get().uri("/api/tickets/pending")
+        List<TicketResponse> pendingA = web().get()
+                .uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(pendingA).extracting(TicketResponse::id)
+        assertThat(pendingA)
+                .extracting(TicketResponse::id)
                 .containsExactlyInAnyOrder(aOpen.id())
                 .doesNotContain(bOpen.id());
 
-        List<TicketResponse> pendingB = web()
-                .get().uri("/api/tickets/pending")
+        List<TicketResponse> pendingB = web().get()
+                .uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        assertThat(pendingB).extracting(TicketResponse::id)
+        assertThat(pendingB)
+                .extracting(TicketResponse::id)
                 .containsExactly(bOpen.id())
                 .doesNotContain(aOpen.id());
     }
@@ -245,38 +250,42 @@ class TicketOwnershipIT {
         // tell B that the id exists in some other tenant).
         String tokenA = loginAndGetToken();
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
-        String tokenB = createUserAndGetToken("google-sub-other",
-                "other@example.com", "Other User");
+        String tokenB = createUserAndGetToken("google-sub-other", "other@example.com", "Other User");
 
         Ticket aOnly = seedTicket(userA.id(), "secret.pdf");
 
-        web().get().uri("/api/tickets/{id}", aOnly.id())
+        web().get()
+                .uri("/api/tickets/{id}", aOnly.id())
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         // And the owner can still read it normally.
-        web().get().uri("/api/tickets/{id}", aOnly.id())
+        web().get()
+                .uri("/api/tickets/{id}", aOnly.id())
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
     }
 
     @Test
     void changeStatusReturns404ForOtherUsersTicket() {
         loginAndGetToken();
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
-        String tokenB = createUserAndGetToken("google-sub-other",
-                "other@example.com", "Other User");
+        String tokenB = createUserAndGetToken("google-sub-other", "other@example.com", "Other User");
 
         Ticket aOnly = seedTicket(userA.id(), "secret.pdf");
 
-        web().patch().uri("/api/tickets/{id}/status", aOnly.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", aOnly.id())
                 .header("authorization", "Bearer " + tokenB)
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .bodyValue(new ChangeStatusRequest(Ticket.Status.CANCELLED))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         // A's ticket status unchanged.
         assertThat(tickets.findById(aOnly.id(), userA.id()))
@@ -287,15 +296,16 @@ class TicketOwnershipIT {
     void deleteReturns404ForOtherUsersTicket() {
         loginAndGetToken();
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
-        String tokenB = createUserAndGetToken("google-sub-other",
-                "other@example.com", "Other User");
+        String tokenB = createUserAndGetToken("google-sub-other", "other@example.com", "Other User");
 
         Ticket aOnly = seedTicket(userA.id(), "secret.pdf");
 
-        web().delete().uri("/api/tickets/{id}", aOnly.id())
+        web().delete()
+                .uri("/api/tickets/{id}", aOnly.id())
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         // A's ticket still exists.
         assertThat(tickets.findById(aOnly.id(), userA.id())).isPresent();
@@ -311,8 +321,7 @@ class TicketOwnershipIT {
         loginAndGetToken();
         AuthenticatedUser userA = users.findByGoogleSub("google-sub-stub").orElseThrow();
         // Seed user B directly so the FK target is reachable.
-        AuthenticatedUser userB = users.upsertFromGoogle(
-                "google-sub-scheduler", "sched@example.com", "Sched", null);
+        AuthenticatedUser userB = users.upsertFromGoogle("google-sub-scheduler", "sched@example.com", "Sched", null);
 
         Ticket aOpen = seedTicket(userA.id(), "a-open.pdf");
         Ticket bOpen = seedTicket(userB.id(), "b-open.pdf");
@@ -320,7 +329,6 @@ class TicketOwnershipIT {
         // System-scope: returns both. Uses the queue port — the
         // owner-scoped repository cannot reach this path by type.
         List<Ticket> open = extractionQueue.findOpenForExtraction(10);
-        assertThat(open).extracting(Ticket::id)
-                .contains(aOpen.id(), bOpen.id());
+        assertThat(open).extracting(Ticket::id).contains(aOpen.id(), bOpen.id());
     }
 }

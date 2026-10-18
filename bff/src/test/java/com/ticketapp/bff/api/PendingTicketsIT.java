@@ -1,12 +1,15 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.ChangeStatusRequest;
 import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
-import com.ticketapp.domain.identity.UserRepository;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.identity.UserRepository;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,11 +24,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * IT coverage for {@code GET /api/tickets/pending}.
@@ -63,12 +61,11 @@ class PendingTicketsIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     @LocalServerPort
     int port;
@@ -101,18 +98,18 @@ class PendingTicketsIT {
     }
 
     private WebTestClient web() {
-        return WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     /** Log in with the stub token, return the Bearer to use on
      * subsequent requests. */
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -125,16 +122,14 @@ class PendingTicketsIT {
      * exists, so this never returns empty in a test. */
     private long ownerId() {
         return users.findByGoogleSub("google-sub-stub")
-                .orElseThrow(() -> new IllegalStateException(
-                        "test setup: user row not created — call loginAndGetToken first"))
+                .orElseThrow(() ->
+                        new IllegalStateException("test setup: user row not created — call loginAndGetToken first"))
                 .id();
     }
 
     @Test
     void rejectsUnauthenticatedRequests() {
-        web().get().uri("/api/tickets/pending")
-                .exchange()
-                .expectStatus().isUnauthorized();
+        web().get().uri("/api/tickets/pending").exchange().expectStatus().isUnauthorized();
     }
 
     @Test
@@ -142,17 +137,18 @@ class PendingTicketsIT {
         String token = loginAndGetToken();
         long owner = ownerId();
         // Seed only terminal rows for the owner — none should be returned.
-        tickets.save(Ticket.open(owner, "done.pdf", "done",
-                "application/pdf", "done.pdf", new byte[]{1})
+        tickets.save(Ticket.open(owner, "done.pdf", "done", "application/pdf", "done.pdf", new byte[] {1})
                 .withStatus(Ticket.Status.DONE));
-        tickets.save(Ticket.open(owner, "cancelled.pdf", "cancelled",
-                "application/pdf", "cancelled.pdf", new byte[]{2})
-                .withStatus(Ticket.Status.CANCELLED));
+        tickets.save(
+                Ticket.open(owner, "cancelled.pdf", "cancelled", "application/pdf", "cancelled.pdf", new byte[] {2})
+                        .withStatus(Ticket.Status.CANCELLED));
 
-        List<?> body = web().get().uri("/api/tickets/pending")
+        List<?> body = web().get()
+                .uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(List.class)
                 .returnResult()
                 .getResponseBody();
@@ -164,18 +160,18 @@ class PendingTicketsIT {
     void returnsOwnersOpenInProgressAndOnErrorTickets() {
         String token = loginAndGetToken();
         long owner = ownerId();
-        Ticket openOld = tickets.save(Ticket.open(owner, "old-open.pdf", "first",
-                "application/pdf", "old.pdf", new byte[]{1}));
-        Ticket inAnalysis = tickets.save(Ticket.open(owner, "ai-working.pdf", "second",
-                "application/pdf", "ai-working.pdf", new byte[]{2}));
-        Ticket inProgress = tickets.save(Ticket.open(owner, "wip.pdf", "third",
-                "application/pdf", "wip.pdf", new byte[]{3}));
-        Ticket errored = tickets.save(Ticket.open(owner, "broken.pdf", "fourth",
-                "application/pdf", "broken.pdf", new byte[]{4}));
-        Ticket done = tickets.save(Ticket.open(owner, "done.pdf", "fifth",
-                "application/pdf", "done.pdf", new byte[]{5}));
-        Ticket cancelled = tickets.save(Ticket.open(owner, "cancelled.pdf", "sixth",
-                "application/pdf", "cancelled.pdf", new byte[]{6}));
+        Ticket openOld =
+                tickets.save(Ticket.open(owner, "old-open.pdf", "first", "application/pdf", "old.pdf", new byte[] {1}));
+        Ticket inAnalysis = tickets.save(
+                Ticket.open(owner, "ai-working.pdf", "second", "application/pdf", "ai-working.pdf", new byte[] {2}));
+        Ticket inProgress =
+                tickets.save(Ticket.open(owner, "wip.pdf", "third", "application/pdf", "wip.pdf", new byte[] {3}));
+        Ticket errored = tickets.save(
+                Ticket.open(owner, "broken.pdf", "fourth", "application/pdf", "broken.pdf", new byte[] {4}));
+        Ticket done =
+                tickets.save(Ticket.open(owner, "done.pdf", "fifth", "application/pdf", "done.pdf", new byte[] {5}));
+        Ticket cancelled = tickets.save(
+                Ticket.open(owner, "cancelled.pdf", "sixth", "application/pdf", "cancelled.pdf", new byte[] {6}));
 
         tickets.save(inAnalysis.withStatus(Ticket.Status.IN_ANALYSIS));
         tickets.save(inProgress.withStatus(Ticket.Status.IN_PROGRESS));
@@ -183,10 +179,12 @@ class PendingTicketsIT {
         tickets.save(done.withStatus(Ticket.Status.DONE));
         tickets.save(cancelled.withStatus(Ticket.Status.CANCELLED));
 
-        List<TicketResponse> body = web().get().uri("/api/tickets/pending")
+        List<TicketResponse> body = web().get()
+                .uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -196,11 +194,12 @@ class PendingTicketsIT {
         // scheduler is currently feeding to the provider shows up in
         // the work queue — the operator sees a stuck "AI is working"
         // row right next to the genuine pending and failed tickets.
-        assertThat(body).extracting(TicketResponse::id)
-                .containsExactlyInAnyOrder(
-                        openOld.id(), inAnalysis.id(), inProgress.id(), errored.id())
+        assertThat(body)
+                .extracting(TicketResponse::id)
+                .containsExactlyInAnyOrder(openOld.id(), inAnalysis.id(), inProgress.id(), errored.id())
                 .doesNotContain(done.id(), cancelled.id());
-        assertThat(body).extracting(TicketResponse::status)
+        assertThat(body)
+                .extracting(TicketResponse::status)
                 .containsOnly(
                         Ticket.Status.OPEN,
                         Ticket.Status.IN_ANALYSIS,
@@ -211,14 +210,14 @@ class PendingTicketsIT {
 
         // Sanity-check the freshly-seeded rows so a broken assertion
         // above doesn't hide a missing-seed bug.
-        assertThat(tickets.findById(openOld.id(), owner)).hasValueSatisfying(
-                t -> assertThat(t.status()).isEqualTo(Ticket.Status.OPEN));
-        assertThat(tickets.findById(inAnalysis.id(), owner)).hasValueSatisfying(
-                t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_ANALYSIS));
-        assertThat(tickets.findById(inProgress.id(), owner)).hasValueSatisfying(
-                t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
-        assertThat(tickets.findById(errored.id(), owner)).hasValueSatisfying(
-                t -> assertThat(t.status()).isEqualTo(Ticket.Status.ON_ERROR));
+        assertThat(tickets.findById(openOld.id(), owner))
+                .hasValueSatisfying(t -> assertThat(t.status()).isEqualTo(Ticket.Status.OPEN));
+        assertThat(tickets.findById(inAnalysis.id(), owner))
+                .hasValueSatisfying(t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_ANALYSIS));
+        assertThat(tickets.findById(inProgress.id(), owner))
+                .hasValueSatisfying(t -> assertThat(t.status()).isEqualTo(Ticket.Status.IN_PROGRESS));
+        assertThat(tickets.findById(errored.id(), owner))
+                .hasValueSatisfying(t -> assertThat(t.status()).isEqualTo(Ticket.Status.ON_ERROR));
     }
 
     @Test
@@ -229,14 +228,16 @@ class PendingTicketsIT {
         // so the operator can read why without opening detail.
         String token = loginAndGetToken();
         long owner = ownerId();
-        Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "still pending",
-                "application/pdf", "broken.pdf", new byte[]{1})
-                .markError("the AI provider returned 500: bad gateway"));
+        Ticket failed = tickets.save(
+                Ticket.open(owner, "broken.pdf", "still pending", "application/pdf", "broken.pdf", new byte[] {1})
+                        .markError("the AI provider returned 500: bad gateway"));
 
-        List<TicketResponse> body = web().get().uri("/api/tickets/pending")
+        List<TicketResponse> body = web().get()
+                .uri("/api/tickets/pending")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -256,14 +257,16 @@ class PendingTicketsIT {
         // and the controller mapper (domain → JSON → wire).
         String token = loginAndGetToken();
         long owner = ownerId();
-        Ticket failed = tickets.save(Ticket.open(owner, "broken.pdf", "broken",
-                "application/pdf", "broken.pdf", new byte[]{1})
-                .markError("the AI provider returned 502: bad gateway"));
+        Ticket failed =
+                tickets.save(Ticket.open(owner, "broken.pdf", "broken", "application/pdf", "broken.pdf", new byte[] {1})
+                        .markError("the AI provider returned 502: bad gateway"));
 
-        TicketResponse body = web().get().uri("/api/tickets/" + failed.id())
+        TicketResponse body = web().get()
+                .uri("/api/tickets/" + failed.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -281,9 +284,9 @@ class PendingTicketsIT {
         // the operator re-enqueues the ticket.
         String token = loginAndGetToken();
         long owner = ownerId();
-        Ticket failed = tickets.save(Ticket.open(owner, "retry.pdf", "retry me",
-                "application/pdf", "retry.pdf", new byte[]{1})
-                .markError("the AI provider returned 500"));
+        Ticket failed =
+                tickets.save(Ticket.open(owner, "retry.pdf", "retry me", "application/pdf", "retry.pdf", new byte[] {1})
+                        .markError("the AI provider returned 500"));
 
         TicketResponse patched = web().patch()
                 .uri("/api/tickets/" + failed.id() + "/status")
@@ -291,7 +294,8 @@ class PendingTicketsIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new ChangeStatusRequest(Ticket.Status.OPEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();

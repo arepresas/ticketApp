@@ -7,16 +7,14 @@ import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.exceptions.ResourceNotFoundException;
 import com.ticketapp.persistence.ExtractionRowMapper.JsonbSupport;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
-
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /**
  * JDBC implementation of {@link TicketExtractionRepository}. Plain SQL,
@@ -35,9 +33,8 @@ import java.util.Optional;
 @Repository
 public class JdbcTicketExtractionRepository implements TicketExtractionRepository {
 
-    private static final String SELECT_COLS =
-            "ticket_id, merchant, purchase_date, category, products, total_amount, " +
-            "currency, model, extracted_at, raw_response_text, extraction_payload";
+    private static final String SELECT_COLS = "ticket_id, merchant, purchase_date, category, products, total_amount, "
+            + "currency, model, extracted_at, raw_response_text, extraction_payload";
 
     private static final String INSERT_SQL = """
             INSERT INTO ticket_extractions
@@ -94,7 +91,8 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
                         + " JOIN tickets t ON t.id = e.ticket_id"
                         + " WHERE e.ticket_id = ? AND t.owner_id = ?",
                 (rs, n) -> mapper.mapRow(rs),
-                ticketId, ownerId);
+                ticketId,
+                ownerId);
         return rows.stream().findFirst();
     }
 
@@ -126,15 +124,13 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
             return ps;
         });
         if (rows == 0) {
-            throw new ResourceNotFoundException("extraction for ticket",
-                    extraction.ticketId());
+            throw new ResourceNotFoundException("extraction for ticket", extraction.ticketId());
         }
         return extraction;
     }
 
     @Override
-    public boolean updateEditableFields(long ticketId, long ownerId,
-                                        TicketExtraction.EditableFields fields) {
+    public boolean updateEditableFields(long ticketId, long ownerId, TicketExtraction.EditableFields fields) {
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_EDITABLE_SQL);
             bindEditableFields(ps, 1, new EditableColumns(fields.merchant(),

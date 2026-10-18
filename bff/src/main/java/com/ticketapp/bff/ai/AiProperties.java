@@ -3,13 +3,11 @@ package com.ticketapp.bff.ai;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
-
+import java.time.Duration;
+import java.util.Objects;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
-
-import java.time.Duration;
-import java.util.Objects;
 
 /**
  * Provider-agnostic configuration for the AI extraction pipeline
@@ -43,8 +41,7 @@ public record AiProperties(
          * call timeout (30 s in prod) so a slow-but-alive worker is
          * never robbed of its claim.
          */
-        @DefaultValue("10m") Duration staleAnalysisTimeout
-) {
+        @DefaultValue("10m") Duration staleAnalysisTimeout) {
     public AiProperties {
         Objects.requireNonNull(staleAnalysisTimeout, "staleAnalysisTimeout is required");
         // @Scheduled consumes the raw property, so nothing else would
@@ -55,8 +52,7 @@ public record AiProperties(
         try {
             org.springframework.scheduling.support.CronExpression.parse(cron);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException(
-                    "ticketapp.ai.cron is not a valid cron expression: " + cron, e);
+            throw new IllegalArgumentException("ticketapp.ai.cron is not a valid cron expression: " + cron, e);
         }
     }
 }

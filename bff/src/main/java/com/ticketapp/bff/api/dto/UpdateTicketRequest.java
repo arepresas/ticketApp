@@ -10,4 +10,4 @@ import com.ticketapp.domain.Ticket;
  * normalised to {@code ""} by {@link Ticket#withDescription(String)}
  * when {@code null}.
  */
-public record UpdateTicketRequest(String title, String description) { }
+public record UpdateTicketRequest(String title, String description) {}
