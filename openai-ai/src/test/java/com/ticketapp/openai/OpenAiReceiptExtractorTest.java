@@ -272,6 +272,21 @@ class OpenAiReceiptExtractorTest {
     }
 
     @Test
+    void missingCurrencySurfacesSchemaMismatch() throws Exception {
+        when(client.extractReceipt(any())).thenReturn("""
+                {"merchant":"ALDI","purchase_date":"2026-10-18",
+                 "products":[],"total_amount":10.00}
+                """);
+
+        assertThatThrownBy(() -> extractor.extract(
+                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+                .isInstanceOf(ReceiptExtractionException.class)
+                .hasMessageContaining("does not match the expected schema")
+                .hasMessageContaining("missing or empty field: currency")
+                .hasMessageNotContaining("non-JSON reply");
+    }
+
+    @Test
     void unknownCategoryNormalisedToOther() throws Exception {
         when(client.extractReceipt(any())).thenReturn("""
                 {"merchant":"X","purchase_date":"2026-01-01",
