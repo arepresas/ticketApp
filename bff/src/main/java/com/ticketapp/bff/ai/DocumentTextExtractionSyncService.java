@@ -46,6 +46,20 @@ import org.springframework.stereotype.Service;
  * the presence/absence of {@code ocrText}, but the user-visible
  * behaviour is identical.
  *
+ * <p><b>…but it is no longer silent.</b> The paragraph above
+ * describes what the upload does with the failure; it does not
+ * describe what the operator or the user is told about it. On
+ * 2026-10-18 a hybrid-reasoning provider returned
+ * {@code content: null} after spending the whole completion budget
+ * on reasoning, the step logged one WARN line, the upload returned
+ * 201 with {@code ocr=0 chars}, and nothing anywhere said the
+ * transcript was missing. {@link #runOnUpload} therefore returns an
+ * {@link Outcome} carrying an explicit {@link OcrStatus}, the
+ * failure is logged at ERROR, and the upload response carries the
+ * status so the SPA can tell the user. The failure reason itself
+ * stays in the log: {@link Outcome#detail()} can quote a provider
+ * body and must not reach the wire.
+ *
  * <p><b>Why not the scheduler.</b> Calling the OCR step at upload
  * keeps the scheduler focused on the expensive structured-extraction
  * call (which already takes a few seconds and consumes a chunk of
@@ -70,13 +84,49 @@ public class DocumentTextExtractionSyncService {
     private final AiProperties properties;
 
     /**
-     * Run OCR on the freshly-saved ticket and stamp the verbatim
-     * transcription onto {@code ticket.ocrText()}. Returns the
-     * original ticket (with {@code ocrText == null}) when OCR is
-     * disabled, when the step is a no-op (no bytes) or when the
-     * provider failed — see the class javadoc for the rationale.
+     * What the OCR step did with a ticket. Surfaced to the caller so
+     * the upload response can tell the user, and used to pick the log
+     * level.
      */
-    public Ticket runOnUpload(Ticket ticket) {
+    public enum OcrStatus {
+        /** No OCR was attempted: AI disabled, no bytes, or no MIME type. */
+        SKIPPED,
+        /** OCR ran and a transcript was stamped onto the ticket. */
+        TRANSCRIBED,
+        /** OCR ran and the provider reported no readable text. */
+        NO_TEXT,
+        /** OCR ran and failed — provider error, budget exhausted, network. */
+        FAILED
+    }
+
+    /**
+     * Result of the upload-time OCR step.
+     *
+     * @param ticket the ticket to persist/return — never null
+     * @param status what happened; never null
+     * @param detail operator-facing reason, {@code null} unless the
+     *               step failed or produced no text. <strong>Log
+     *               only</strong>: it can quote a provider response
+     *               body, which must not reach the SPA.
+     */
+    public record Outcome(Ticket ticket, OcrStatus status, String detail) {
+        public Outcome {
+            java.util.Objects.requireNonNull(ticket, "ticket is required");
+            java.util.Objects.requireNonNull(status, "status is required");
+        }
+    }
+
+    /**
+     * Run OCR on the freshly-saved ticket and stamp the verbatim
+     * transcription onto {@code ticket.ocrText()}.
+     *
+     * <p>The returned ticket is the original one (with
+     * {@code ocrText == null}) whenever the step did not run or did
+     * not produce text; {@link Outcome#status()} is what tells the
+     * caller which of those it was, and {@link Outcome#detail()} is
+     * the log-facing reason.
+     */
+    public Outcome runOnUpload(Ticket ticket) {
         if (!properties.enabled()) {
             // The same kill switch the scheduled extraction honours
             // (see TicketExtractionJob#tick). Without this check the
@@ -86,14 +136,14 @@ public class DocumentTextExtractionSyncService {
             // requests against the live provider endpoint with the test
             // key. That was a 2026-09 bug; the suite is hermetic now.
             log.debug("ticketapp.ai.enabled=false — skipping OCR step");
-            return ticket;
+            return new Outcome(ticket, OcrStatus.SKIPPED, null);
         }
         if (ticket == null || ticket.fileData() == null || ticket.fileData().length == 0) {
             // Metadata-only ticket: nothing to OCR. The dashboard's
             // preview already renders the empty file slot; this
             // service never over-writes a non-null ocrText with
             // null.
-            return ticket;
+            return new Outcome(ticket, OcrStatus.SKIPPED, null);
         }
         String mime = ticket.contentType();
         if (mime == null || mime.isBlank()) {
@@ -103,25 +153,28 @@ public class DocumentTextExtractionSyncService {
             // crash the upload.
             log.warn("Ticket {} has no contentType; skipping OCR step",
                     ticket.id());
-            return ticket;
+            return new Outcome(ticket, OcrStatus.SKIPPED, "ticket has no contentType");
         }
         String text;
         try {
             text = documentTextExtractor.extract(ticket.fileData(), mime);
         } catch (DocumentTextExtractionException e) {
-            // Failing closed: log enough for ops to see, return the
-            // ticket untouched. The structured-extraction scheduler
-            // still picks the ticket up; the missing OCR text just
-            // means the upload preview shows no transcript.
-            log.warn("OCR failed for ticket {}: status={} msg={}",
+            // Failing closed on the ticket — the upload itself
+            // succeeds and the structured-extraction scheduler still
+            // picks the ticket up. ERROR, not WARN: this is the line
+            // an operator greps when a user says "the transcript is
+            // empty", and it must survive a default-level WARN
+            // filter.
+            log.error("OCR failed for ticket {}: status={} msg={}",
                     ticket.id(), e.statusCode(), e.getMessage());
-            return ticket;
+            return new Outcome(ticket, OcrStatus.FAILED,
+                    "status=" + e.statusCode() + " " + e.getMessage());
         } catch (RuntimeException e) {
             // Belt-and-braces: a port implementation bug or a
             // non-mapped SDK failure must not crash the upload.
-            log.warn("OCR threw unexpectedly for ticket {}: {}",
-                    ticket.id(), e.getMessage());
-            return ticket;
+            log.error("OCR threw unexpectedly for ticket {}", ticket.id(), e);
+            return new Outcome(ticket, OcrStatus.FAILED,
+                    "unexpected " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
         if (text == null) {
             // Provider explicitly returned no text (blank receipt,
@@ -134,9 +187,10 @@ public class DocumentTextExtractionSyncService {
             // not need to second-guess whether OCR ever ran.
             log.info("OCR returned no text for ticket {}", ticket.id());
             Ticket cleared = ticket.withOcrText(null);
-            return ticketRepository.save(cleared);
+            return new Outcome(ticketRepository.save(cleared), OcrStatus.NO_TEXT,
+                    "provider returned no readable text");
         }
         Ticket stamped = ticket.withOcrText(text);
-        return ticketRepository.save(stamped);
+        return new Outcome(ticketRepository.save(stamped), OcrStatus.TRANSCRIBED, null);
     }
 }
