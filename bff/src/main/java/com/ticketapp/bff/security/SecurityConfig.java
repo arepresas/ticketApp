@@ -108,6 +108,10 @@ public class SecurityConfig {
         http
                 .securityMatcher("/api/auth/google", "/actuator/health")
                 .authorizeHttpRequests(a -> a.anyRequest().permitAll())
+                // Intentional — ADR 0008: stateless Bearer header, no
+                // cookie, so there is no ambient credential for CSRF
+                // to abuse. Same for the two chains below.
+                // codeql[java/spring-csrf-protection-disabled]
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -129,6 +133,7 @@ public class SecurityConfig {
         http
                 .securityMatcher("/api/**")
                 .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+                // codeql[java/spring-csrf-protection-disabled] — ADR 0008
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -161,6 +166,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(a -> a
                         .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ERROR).permitAll()
                         .anyRequest().denyAll())
+                // codeql[java/spring-csrf-protection-disabled] — ADR 0008;
+                // this chain denies everything anyway.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(AbstractHttpConfigurer::disable)

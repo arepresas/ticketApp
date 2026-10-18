@@ -118,10 +118,10 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
         // instead of overwriting the genuine extraction flow.
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_SQL);
-            bindEditableFields(ps, 1, extraction.merchant(),
+            bindEditableFields(ps, 1, new EditableColumns(extraction.merchant(),
                     extraction.purchaseDate(), extraction.category(),
                     extraction.products(), extraction.totalAmount(),
-                    extraction.currency());
+                    extraction.currency()));
             ps.setLong(7, extraction.ticketId());
             return ps;
         });
@@ -137,9 +137,9 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
                                         TicketExtraction.EditableFields fields) {
         int rows = jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(UPDATE_EDITABLE_SQL);
-            bindEditableFields(ps, 1, fields.merchant(), fields.purchaseDate(),
-                    fields.category(), fields.products(), fields.totalAmount(),
-                    fields.currency());
+            bindEditableFields(ps, 1, new EditableColumns(fields.merchant(),
+                    fields.purchaseDate(), fields.category(), fields.products(),
+                    fields.totalAmount(), fields.currency()));
             ps.setLong(7, ticketId);
             ps.setLong(8, ownerId);
             return ps;
@@ -167,23 +167,36 @@ public class JdbcTicketExtractionRepository implements TicketExtractionRepositor
     }
 
     /**
+     * The six editable columns, grouped so
+     * {@link #bindEditableFields} stays within the parameter budget
+     * without changing what either write path binds. Deliberately
+     * <em>not</em> {@link TicketExtraction.EditableFields}: that
+     * record validates (non-null merchant/date/…), while
+     * {@link #replace} still binds whatever the caller built — a
+     * behaviour the insert path shares and the port contract allows.
+     */
+    private record EditableColumns(
+            String merchant,
+            java.time.LocalDate purchaseDate,
+            SpendCategory category,
+            List<ProductLine> products,
+            java.math.BigDecimal totalAmount,
+            String currency
+    ) {}
+
+    /**
      * Bind the six editable columns starting at {@code base} (1 for
      * both update statements). Shared so the two write paths cannot
      * drift on null handling or JSONB wrapping.
      */
     private void bindEditableFields(PreparedStatement ps, int base,
-                                    String merchant,
-                                    java.time.LocalDate purchaseDate,
-                                    SpendCategory category,
-                                    List<ProductLine> products,
-                                    java.math.BigDecimal totalAmount,
-                                    String currency) throws java.sql.SQLException {
-        ps.setString(base, merchant);
-        ps.setObject(base + 1, purchaseDate);
-        bindCategory(ps, base + 2, category);
-        ps.setObject(base + 3, JsonbSupport.toJsonb(mapper.writeProducts(products)));
-        ps.setBigDecimal(base + 4, totalAmount);
-        ps.setString(base + 5, currency);
+                                    EditableColumns c) throws java.sql.SQLException {
+        ps.setString(base, c.merchant());
+        ps.setObject(base + 1, c.purchaseDate());
+        bindCategory(ps, base + 2, c.category());
+        ps.setObject(base + 3, JsonbSupport.toJsonb(mapper.writeProducts(c.products())));
+        ps.setBigDecimal(base + 4, c.totalAmount());
+        ps.setString(base + 5, c.currency());
     }
 
     /**

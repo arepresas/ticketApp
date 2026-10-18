@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.ZoneOffset;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -159,7 +160,7 @@ class DashboardControllerIT {
         Login login = loginAndGetTokenAndUser();
         String token = login.token();
         seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food",
-                LocalDate.of(2026, 1, 12));
+                LocalDate.of(2026, Month.JANUARY.getValue(), 12));
 
         DashboardResponse body = web().get().uri("/api/dashboard")
                 .header("authorization", "Bearer " + token)
@@ -193,13 +194,13 @@ class DashboardControllerIT {
         String token = login.token();
         long owner = login.userId();
         seedTicketForCurrentUser(owner, "jan-food", Ticket.Status.DONE, "10.00", "EUR", "food",
-                LocalDate.of(2026, 1, 5));
+                LocalDate.of(2026, Month.JANUARY.getValue(), 5));
         seedTicketForCurrentUser(owner, "jan-transport", Ticket.Status.DONE, "20.00", "EUR", "transport",
-                LocalDate.of(2026, 1, 20));
+                LocalDate.of(2026, Month.JANUARY.getValue(), 20));
         seedTicketForCurrentUser(owner, "mar-food", Ticket.Status.OPEN, "30.00", "EUR", "food",
-                LocalDate.of(2026, 3, 9));
+                LocalDate.of(2026, Month.MARCH.getValue(), 9));
         seedTicketForCurrentUser(owner, "may-lodging", Ticket.Status.DONE, "40.00", "EUR", "lodging",
-                LocalDate.of(2026, 5, 2));
+                LocalDate.of(2026, Month.MAY.getValue(), 2));
         seedTicketForCurrentUser(owner, "jun-pending", Ticket.Status.OPEN, null, null, null);
 
         DashboardResponse body = web().get().uri("/api/dashboard")
@@ -252,7 +253,7 @@ class DashboardControllerIT {
         // category slugs included.
         Login login = loginAndGetTokenAndUser();
         seedTicketForCurrentUser(login.userId(), "done", Ticket.Status.DONE, "25.00", "EUR", "food",
-                LocalDate.of(2026, 3, 9));
+                LocalDate.of(2026, Month.MARCH.getValue(), 9));
 
         String json = web().get().uri("/api/dashboard")
                 .header("authorization", "Bearer " + login.token())
