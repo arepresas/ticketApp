@@ -17,6 +17,7 @@ import com.ticketapp.domain.TicketRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -28,6 +29,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -368,6 +370,33 @@ class TicketExtractionNormaliserTest {
         ArgumentCaptor<Ticket> savedTicket = ArgumentCaptor.forClass(Ticket.class);
         verify(tickets).save(savedTicket.capture());
         assertThat(savedTicket.getValue().shopId()).isEqualTo(created.id());
+    }
+
+    @Test
+    void revalidationDeletesStaleLinesBeforeReemitting() {
+        // 2026-10-18 incident: the user renamed a line, re-marked the
+        // ticket DONE, and the DONE view showed the old row next to
+        // the new one. The upsert cannot collapse them — a renamed
+        // line resolves to a different product_id — so the normaliser
+        // must delete the ticket's line rows before re-emitting.
+        // Pin the two halves: the delete ran, and the fresh line was
+        // saved after it (same ticket).
+        long ticketId = nextId();
+        ProductLine renamed = new ProductLine("Green Tea", new BigDecimal("1"),
+                QuantityUnit.UNIT, new BigDecimal("2.00"), new BigDecimal("2.00"));
+        when(extractions.findByTicketId(ticketId, OWNER))
+                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
+                        "{\"merchant\":\"Mercadona\"}", List.of(renamed))));
+        when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
+
+        normaliser.normaliseOnDone(sampleTicket(ticketId));
+
+        InOrder order = inOrder(lineTickets);
+        order.verify(lineTickets).deleteByTicketId(ticketId);
+        ArgumentCaptor<com.ticketapp.domain.LineTicket> line =
+                ArgumentCaptor.forClass(com.ticketapp.domain.LineTicket.class);
+        order.verify(lineTickets).save(line.capture());
+        assertThat(line.getValue().ticketId()).isEqualTo(ticketId);
     }
 
     /** Sequential stand-in for the former UUID test ids. */

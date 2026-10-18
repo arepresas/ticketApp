@@ -55,6 +55,14 @@ public class JdbcLineTicketRepository implements LineTicketRepository {
             "SELECT " + LINE_COLS + " FROM line_tickets l " +
             "WHERE l.ticket_id = :ticket AND l.product_id = :product";
 
+    private static final String DELETE_BY_TICKET_SQL =
+            "DELETE FROM line_tickets WHERE ticket_id = ?";
+
+    @Override
+    public void deleteByTicketId(long ticketId) {
+        jdbc.update(DELETE_BY_TICKET_SQL, ticketId);
+    }
+
     @Override
     public Optional<LineTicket> findByTicketAndProduct(long ticketId, long productId) {
         var params = new MapSqlParameterSource()

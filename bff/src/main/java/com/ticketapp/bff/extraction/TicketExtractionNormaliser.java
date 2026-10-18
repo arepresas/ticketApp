@@ -31,8 +31,11 @@ import java.util.function.Supplier;
 /**
  * Snapshots the structured payload of a validated ticket into the
  * normalised catalogue. Triggered when a ticket transitions to
- * {@code DONE}; idempotent on re-validation so calling it twice is
- * safe.
+ * {@code DONE}. Re-running it is a true replace for this ticket's
+ * {@code line_tickets}: the previous rows are deleted and re-emitted
+ * from the current extraction, so a re-validation after the user
+ * renamed a line cannot leave the stale row next to the new one.
+ * Product / shop / price masters are get-or-create and stay.
  *
  * <p>The snapshot fans out into four tables so downstream analytics
  * can join without parsing the JSONB column on
@@ -116,8 +119,24 @@ public class TicketExtractionNormaliser {
         int persistedPrices = 0;
         int persistedLines = 0;
 
-        // Step 2 — per line. Product → Price → LineTicket. Each
-        // step is idempotent: re-validation reuses existing ids.
+        // Step 2 — replace this ticket's line rows. The upsert only
+        // collapses rows that share a product_id, so a line the user
+        // RENAMED (new normalised name → new product master) would
+        // otherwise leave the stale row for the old product sitting
+        // next to the new one and the DONE view would show both.
+        // Deleting first makes re-normalisation a true replace for
+        // this ticket. Safe inside the surrounding @Transactional:
+        // a mid-loop failure rolls the delete back with the inserts.
+        // Prices are NOT deleted: they are a get-or-create cache
+        // keyed on (product, ticket, amount) and are only ever read
+        // back through a line_ticket join — an unreferenced row is
+        // inert.
+        lineTickets.deleteByTicketId(ticketId);
+
+        // Step 3 — per line. Product → Price → LineTicket. Each
+        // product/price step is get-or-create (masters and per-ticket
+        // price snapshots are reused across tickets); the line rows
+        // are fresh inserts after the delete above.
         //
         // Each line captures its own {@code Instant.now()} so the
         // {@code created_at} column reflects insertion order. A

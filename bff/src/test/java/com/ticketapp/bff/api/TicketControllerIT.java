@@ -1082,6 +1082,99 @@ class TicketControllerIT {
     }
 
     @Test
+    void markAsDoneAfterRenamedLineReplacesStaleCatalogueRows() {
+        // 2026-10-18 bug: Done → reopen → rename a line → Done again
+        // left BOTH the old and the new line in the DONE view. The
+        // upsert on line_tickets cannot collapse them (a renamed line
+        // resolves to a different product master), so the normaliser
+        // now deletes the ticket's line rows before re-emitting.
+        // Realistic cycle: DONE → PATCH IN_PROGRESS (reopen) → PUT
+        // extraction (rename) → DONE.
+        String token = loginAndGetToken();
+        byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
+        TicketResponse created = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart(
+                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketResponse.class)
+                .returnResult()
+                .getResponseBody();
+        assertThat(created).isNotNull();
+        seedExtractionWithProducts(created.id(), "Lidl", java.util.List.of(
+                "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"
+        ));
+
+        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("status", "DONE"))
+                .exchange()
+                .expectStatus().isOk();
+
+        // Reopen for editing, then rename the line via the extraction PUT.
+        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("status", "IN_PROGRESS"))
+                .exchange()
+                .expectStatus().isOk();
+        var renamedProducts = java.util.List.of(java.util.Map.of(
+                "name", "Green Tea",
+                "quantity", 1,
+                "unit", "unit",
+                "pricePerUnit", "2.00",
+                "lineTotal", "2.00"));
+        var payload = java.util.Map.of(
+                "merchant", "Lidl",
+                "purchaseDate", "2026-07-03",
+                "category", "food",
+                "products", renamedProducts,
+                "totalAmount", "2.00",
+                "currency", "EUR");
+        web().put()
+                .uri("/api/tickets/{id}/extraction", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus().isOk();
+
+        // Re-validate: cancel first mirrors the UI (a DONE ticket
+        // cannot be patched straight back to DONE), then DONE.
+        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("status", "CANCELLED"))
+                .exchange()
+                .expectStatus().isOk();
+        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(java.util.Map.of("status", "DONE"))
+                .exchange()
+                .expectStatus().isOk();
+
+        // Exactly one line for this ticket — the renamed one. The
+        // stale "Tea" row is gone.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
+                Integer.class, created.id())).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT p.name FROM line_tickets lt JOIN products p ON p.id = lt.product_id"
+                        + " WHERE lt.ticket_id = ?",
+                String.class, created.id())).isEqualTo("Green Tea");
+        // Both product masters survive — "Tea" stays in the catalogue
+        // for other tickets / search; only this ticket's link row
+        // was dropped.
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM products WHERE name IN ('Tea', 'Green Tea')",
+                Integer.class)).isEqualTo(2);
+    }
+
+    @Test
     void markAsDoneTriggersExtractionWhenMissing() {
         // A ticket that never had an extraction row (the typical
         // ON_ERROR case: AI provider failed before persisting any

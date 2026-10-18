@@ -31,4 +31,18 @@ public interface LineTicketRepository {
      * {@code line_total}, shop/price references and {@code updated_at}.
      */
     LineTicket save(LineTicket line);
+
+    /**
+     * Remove every line row for one ticket.
+     *
+     * <p>Used by the normaliser before re-emitting the catalogue on a
+     * re-validation: the upsert only collapses rows that share a
+     * {@code product_id}, so when the user renamed a line (new
+     * normalised name → new product master row) the stale row for the
+     * old product would otherwise survive next to the new one and the
+     * DONE view would show both. Deleting first turns re-normalisation
+     * into a true replace for this ticket. Cross-ticket history is
+     * untouched — only rows of {@code ticketId}.
+     */
+    void deleteByTicketId(long ticketId);
 }
