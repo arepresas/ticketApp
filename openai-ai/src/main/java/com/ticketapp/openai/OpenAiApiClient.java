@@ -5,11 +5,13 @@ import com.openai.core.JsonValue;
 import com.openai.core.http.HttpResponseFor;
 import com.openai.errors.OpenAIServiceException;
 import com.openai.models.ResponseFormatJsonObject;
+import com.openai.models.ReasoningEffort;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
+import com.openai.models.completions.CompletionUsage;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -81,9 +83,21 @@ public final class OpenAiApiClient {
                 .model(model)
                 .addSystemMessage(OCR_PROMPT)
                 .temperature(properties.temperature())
-                // OCR can return arbitrarily long receipts (Lidl with
-                // 30+ line items) so the budget is generous.
-                .maxCompletionTokens(properties.maxCompletionTokens())
+                // OCR gets its own, larger budget: it is the call that
+                // loses the race against the model's reasoning channel.
+                // Reasoning tokens are billed INSIDE
+                // max_completion_tokens, so a hybrid-reasoning model
+                // that deliberates on a dense receipt photo can spend
+                // the entire budget and reply with content=null
+                // (2026-10-18: 16383 reasoning tokens of 16384,
+                // finish_reason=length, empty OCR on a ticket whose
+                // structured extraction then succeeded at 649 tokens).
+                // See OpenAiProperties#ocrMaxCompletionTokens.
+                .maxCompletionTokens(properties.ocrMaxCompletionTokens())
+                // Explicit effort rather than the provider default,
+                // which is the HIGHEST tier. See
+                // OpenAiProperties#reasoningEffort.
+                .reasoningEffort(reasoningEffort())
                 .addUserMessageOfArrayOfContentParts(
                         List.of(imagePart(imageBytes, mimeType)))
                 .build();
@@ -145,8 +159,14 @@ public final class OpenAiApiClient {
                 // 8192 handled ~10 products; 16384 covers the worst
                 // observed case (Lidl, 7+ products with loyalty
                 // discounts, 2026-07-13) where 8192 died in the
-                // thinking block alone.
+                // thinking block alone. Reasoning tokens count inside
+                // this budget too, so the operator tunes effort first
+                // and size second.
                 .maxCompletionTokens(properties.maxCompletionTokens())
+                // Same reasoning-effort pin as the OCR call — the
+                // provider default is its highest tier and this call
+                // has the same exposure to a reasoning overrun.
+                .reasoningEffort(reasoningEffort())
                 // Constrain the model to emit a JSON object. Without
                 // this, gpt-4o-mini occasionally wraps the reply in
                 // markup (<output>...</output>, <|refusal|>...) which
@@ -211,9 +231,10 @@ public final class OpenAiApiClient {
             // tell "I sent the right request" from "I sent the wrong
             // model id" without leaking the payload.
             int messageCount = params.messages() == null ? 0 : params.messages().size();
-            log.debug("openai request: model={} messages={} temp={} maxTokens={}",
+            log.debug("openai request: model={} messages={} temp={} maxTokens={} reasoningEffort={}",
                     params.model(), messageCount,
-                    params.temperature(), params.maxCompletionTokens());
+                    params.temperature(), params.maxCompletionTokens(),
+                    params.reasoningEffort().map(ReasoningEffort::asString).orElse("absent"));
         }
         HttpResponseFor<ChatCompletion> resp;
         try {
@@ -314,7 +335,69 @@ public final class OpenAiApiClient {
         return completion.choices().get(0)
                 .message()
                 .content()
-                .orElseThrow(() -> new OpenAiApiException(502, "provider returned empty content"));
+                .orElseThrow(() -> new OpenAiApiException(502,
+                        "provider returned empty content (" + describeEmptyReply(completion) + ")"));
+    }
+
+    /**
+     * Explain an absent {@code content} with the numbers an operator
+     * needs to size the budget.
+     *
+     * <p>Added 2026-10-18: a hybrid-reasoning model that spends its
+     * whole {@code max_completion_tokens} on reasoning answers HTTP
+     * 200 with {@code content: null} and {@code finish_reason:
+     * "length"}. The bare message "provider returned empty content"
+     * looks like a provider outage; the same message carrying
+     * {@code reasoningTokens=16383, completionTokens=16384} names the
+     * real cause (budget too small for this model's reasoning) in the
+     * one line the WARN log has room for.
+     *
+     * <p>Reads every diagnostic through the {@code _}-prefixed
+     * {@link com.openai.core.JsonField} accessors, never the plain
+     * getters: the SDK's plain getters throw
+     * {@code OpenAIInvalidDataException} when a gateway omits the
+     * field, and a diagnostic path must never be the thing that
+     * throws while reporting an empty reply. Absent values read
+     * {@code unknown} (or {@code absent} for the finish reason)
+     * instead.
+     */
+    private static String describeEmptyReply(ChatCompletion completion) {
+        String finishReason = completion.choices().get(0)
+                ._finishReason()
+                // asKnown() (not asString()): the field deserialises
+                // into the SDK's FinishReason enum, and JsonField's
+                // string accessor only reads fields the SDK left
+                // untyped.
+                .asKnown()
+                .map(ChatCompletion.Choice.FinishReason::asString)
+                .orElse("absent");
+        Optional<CompletionUsage> usage = completion._usage().asKnown();
+        String completionTokens = usage
+                .flatMap(u -> u._completionTokens().asKnown())
+                .map(value -> value.toString())
+                .orElse("unknown");
+        String reasoningTokens = usage
+                .flatMap(u -> u._completionTokensDetails().asKnown())
+                .flatMap(details -> details._reasoningTokens().asKnown())
+                .map(value -> value.toString())
+                .orElse("unknown");
+        return "finishReason=" + finishReason
+                + ", completionTokens=" + completionTokens
+                + ", reasoningTokens=" + reasoningTokens
+                + " — reasoning tokens are billed inside max_completion_tokens, "
+                + "so an empty content usually means the budget was consumed before the answer";
+    }
+
+    /**
+     * The operator-configured reasoning effort, as the SDK enum.
+     *
+     * <p>Resolved per call rather than cached in a field: the value is
+     * a validated lowercase string by the time
+     * {@link OpenAiProperties}'s compact constructor has seen it, and
+     * {@link ReasoningEffort#of(String)} is a cheap enum lookup.
+     */
+    private ReasoningEffort reasoningEffort() {
+        return ReasoningEffort.of(properties.reasoningEffort());
     }
 
     private static ChatCompletionContentPart imagePart(byte[] imageBytes, String mimeType) {

@@ -59,8 +59,10 @@ public class OpenAiAutoConfiguration {
         java.util.Map<String, String> headers = OpenAiHeaders.parse(properties.customHeaders());
         // Log only the keys, never the values — a header can carry a
         // session id, a tenant token, or a vendor routing key.
-        log.info("the provider OpenAI client configured: baseUrl={} model={} timeoutMs={} customHeaderNames={} debugHttp={}",
+        log.info("the provider OpenAI client configured: baseUrl={} model={} timeoutMs={} reasoningEffort={} extractMaxTokens={} ocrMaxTokens={} customHeaderNames={} debugHttp={}",
                 properties.baseUrl(), properties.model(), properties.timeoutMs(),
+                properties.reasoningEffort(),
+                properties.maxCompletionTokens(), properties.ocrMaxCompletionTokens(),
                 headers.keySet(), properties.debugHttp());
         // putHeader() runs for each entry: the SDK applies them as
         // default headers on every request. putHeader — not headers()
@@ -127,7 +129,9 @@ public class OpenAiAutoConfiguration {
                             + "Set it in the environment or in .env; every other "
                             + "provider variable (OPENAI_BASE_URL, OPENAI_MODEL, "
                             + "OPENAI_TIMEOUT_MS, OPENAI_TEMPERATURE, "
-                            + "OPENAI_MAX_COMPLETION_TOKENS) must be set too.");
+                            + "OPENAI_MAX_COMPLETION_TOKENS, "
+                            + "OPENAI_OCR_MAX_COMPLETION_TOKENS, "
+                            + "OPENAI_REASONING_EFFORT) must be set too.");
         }
     }
 }

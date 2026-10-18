@@ -55,10 +55,23 @@ ticketapp:
       # Tunable via .env; the default keeps local dev working.
       timeout-ms: ${OPENAI_TIMEOUT_MS:120000}
       # Deterministic JSON: 0.0 so retries return the same text.
-      # Token budget: covers the worst observed case (Lidl, 7+
-      # products with loyalty discounts, 2026-07-13).
       temperature: 0.0
+      # Extraction budget: covers the worst observed case (Lidl, 7+
+      # products with loyalty discounts, 2026-07-13).
       max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS:16384}
+      # OCR budget, deliberately larger. Hybrid-reasoning models bill
+      # reasoning INSIDE max_completion_tokens, so an OCR call that
+      # deliberates can consume the whole budget and return an empty
+      # content (2026-10-18: 16383/16384 reasoning tokens,
+      # finish_reason=length, no transcript). 65536 leaves room for a
+      # long reasoning pass plus a 30-line receipt. Provider cap is
+      # 524288; tune down if your model bills reasoning expensively.
+      ocr-max-completion-tokens: ${OPENAI_OCR_MAX_COMPLETION_TOKENS:65536}
+      # Reasoning effort. Providers default hybrid-reasoning models to
+      # their HIGHEST tier, which is what makes the overrun above
+      # likely. `low` is the right tier for transcription + a fixed
+      # JSON schema. `none` is rejected at boot (MiniMax answers 400).
+      reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
       # No custom headers by default — most local providers don't need any.
       # Set in `.env` if your gateway requires a routing/session header.
       custom-headers: ${OPENAI_HEADERS:}

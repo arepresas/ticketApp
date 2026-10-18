@@ -70,6 +70,15 @@ ticketapp:
       timeout-ms: ${OPENAI_TIMEOUT_MS}
       temperature: ${OPENAI_TEMPERATURE}
       max-completion-tokens: ${OPENAI_MAX_COMPLETION_TOKENS}
+      # OCR budget, kept separate from the extraction budget above.
+      # Hybrid-reasoning models bill reasoning inside
+      # max_completion_tokens, so OCR needs headroom the JSON-anchored
+      # extraction call does not.
+      ocr-max-completion-tokens: ${OPENAI_OCR_MAX_COMPLETION_TOKENS}
+      # Reasoning effort (minimal|low|medium|high|xhigh|max). Required
+      # rather than defaulted so an operator cannot silently inherit a
+      # provider's highest-reasoning default and blow the budget.
+      reasoning-effort: ${OPENAI_REASONING_EFFORT}
       api-key: ${OPENAI_API_KEY}
       # Extra headers attached to every provider request. Comma-separated
       # `key=value` pairs, e.g. `X-OpenCode-Session=ses-1234,X-Org-Id=org-1`.

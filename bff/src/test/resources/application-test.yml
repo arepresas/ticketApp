@@ -39,6 +39,8 @@ ticketapp:
       timeout-ms: 30000
       temperature: 0.0
       max-completion-tokens: 16384
+      ocr-max-completion-tokens: 65536
+      reasoning-effort: "low"
 
 bff:
   jwt:

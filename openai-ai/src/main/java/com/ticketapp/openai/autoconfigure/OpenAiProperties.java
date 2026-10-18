@@ -38,6 +38,60 @@ public record OpenAiProperties(
         @DecimalMin("0.0") @DecimalMax("2.0") double temperature,
         @Positive int maxCompletionTokens,
         /**
+         * Completion budget for the OCR call
+         * ({@link com.ticketapp.openai.OpenAiApiClient#transcribeImage}).
+         *
+         * <p><b>Why a second budget instead of reusing
+         * {@link #maxCompletionTokens}.</b> Hybrid-reasoning models
+         * (MiniMax-M3.1-Flash-Preview, o-series, …) bill
+         * {@code reasoning_content} <em>inside</em>
+         * {@code max_completion_tokens} — the provider's own docs say
+         * a value that is too small "yields {@code finish_reason:
+         * "length"} with an empty {@code content}". OCR is the call
+         * that loses that race: a 1 MB receipt photo with no
+         * {@code response_format} and no schema to anchor the reply
+         * is exactly the shape that makes the model deliberate, and
+         * the prompt-level "don't think" instructions cannot suppress
+         * a built-in reasoning channel. Structured extraction, which
+         * pins {@code response_format: json_object}, has stayed
+         * well inside the smaller budget — 2026-10-18 incident: OCR
+         * burned 16383 of 16384 tokens on reasoning and returned
+         * {@code content: null}, while the extraction of the very
+         * same ticket succeeded at 649 tokens.
+         *
+         * <p>Default 65536. The provider recommends 131072 for this
+         * model family and accepts up to 524288; 65536 leaves room
+         * for a long reasoning pass plus a 30-line transcription
+         * without tripling the worst-case bill of a runaway.
+         */
+        @Positive int ocrMaxCompletionTokens,
+        /**
+         * Reasoning effort sent as {@code reasoning_effort} on every
+         * provider request. Bound from
+         * {@code ticketapp.ai.openai.reasoning-effort} via
+         * {@code OPENAI_REASONING_EFFORT}.
+         *
+         * <p><b>Why the operator has to set this.</b> Providers
+         * default hybrid-reasoning models to their <em>highest</em>
+         * effort (MiniMax: {@code max}), and the more effort the
+         * model spends, the more of {@code max_completion_tokens} it
+         * burns before producing the answer that actually reaches
+         * {@code content}. {@code low} is the sweet spot for this
+         * workload: transcribing a receipt and emitting a fixed JSON
+         * schema are perception-and-formatting tasks, not
+         * multi-step-planning tasks, and the measured cost is a
+         * fraction of the default with no loss of fidelity.
+         *
+         * <p>{@code none} is rejected at boot — MiniMax answers
+         * HTTP 400 (err 2013) because M3.1 requires adaptive
+         * thinking, and OpenAI's {@code none} means something else
+         * entirely. Everything else in the SDK's vocabulary
+         * ({@code minimal}, {@code low}, {@code medium},
+         * {@code high}, {@code xhigh}, {@code max}) is accepted so a
+         * future provider swap does not need a code change.
+         */
+        @NotBlank String reasoningEffort,
+        /**
          * Comma-separated {@code key=value} list of extra HTTP
          * headers attached to every provider request. Operator-layer
          * escape hatch for gateways that require a session token or
@@ -73,9 +127,45 @@ public record OpenAiProperties(
          */
         boolean debugHttp
 ) {
+    /**
+     * The reasoning-effort values the OpenAI SDK's
+     * {@code ReasoningEffort} enum can serialise, minus {@code none}.
+     */
+    private static final java.util.Set<String> SUPPORTED_REASONING_EFFORTS =
+            java.util.Set.of("minimal", "low", "medium", "high", "xhigh", "max");
+
     public OpenAiProperties {
         if (customHeaders == null) {
             customHeaders = "";
         }
+        reasoningEffort = normaliseReasoningEffort(reasoningEffort);
+    }
+
+    /**
+     * Lower-cases and validates the configured reasoning effort so a
+     * typo or a provider-illegal {@code none} fails the boot with a
+     * readable cause instead of surfacing as an opaque HTTP 400 on
+     * the first ticket of the day.
+     */
+    private static String normaliseReasoningEffort(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "ticketapp.ai.openai.reasoning-effort is required; set "
+                            + "OPENAI_REASONING_EFFORT to one of " + SUPPORTED_REASONING_EFFORTS
+                            + " (low is the recommended default for receipt OCR)");
+        }
+        String normalised = value.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("none".equals(normalised)) {
+            throw new IllegalArgumentException(
+                    "ticketapp.ai.openai.reasoning-effort=none is not accepted: hybrid-reasoning "
+                            + "providers reject it (MiniMax answers HTTP 400 err 2013 — M3.1 requires "
+                            + "adaptive thinking) and OpenAI's none carries different semantics. Use 'low'.");
+        }
+        if (!SUPPORTED_REASONING_EFFORTS.contains(normalised)) {
+            throw new IllegalArgumentException(
+                    "ticketapp.ai.openai.reasoning-effort=" + value + " is not a known value; expected one of "
+                            + SUPPORTED_REASONING_EFFORTS);
+        }
+        return normalised;
     }
 }
