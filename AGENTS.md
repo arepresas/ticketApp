@@ -17,6 +17,7 @@
 | `openai-ai/` | OpenAI-compatible provider implementation of the `ReceiptExtractor` port | Java 25, OpenAI Java SDK, Apache PDFBox |
 | `bff/` | Backend-for-frontend, REST + OAuth (Google); orchestrates the AI extraction pipeline against the `ReceiptExtractor` port | Spring Boot 4.1, Java 25 |
 | `front/` | Web components, landing + dashboard | Svelte 5, Vite 8, TypeScript, Tailwind 4 |
+| `app-android/` | Native Android shell (Google sign-in) hosting the SPA in a WebView — see ADR 0009 | Kotlin, Jetpack Compose, Gradle/AGP |
 | `local-environment/` | docker-compose (Postgres 18) | Docker |
 | `.github/` | CI workflows, Dependabot, PR template | GitHub Actions |
 
@@ -43,6 +44,9 @@ pnpm test               # vitest run
 pnpm test:coverage      # vitest + lcov report under front/coverage
 pnpm check              # svelte-check (types + a11y)
 
+# Android client (separate Gradle project — ADR 0009)
+cd app-android && ./gradlew assembleDebug   # needs SDK platform 37
+
 # Local infra
 docker compose -f local-environment/docker-compose.yml up -d
 ```
@@ -54,7 +58,7 @@ All commands must succeed before a change is considered done. See `CONVENTIONS.m
 ## 3. Repository rules — read these before changing anything
 
 1. **Layer boundaries are non-negotiable.** `domain` depends on nothing; `persistence` and `openai-ai` depend only on `domain`; `bff` depends on all three. Reverse dependencies are a build break, not a style issue. AI provider modules depend only on `domain` — never on `persistence` or `bff`.
-2. **No new top-level Maven modules** without an ADR in `docs/adr/`.
+2. **No new top-level Maven modules** without an ADR in `docs/adr/`. A new top-level *non-Maven* project (`front/`, `app-android/`) needs an ADR too — it changes the build topology and the release process.
 3. **Database changes go through Liquibase.** Never edit schema in Java code or runtime DDL. New migrations: `persistence/src/main/resources/db/changelog/changes/`.
 4. **Migrations are additive.** Backfills ship in a separate, ordered migration. No `DROP` in the same release that removes the column from code.
 5. **Secrets are never committed.** Use the env vars defined in `README.md` §Environment variables. `.env` is gitignored; `.env.example` is the template.
@@ -98,6 +102,16 @@ ticketApp/
 │       │   ├── charts/              # Chart.js registrations
 │       │   └── landing/             # Public landing page
 │       └── index.ts                 # Web-component entry point
+├── app-android/                     # Native Android shell (ADR 0009)
+│   ├── app/
+│   │   ├── build.gradle.kts         # AGP 9.4 / Gradle 9.8 / Kotlin 2.4
+│   │   └── src/main/java/com/ticketapp/android/
+│   │       ├── auth/                # GoogleSignIn (Credential Manager), SessionStore (Keystore)
+│   │       ├── net/                 # BffAuthClient (the 3 auth endpoints)
+│   │       ├── ui/                  # MainActivity, AppViewModel, LoginScreen
+│   │       └── web/                 # WebAppScreen (WebView), SessionBridge (session hand-off)
+│   ├── gradle/libs.versions.toml    # version catalog — single source of toolchain versions
+│   └── local.properties             # gitignored: sdk.dir, web origin, OAuth client id
 ├── local-environment/
 ├── .github/
 │   ├── workflows/                   # ci.yml, sonar-manual.yml, ai-review.yml, fly-deploy.yml
@@ -166,6 +180,10 @@ Keep these terms stable across code, commits, and PR descriptions:
 - **Landing** — Public marketing page (`front/src/lib/landing/`). No auth required.
 - **Dashboard** — Authenticated app (`front/src/lib/auth/DashboardApp.svelte`). Requires valid session.
 - **ReceiptExtractor** — Domain port (`com.ticketapp.domain.ai.ReceiptExtractor`). The orchestrator depends on this interface; provider modules (`openai-ai` today, future `anthropic-ai`, `local-llm-ai`, ...) implement it via Spring Boot autoconfiguration (ADR 0007).
+- **Android shell** — `app-android/`. Native Google sign-in + WebView hosting the SPA. It is a *client* of the BFF, not a second backend: the ticket/dashboard surfaces are the SPA's (ADR 0009).
+- **Session hand-off** — How the Android shell gives its BFF JWT to the SPA: a document-start script writing `sessionStorage['ticketapp.session']` before any page JS. The key name is owned by `front/src/lib/auth/store.svelte.ts`; renaming it breaks Android login silently (ADR 0009 §D3).
+- **Android client** — `app-android/`. A native shell that signs in with Google (GIS cannot run in a WebView) and hosts the *same* SPA in a WebView. Never a second implementation of the front or the BFF.
+- **Session hand-off** — The Android shell writes the BFF JWT into `sessionStorage['ticketapp.session']` via a document-start script before the SPA boots. Renaming that key in `front/src/lib/auth/store.svelte.ts` breaks Android login (ADR 0009 §D3).
 
 ---
 
@@ -189,6 +207,16 @@ SONARQUBE_TOKEN=...                        # from https://sonarcloud.io/account/
 SONARQUBE_ORG=arepresas
 SONARQUBE_URL=https://sonarcloud.io
 ```
+
+GitHub Actions secrets (repo Settings → Secrets and variables → Actions, never in `.env`):
+
+| Secret | Used by |
+|--------|---------|
+| `SONAR_TOKEN` / `SONAR_HOST_URL` / `SONAR_ORGANIZATION` | `ci.yml` sonar job (scanner side of the Sonar variables) |
+| `AI_API_KEY` (+ `AI_API_ENDPOINT`/`AI_MODEL` as vars) | `ai-review.yml` |
+| `FLY_API_TOKEN` | `fly-deploy.yml` |
+| `VITE_GOOGLE_CLIENT_ID` | `fly-deploy.yml` and `docker-publish.yml` (front build-arg) |
+| `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` | `docker-publish.yml` (push to Docker Hub as user `arepresas`) |
 
 **Two different variable families — do not mix them up.** Sonar-related
 settings exist twice under different names, and confusing them is the
@@ -218,6 +246,10 @@ Tests under `bff/` ignore these and spin up Postgres via Testcontainers.
 1. **backend** — `mvn -B -ntp verify` on JDK 25. Publishes surefire/failsafe reports + jacoco XML.
 2. **frontend** — pnpm install → `pnpm test:ci` → `pnpm build` → `pnpm test:coverage`. Publishes junit XML + lcov.
 3. **sonar** — depends on both above. Single `sonar` scanner invocation; fails if quality gate is RED.
+4. **commitlint** — PR-only; validates commit messages against Conventional Commits (CONVENTIONS.md §11.1).
+5. **format** — `mvn spotless:check` + `pnpm format:check`.
+
+Post-merge on `main` (separate workflows): **fly-deploy** ships both apps to Fly.io; **docker-publish** builds the `ticketapp-bff` and `ticketapp-front` images and pushes them to Docker Hub (`arepresas/*:latest`).
 
 Manual trigger: `.github/workflows/sonar-manual.yml` (re-runs the scanner without rebuilding).
 

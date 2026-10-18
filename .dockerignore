@@ -1,0 +1,30 @@
+# Build context for the root BFF Dockerfile.
+# Only pom.xml + the four modules are COPYed — everything else is noise
+# that would invalidate the build cache (git history, frontend, IDE files).
+.git
+.github
+.idea
+.vscode
+.tmp
+.scannerwork
+
+# Frontend — never part of the BFF image.
+front
+
+# Maven build output — always stale inside the container build.
+**/target/
+
+# Node / tooling (root tooling deps, lockfiles irrelevant to Maven).
+node_modules
+pnpm-lock.yaml
+package.json
+
+# Local infra & docs.
+local-environment
+docs
+*.md
+LICENSE
+
+# Env files — never leak into an image layer.
+.env
+.env.*

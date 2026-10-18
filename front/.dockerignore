@@ -1,0 +1,19 @@
+# Build context for front/Dockerfile.
+.git
+node_modules
+dist
+build
+.svelte-kit
+.vite
+coverage
+reports
+storybook-static
+npm
+screenshots
+
+# Stale stub from the pnpm migration — not part of the build.
+package-lock.json
+
+# Env files — the only value the build needs comes in as a build-arg.
+.env
+.env.*
