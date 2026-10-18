@@ -54,7 +54,7 @@ class OpenAiApiClientTest {
         when(chat.completions()).thenReturn(completions);
         when(completions.withRawResponse()).thenReturn(completionsRaw);
         api = new OpenAiApiClient(client, new com.ticketapp.openai.autoconfigure.OpenAiProperties(
-                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384, "", false));
+                "https://api.openai.com/v1", "k", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536, "low", "", false));
     }
 
     @Test
@@ -107,6 +107,66 @@ class OpenAiApiClientTest {
         var textPart = userParts.get(0).text();
         assertThat(textPart).isPresent();
         assertThat(textPart.get().text()).contains("MERCADONA");
+    }
+
+    @Test
+    void ocrRequestSendsTheOcrBudgetAndTheConfiguredReasoningEffort() throws Exception {
+        // 2026-10-18 regression: OCR is the call that loses the race
+        // against the model's reasoning channel, so it must NOT share
+        // the (smaller) extraction budget and must not run at the
+        // provider's default — highest — effort.
+        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"LIDL\"},\"finish_reason\":\"stop\"}]}");
+        byte[] jpeg = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+
+        api.transcribeImage("gpt-4o-mini", jpeg, "image/jpeg");
+
+        ChatCompletionCreateParams params = captureParams();
+        assertThat(params.maxCompletionTokens()).contains(65_536L);
+        assertThat(params.reasoningEffort()).isPresent();
+        assertThat(params.reasoningEffort().get().asString()).isEqualTo("low");
+    }
+
+    @Test
+    void extractionRequestSendsTheExtractionBudgetAndTheSameReasoningEffort() throws Exception {
+        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{}\"},\"finish_reason\":\"stop\"}]}");
+
+        api.extractReceipt(ReceiptInput.pdfText("gpt-4o-mini", "x"));
+
+        ChatCompletionCreateParams params = captureParams();
+        assertThat(params.maxCompletionTokens()).contains(16_384L);
+        assertThat(params.reasoningEffort()).isPresent();
+        assertThat(params.reasoningEffort().get().asString()).isEqualTo("low");
+    }
+
+    @Test
+    void emptyContentNamesTheFinishReasonAndTheReasoningTokensItSpent() throws Exception {
+        // The shape MiniMax-M3.1-Flash-Preview returned on the
+        // 2026-10-18 incident: HTTP 200, finish_reason=length,
+        // content=null, every token of the budget spent on reasoning.
+        // The operator only has the WARN line, so the message has to
+        // name the cause instead of saying "empty content".
+        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null},"
+                + "\"finish_reason\":\"length\"}],"
+                + "\"usage\":{\"completion_tokens\":16384,"
+                + "\"completion_tokens_details\":{\"reasoning_tokens\":16383}}}");
+
+        assertThatThrownBy(() ->
+                api.transcribeImage("gpt-4o-mini", new byte[]{1}, "image/jpeg"))
+                .isInstanceOf(OpenAiApiException.class)
+                .hasMessageContaining("finishReason=length")
+                .hasMessageContaining("reasoningTokens=16383")
+                .hasMessageContaining("max_completion_tokens");
+    }
+
+    @Test
+    void emptyContentStaysTolerantWhenTheGatewayOmitsUsage() throws Exception {
+        stubOk("{\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null}}]}");
+
+        assertThatThrownBy(() ->
+                api.transcribeImage("gpt-4o-mini", new byte[]{1}, "image/jpeg"))
+                .isInstanceOf(OpenAiApiException.class)
+                .hasMessageContaining("finishReason=absent")
+                .hasMessageContaining("completionTokens=unknown");
     }
 
     @Test
@@ -281,6 +341,18 @@ class OpenAiApiClientTest {
     }
 
     // ---- helpers ---------------------------------------------------------
+
+    /**
+     * The params object the client actually handed to the SDK. Read
+     * through {@code completionsRaw} because that is the seam
+     * {@code sendChatRequest} calls.
+     */
+    private ChatCompletionCreateParams captureParams() throws Exception {
+        ArgumentCaptor<ChatCompletionCreateParams> cap =
+                ArgumentCaptor.forClass(ChatCompletionCreateParams.class);
+        verify(completionsRaw).create(cap.capture());
+        return cap.getValue();
+    }
 
     @SuppressWarnings("unchecked")
     private void stubOk(String body) throws Exception {

@@ -61,7 +61,7 @@ class OpenAiReceiptExtractorTest {
         client = mock(OpenAiApiClient.class);
         pdfExtractor = mock(PdfTextExtractor.class);
         properties = new OpenAiProperties(
-                "https://api.openai.com/v1", "k", MODEL, 30_000L, 0.0, 16384, "", false);
+                "https://api.openai.com/v1", "k", MODEL, 30_000L, 0.0, 16384, 65_536, "low", "", false);
         extractor = new OpenAiReceiptExtractor(
                 client, pdfExtractor, new ReceiptResponseParser(new ObjectMapper()), properties);
     }

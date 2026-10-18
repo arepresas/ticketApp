@@ -32,6 +32,12 @@ primary_region = 'ams'
   OPENAI_TIMEOUT_MS = '30000'
   OPENAI_TEMPERATURE = '0.0'
   OPENAI_MAX_COMPLETION_TOKENS = '16384'
+  # Separate, larger OCR budget: hybrid-reasoning models bill their
+  # reasoning inside max_completion_tokens and an OCR call that
+  # deliberates can return an empty reply (2026-10-18 incident).
+  OPENAI_OCR_MAX_COMPLETION_TOKENS = '65536'
+  # Pin the reasoning effort; providers default to their highest tier.
+  OPENAI_REASONING_EFFORT = 'low'
 
 [http_service]
   internal_port = 8080
