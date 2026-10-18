@@ -65,11 +65,20 @@ public class TicketApplicationService {
      * <p>The OCR step is intentionally non-throwing: an OCR failure
      * never aborts the upload (the file is already persisted; the
      * structured-extraction scheduler still picks the ticket up).
+     * What it is <em>not</em> is silent — the returned
+     * {@link DocumentTextExtractionSyncService.Outcome} carries the
+     * {@link DocumentTextExtractionSyncService.OcrStatus} so the
+     * upload response can tell the user that the transcript is
+     * missing, instead of returning a ticket with a null
+     * {@code ocrText} and no explanation.
+     *
+     * @return the ticket to return to the caller, plus the OCR
+     *         outcome that describes it
      */
-    public Ticket createTicket(AuthenticatedUser user,
-                               MultipartFile file,
-                               String titleOverride,
-                               String description) {
+    public DocumentTextExtractionSyncService.Outcome createTicket(AuthenticatedUser user,
+                                MultipartFile file,
+                                String titleOverride,
+                                String description) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file is required");
         }
@@ -109,11 +118,20 @@ public class TicketApplicationService {
         // untouched.
         String rawName = file.getOriginalFilename();
         String logName = rawName == null ? "" : rawName.replace('\n', '_').replace('\r', '_');
-        Ticket withOcr = documentTextExtractionService.runOnUpload(created);
-        log.info("Created ticket {} for user {} (file={} {} bytes, ocr={} chars)",
-                withOcr.id(), user.id(), logName, bytes.length,
-                withOcr.ocrText() == null ? 0 : withOcr.ocrText().length());
-        return withOcr;
+        DocumentTextExtractionSyncService.Outcome outcome =
+                documentTextExtractionService.runOnUpload(created);
+        // `ocr=` counts the characters, and is now qualified by the
+        // outcome so a 0-length transcript is distinguishable in the
+        // boot-time log from a transcript that was never attempted.
+        log.info("Created ticket {} for user {} (file={} {} bytes, ocr={} chars, ocrStatus={})",
+                outcome.ticket().id(), user.id(), logName, bytes.length,
+                outcome.ticket().ocrText() == null ? 0 : outcome.ticket().ocrText().length(),
+                outcome.status());
+        if (outcome.status() == DocumentTextExtractionSyncService.OcrStatus.FAILED) {
+            log.error("Ticket {} uploaded with no transcript — detail: {}",
+                    outcome.ticket().id(), outcome.detail());
+        }
+        return outcome;
     }
 
     /**

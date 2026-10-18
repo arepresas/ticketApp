@@ -1,5 +1,6 @@
 package com.ticketapp.bff.api;
 
+import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.ai.TestDocumentTextExtractorConfig;
 import com.ticketapp.bff.api.dto.CatalogueResponse;
 import com.ticketapp.bff.api.dto.ExtractionResponse;
@@ -302,6 +303,45 @@ class TicketControllerIT {
         // to the provider endpoint (ADR 0006 D7).
         assertThat(TestDocumentTextExtractorConfig.calls()).isEmpty();
         assertThat(response.ocrText()).isNull();
+        // The upload response now states what happened to the OCR
+        // step instead of leaving the user to infer it from a null
+        // transcript. With the kill switch off this is SKIPPED, not
+        // FAILED — the two mean very different things to an operator
+        // and the whole point of PR2 is that they are distinguishable.
+        assertThat(response.ocrStatus())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED.name());
+    }
+
+    @Test
+    void readPathsDoNotClaimAnOcrStatusTheyCannotKnow() throws Exception {
+        // ocrStatus is only populated on the upload response: a later
+        // read sees ocrText == NULL and genuinely cannot tell
+        // "OCR failed" from "row predates the OCR step". Asserting
+        // null here pins that the DTO does not start guessing.
+        String token = loginAndGetToken();
+        byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
+        long id = web().post().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(pdfMultipart("photo.png", pngBytes, "image/png", null)))
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(TicketResponse.class)
+                .returnResult().getResponseBody().id();
+
+        web().get().uri("/api/tickets/{id}", id)
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(TicketResponse.class)
+                .value(response -> assertThat(response.ocrStatus()).isNull());
+
+        web().get().uri("/api/tickets")
+                .header("authorization", "Bearer " + token)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(TicketResponse.class)
+                .value(list -> assertThat(list).allSatisfy(r -> assertThat(r.ocrStatus()).isNull()));
     }
 
     @Test

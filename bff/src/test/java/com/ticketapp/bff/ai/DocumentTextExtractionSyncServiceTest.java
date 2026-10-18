@@ -28,8 +28,12 @@ import static org.mockito.Mockito.when;
  *   <li>Successful OCR stamps the verbatim text on the ticket and
  *       persists via {@link TicketRepository#save(Object)}.</li>
  *   <li>Provider failures do NOT abort the upload — the ticket is
- *       returned unchanged, no save, a WARN logged. The
+ *       returned unchanged, no save, an ERROR logged. The
  *       structured-extraction scheduler still picks the ticket up.</li>
+ *   <li>Every path reports an explicit
+ *       {@link DocumentTextExtractionSyncService.OcrStatus}, so a
+ *       missing transcript is distinguishable from a missing file —
+ *       the 2026-10-18 regression this class grew a test for.</li>
  *   <li>Empty / metadata-only tickets skip OCR entirely. PDFs and
  *       images both go through the same port — the service makes
  *       no MIME filter of its own.</li>
@@ -67,10 +71,11 @@ class DocumentTextExtractionSyncServiceTest {
         Ticket png = ticketWithFile(nextId(), "image/png");
         service = serviceWith(false);
 
-        Ticket returned = service.runOnUpload(png);
+        var outcome = service.runOnUpload(png);
 
-        assertThat(returned).isSameAs(png);
-        assertThat(returned.ocrText()).isNull();
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED);
+        assertThat(outcome.ticket()).isSameAs(png);
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(extractor, never()).extract(any(), anyString());
         verify(tickets, never()).save(any());
     }
@@ -88,10 +93,13 @@ class DocumentTextExtractionSyncServiceTest {
         when(extractor.extract(png.fileData(), "image/png"))
                 .thenReturn("MERCADONA\nTOTAL 12.34");
 
-        Ticket stamped = service.runOnUpload(png);
+        var outcome = service.runOnUpload(png);
 
-        assertThat(stamped.ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34");
-        verify(tickets).save(stamped);
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
+        assertThat(outcome.detail()).isNull();
+        assertThat(outcome.ticket().ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34");
+        verify(tickets).save(outcome.ticket());
     }
 
     @Test
@@ -106,10 +114,12 @@ class DocumentTextExtractionSyncServiceTest {
         when(extractor.extract(pdf.fileData(), "application/pdf"))
                 .thenReturn("MERCADONA\nTOTAL 12.34 EUR");
 
-        Ticket stamped = service.runOnUpload(pdf);
+        var outcome = service.runOnUpload(pdf);
 
-        assertThat(stamped.ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34 EUR");
-        verify(tickets).save(stamped);
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.TRANSCRIBED);
+        assertThat(outcome.ticket().ocrText()).isEqualTo("MERCADONA\nTOTAL 12.34 EUR");
+        verify(tickets).save(outcome.ticket());
     }
 
     @Test
@@ -123,9 +133,14 @@ class DocumentTextExtractionSyncServiceTest {
         when(extractor.extract(png.fileData(), "image/png"))
                 .thenThrow(new DocumentTextExtractionException(502, "the AI provider returned 502"));
 
-        Ticket returned = service.runOnUpload(png);
+        var outcome = service.runOnUpload(png);
 
-        assertThat(returned.ocrText()).isNull();
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.detail())
+                .contains("502")
+                .contains("the AI provider returned 502");
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
     }
 
@@ -140,9 +155,12 @@ class DocumentTextExtractionSyncServiceTest {
         when(extractor.extract(any(), anyString()))
                 .thenThrow(new RuntimeException("SDK surprise"));
 
-        Ticket returned = service.runOnUpload(png);
+        var outcome = service.runOnUpload(png);
 
-        assertThat(returned.ocrText()).isNull();
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.detail()).contains("RuntimeException").contains("SDK surprise");
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
     }
 
@@ -156,10 +174,13 @@ class DocumentTextExtractionSyncServiceTest {
         Ticket png = ticketWithFile(id, "image/png");
         when(extractor.extract(png.fileData(), "image/png")).thenReturn(null);
 
-        Ticket stamped = service.runOnUpload(png);
+        var outcome = service.runOnUpload(png);
 
-        assertThat(stamped.ocrText()).isNull();
-        verify(tickets).save(stamped);
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.NO_TEXT);
+        assertThat(outcome.detail()).contains("no readable text");
+        assertThat(outcome.ticket().ocrText()).isNull();
+        verify(tickets).save(outcome.ticket());
     }
 
     @Test
@@ -172,9 +193,10 @@ class DocumentTextExtractionSyncServiceTest {
                 Instant.now(), Instant.now(),
                 null, null, null, null, 0, null, null, 0);
 
-        Ticket returned = service.runOnUpload(meta);
+        var outcome = service.runOnUpload(meta);
 
-        assertThat(returned.ocrText()).isNull();
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED);
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(extractor, never()).extract(any(), anyString());
         verify(tickets, never()).save(any());
     }
@@ -189,10 +211,36 @@ class DocumentTextExtractionSyncServiceTest {
                 Instant.now(), Instant.now(),
                 null, "name.bin", new byte[]{1, 2, 3}, null, 0, null, null, 0);
 
-        Ticket returned = service.runOnUpload(broken);
+        var outcome = service.runOnUpload(broken);
 
-        assertThat(returned.ocrText()).isNull();
+        assertThat(outcome.status()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED);
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(extractor, never()).extract(any(), anyString());
+        verify(tickets, never()).save(any());
+    }
+
+    @Test
+    void aBudgetExhaustionIsReportedAsFailedWithTheTokenNumbers() throws Exception {
+        // The 2026-10-18 incident, verbatim: the provider burned its
+        // whole completion budget on reasoning and answered HTTP 200
+        // with an empty body. The upload must survive it, the status
+        // must say FAILED (not NO_TEXT — nothing was read off the
+        // image), and the detail must carry enough numbers for the
+        // operator to size the budget without opening the SDK trace.
+        Ticket png = ticketWithFile(nextId(), "image/png");
+        when(extractor.extract(png.fileData(), "image/png"))
+                .thenThrow(new DocumentTextExtractionException(502,
+                        "provider returned empty content (finishReason=length, "
+                                + "completionTokens=16384, reasoningTokens=16383)"));
+
+        var outcome = service.runOnUpload(png);
+
+        assertThat(outcome.status())
+                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.FAILED);
+        assertThat(outcome.detail())
+                .contains("finishReason=length")
+                .contains("reasoningTokens=16383");
+        assertThat(outcome.ticket().ocrText()).isNull();
         verify(tickets, never()).save(any());
     }
 

@@ -2,6 +2,7 @@ package com.ticketapp.bff.api;
 
 import com.ticketapp.bff.api.dto.ChangeStatusRequest;
 import com.ticketapp.bff.api.dto.TicketResponse;
+import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.api.dto.UpdateTicketRequest;
 import com.ticketapp.bff.application.TicketApplicationService;
 import com.ticketapp.bff.application.TicketEditService;
@@ -147,8 +148,16 @@ public class TicketController {
             @RequestParam(value = "title", required = false) String titleOverride,
             @RequestParam(value = "description", required = false) String description) {
         AuthenticatedUser user = CurrentUser.get();
-        Ticket created = applicationService.createTicket(user, file, titleOverride, description);
-        return ResponseEntity.status(201).body(TicketResponse.of(created));
+        DocumentTextExtractionSyncService.Outcome outcome =
+                applicationService.createTicket(user, file, titleOverride, description);
+        // The status rides the upload response only: it is the one
+        // moment we actually know how the OCR step went. Later reads
+        // leave it null — `ocrText IS NULL` cannot distinguish "OCR
+        // failed" from "pre-OCR row" from "AI disabled", so claiming
+        // a status there would be a guess. The failure *reason* stays
+        // in the log (see DocumentTextExtractionSyncService.Outcome).
+        return ResponseEntity.status(201).body(TicketResponse.of(
+                outcome.ticket(), outcome.status().name()));
     }
 
     /**
