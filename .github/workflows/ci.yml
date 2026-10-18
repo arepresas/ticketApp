@@ -11,10 +11,19 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege by default (CodeQL: "Workflow does not contain
+# permissions"). Jobs that need more (dorny/test-reporter creates
+# check runs) declare it themselves.
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend build & test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write  # dorny/test-reporter
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
@@ -51,6 +60,9 @@ jobs:
   frontend:
     name: Frontend build & test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write  # dorny/test-reporter
     defaults:
       run:
         working-directory: front
