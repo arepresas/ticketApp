@@ -137,7 +137,7 @@ public class ReceiptResponseParser {
         }
         try {
             String merchant = requireText(root, "merchant");
-            LocalDate purchaseDate = parseDate(requireText(root, "purchase_date"));
+            LocalDate purchaseDate = purchaseDateOrDefault(root);
             BigDecimal totalAmount = parseDecimal(root.get("total_amount"), "total_amount");
             String currency = requireText(root, "currency").toUpperCase();
             if (currency.length() != 3) {
@@ -239,6 +239,26 @@ public class ReceiptResponseParser {
     private static String optionalText(JsonNode parent, String field) {
         JsonNode n = parent.get(field);
         return (n == null || n.isNull()) ? null : n.asText();
+    }
+
+    /**
+     * {@code purchase_date} is optional: missing, {@code null} or blank
+     * all fall back to the extraction day (2026-10-18 ALDI incident:
+     * date genuinely absent from a cropped receipt — the model
+     * correctly refused to guess and emitted {@code null}, which
+     * failed the extraction even though every other field was usable).
+     * The fallback keeps the {@code NOT NULL} invariant of
+     * {@code ticket_extractions.purchase_date} without a migration;
+     * an unreadable-but-present value ({@code "n/a"}) still fails so
+     * garbage does not silently become "today".
+     */
+    private static LocalDate purchaseDateOrDefault(JsonNode parent) {
+        String raw = optionalText(parent, "purchase_date");
+        if (raw == null || raw.isBlank()) {
+            log.debug("purchase_date absent in provider reply — defaulting to extraction day");
+            return LocalDate.now();
+        }
+        return parseDate(raw);
     }
 
     private static LocalDate parseDate(String s) {
