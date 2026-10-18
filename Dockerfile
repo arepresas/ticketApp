@@ -3,7 +3,11 @@
 # -----------------------------------------------------------------------------
 # Stage 1: build the BFF (multi-module reactor — only `bff/` is assembled here)
 # -----------------------------------------------------------------------------
-FROM maven:3-eclipse-temurin-27 AS build
+# JDK 25 on purpose: it matches <java.version>25 in the parent POM. Do not
+# bump to a newer temurin tag without checking Lombok first — 1.18.46 (the
+# version Spring Boot 4.1.1 manages) crashes on Temurin 27 with
+# `ExceptionInInitializerError: com.sun.tools.javac.tree.EndPosTable`.
+FROM maven:3-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
 # Cache dependencies first
