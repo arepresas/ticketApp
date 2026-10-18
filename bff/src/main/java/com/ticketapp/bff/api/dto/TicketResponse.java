@@ -3,8 +3,6 @@ package com.ticketapp.bff.api.dto;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketSummary;
 
-
-
 /**
  * Wire response for ticket reads. Excludes {@code fileData} so the bytes don't round-trip
  * on every list call — clients fetch the file separately when needed.
@@ -68,11 +66,20 @@ public record TicketResponse(
     public static TicketResponse of(Ticket t, String ocrStatus) {
         Integer size = t.fileData() == null ? null : t.fileData().length;
         return new TicketResponse(
-                t.id(), t.ownerId(), t.title(), t.description(), t.status(),
-                t.createdAt(), t.updatedAt(),
-                t.contentType(), t.fileName(), size,
-                t.errorMessage(), t.attempts(),
-                t.ocrText(), ocrStatus);
+                t.id(),
+                t.ownerId(),
+                t.title(),
+                t.description(),
+                t.status(),
+                t.createdAt(),
+                t.updatedAt(),
+                t.contentType(),
+                t.fileName(),
+                size,
+                t.errorMessage(),
+                t.attempts(),
+                t.ocrText(),
+                ocrStatus);
     }
 
     public static TicketResponse of(TicketSummary s) {
@@ -81,10 +88,19 @@ public record TicketResponse(
         // field stays Integer by contract.
         Integer size = s.sizeBytes() == null ? null : Math.toIntExact(s.sizeBytes());
         return new TicketResponse(
-                s.id(), s.ownerId(), s.title(), s.description(), s.status(),
-                s.createdAt(), s.updatedAt(),
-                s.contentType(), s.fileName(), size,
-                s.errorMessage(), s.attempts(),
-                null, null);
+                s.id(),
+                s.ownerId(),
+                s.title(),
+                s.description(),
+                s.status(),
+                s.createdAt(),
+                s.updatedAt(),
+                s.contentType(),
+                s.fileName(),
+                size,
+                s.errorMessage(),
+                s.attempts(),
+                null,
+                null);
     }
 }

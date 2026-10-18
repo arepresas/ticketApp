@@ -1,7 +1,6 @@
 package com.ticketapp.bff.api.dto;
 
 import com.ticketapp.bff.dashboard.DashboardService.DashboardView;
-
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -20,10 +19,7 @@ import java.util.List;
  * <p>{@code currency} travels with the amounts so the UI renders the
  * right symbol instead of hardcoding {@code €}.
  */
-public record DashboardResponse(
-        Kpi kpis,
-        List<MonthlyTicket> ticketsPerMonth,
-        List<CategoryAmount> spendByCategory) {
+public record DashboardResponse(Kpi kpis, List<MonthlyTicket> ticketsPerMonth, List<CategoryAmount> spendByCategory) {
 
     /**
      * @param totalTickets      tickets the user can still see a record of
@@ -44,20 +40,17 @@ public record DashboardResponse(
             long extractedTicketsInCurrency,
             BigDecimal totalSpent,
             BigDecimal avgTicketValue,
-            String currency) {
-    }
+            String currency) {}
 
     /**
      * One point of the monthly line. {@code month} is an ISO year-month
      * ({@code "2026-03"}) and is always the receipt's purchase month, not
      * its upload date.
      */
-    public record MonthlyTicket(String month, long count) {
-    }
+    public record MonthlyTicket(String month, long count) {}
 
     /** One slice of the category donut, always all four categories. */
-    public record CategoryAmount(String category, BigDecimal amount) {
-    }
+    public record CategoryAmount(String category, BigDecimal amount) {}
 
     public static DashboardResponse of(DashboardView view) {
         return new DashboardResponse(

@@ -5,18 +5,16 @@ import com.ticketapp.domain.MonthlyTicketCount;
 import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketStats;
 import com.ticketapp.domain.TicketStatsRepository;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.stereotype.Repository;
-
-import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /**
  * JDBC implementation of {@link TicketStatsRepository} — the dashboard's
@@ -49,8 +47,7 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
      * {@code GET /api/tickets/pending} so the "open" KPI and the pending
      * list can never disagree.
      */
-    private static final String OPEN_STATUSES =
-            "('OPEN', 'IN_ANALYSIS', 'IN_PROGRESS', 'ON_ERROR')";
+    private static final String OPEN_STATUSES = "('OPEN', 'IN_ANALYSIS', 'IN_PROGRESS', 'ON_ERROR')";
 
     /**
      * Ticket counts and money totals in one round trip. The
@@ -145,9 +142,7 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
     @Override
     public TicketStats loadStats(long ownerId, String currency) {
         String code = normaliseCurrency(currency);
-        var params = new MapSqlParameterSource()
-                .addValue(PARAM_OWNER, ownerId)
-                .addValue("currency", code);
+        var params = new MapSqlParameterSource().addValue(PARAM_OWNER, ownerId).addValue("currency", code);
 
         // The currency is an input, not a column on the row: it comes
         // back on the record so the dashboard renders the symbol it was
@@ -162,8 +157,10 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
                 // First day of `from`, and first day of the month after
                 // `to`, so `to` itself stays inside the window.
                 .addValue("from", LocalDate.of(from.getYear(), from.getMonthValue(), 1))
-                .addValue("to_exclusive", LocalDate.of(to.plusMonths(1).getYear(),
-                        to.plusMonths(1).getMonthValue(), 1));
+                .addValue(
+                        "to_exclusive",
+                        LocalDate.of(
+                                to.plusMonths(1).getYear(), to.plusMonths(1).getMonthValue(), 1));
 
         return namedJdbc.query(COUNT_BY_MONTH_SQL, params, JdbcTicketStatsRepository::mapMonth);
     }
@@ -208,8 +205,6 @@ public class JdbcTicketStatsRepository implements TicketStatsRepository {
      * must not fail on it.
      */
     private static CategorySpend mapCategorySpend(ResultSet rs, int rowNum) throws SQLException {
-        return new CategorySpend(
-                SpendCategory.fromStorage(rs.getString("category")),
-                rs.getBigDecimal("amount"));
+        return new CategorySpend(SpendCategory.fromStorage(rs.getString("category")), rs.getBigDecimal("amount"));
     }
 }

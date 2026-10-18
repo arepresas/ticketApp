@@ -6,7 +6,6 @@ import com.ticketapp.domain.ai.DocumentTextExtractionException;
 import com.ticketapp.domain.ai.DocumentTextExtractor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.stereotype.Service;
 
 /**
@@ -151,8 +150,7 @@ public class DocumentTextExtractionSyncService {
             // upload MIME, so reaching here means a future
             // controller-path bypass. Skip quietly rather than
             // crash the upload.
-            log.warn("Ticket {} has no contentType; skipping OCR step",
-                    ticket.id());
+            log.warn("Ticket {} has no contentType; skipping OCR step", ticket.id());
             return new Outcome(ticket, OcrStatus.SKIPPED, "ticket has no contentType");
         }
         String text;
@@ -165,16 +163,14 @@ public class DocumentTextExtractionSyncService {
             // an operator greps when a user says "the transcript is
             // empty", and it must survive a default-level WARN
             // filter.
-            log.error("OCR failed for ticket {}: status={} msg={}",
-                    ticket.id(), e.statusCode(), e.getMessage());
-            return new Outcome(ticket, OcrStatus.FAILED,
-                    "status=" + e.statusCode() + " " + e.getMessage());
+            log.error("OCR failed for ticket {}: status={} msg={}", ticket.id(), e.statusCode(), e.getMessage());
+            return new Outcome(ticket, OcrStatus.FAILED, "status=" + e.statusCode() + " " + e.getMessage());
         } catch (RuntimeException e) {
             // Belt-and-braces: a port implementation bug or a
             // non-mapped SDK failure must not crash the upload.
             log.error("OCR threw unexpectedly for ticket {}", ticket.id(), e);
-            return new Outcome(ticket, OcrStatus.FAILED,
-                    "unexpected " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            return new Outcome(
+                    ticket, OcrStatus.FAILED, "unexpected " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
         if (text == null) {
             // Provider explicitly returned no text (blank receipt,
@@ -187,8 +183,7 @@ public class DocumentTextExtractionSyncService {
             // not need to second-guess whether OCR ever ran.
             log.info("OCR returned no text for ticket {}", ticket.id());
             Ticket cleared = ticket.withOcrText(null);
-            return new Outcome(ticketRepository.save(cleared), OcrStatus.NO_TEXT,
-                    "provider returned no readable text");
+            return new Outcome(ticketRepository.save(cleared), OcrStatus.NO_TEXT, "provider returned no readable text");
         }
         Ticket stamped = ticket.withOcrText(text);
         return new Outcome(ticketRepository.save(stamped), OcrStatus.TRANSCRIBED, null);

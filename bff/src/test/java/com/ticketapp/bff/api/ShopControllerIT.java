@@ -1,8 +1,12 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.ShopResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
+import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,12 +21,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end IT for {@link ShopController}: GET and PATCH
@@ -46,11 +44,10 @@ class ShopControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @LocalServerPort
     int port;
@@ -72,10 +69,12 @@ class ShopControllerIT {
     }
 
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -83,14 +82,20 @@ class ShopControllerIT {
         return resp.token();
     }
 
-    private long seedShop(String name, String addressLine, String city,
-                          String country, String phone) {
-        return jdbc.queryForObject("""
+    private long seedShop(String name, String addressLine, String city, String country, String phone) {
+        return jdbc.queryForObject(
+                """
                 INSERT INTO shops
                     (name, normalised_name, address_line, city, country, phone, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                RETURNING id""", Long.class,
-                name, name.toLowerCase(), addressLine, city, country, phone,
+                RETURNING id""",
+                Long.class,
+                name,
+                name.toLowerCase(),
+                addressLine,
+                city,
+                country,
+                phone,
                 java.sql.Timestamp.from(Instant.now()));
     }
 
@@ -99,10 +104,12 @@ class ShopControllerIT {
         String token = loginAndGetToken();
         long id = seedShop("Mercadona", "Calle Mayor 1", "Madrid", "ES", "+34 911 22 33 44");
 
-        web().get().uri("/api/shops/{id}", id)
+        web().get()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.id()).isEqualTo(id);
@@ -118,18 +125,18 @@ class ShopControllerIT {
     @Test
     void getReturns404WhenShopUnknown() {
         String token = loginAndGetToken();
-        web().get().uri("/api/shops/{id}", nextId())
+        web().get()
+                .uri("/api/shops/{id}", nextId())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
     void getRejectsUnauthenticated() {
         long id = seedShop("Dia", null, null, null, null);
-        web().get().uri("/api/shops/{id}", id)
-                .exchange()
-                .expectStatus().isUnauthorized();
+        web().get().uri("/api/shops/{id}", id).exchange().expectStatus().isUnauthorized();
     }
 
     @Test
@@ -137,7 +144,8 @@ class ShopControllerIT {
         String token = loginAndGetToken();
         long id = seedShop("Carrefour", null, null, null, null);
 
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
@@ -149,7 +157,8 @@ class ShopControllerIT {
                         "taxId", "B12345678",
                         "website", "https://carrefour.es"))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.addressLine()).isEqualTo("Avenida Diagonal 3");
@@ -165,18 +174,19 @@ class ShopControllerIT {
     @Test
     void patchAppliesOnlySuppliedFields() {
         String token = loginAndGetToken();
-        long id = seedShop("Lidl",
-                "Old Street 1", "Madrid", "ES", "+34 900 00 00 00");
+        long id = seedShop("Lidl", "Old Street 1", "Madrid", "ES", "+34 900 00 00 00");
 
         // Patch only phone — the other contact fields must stay
         // untouched. This is the "set one field" UI flow the
         // dashboard uses most of the time.
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("phone", "+34 901 00 00 00"))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(ShopResponse.class)
                 .value(resp -> {
                     assertThat(resp.phone()).isEqualTo("+34 901 00 00 00");
@@ -191,12 +201,14 @@ class ShopControllerIT {
         String token = loginAndGetToken();
         long id = seedShop("Lidl", null, null, null, null);
 
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("country", "ESP"))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -204,33 +216,39 @@ class ShopControllerIT {
         String token = loginAndGetToken();
         long id = seedShop("Lidl", null, null, null, null);
 
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of())
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void patchReturns404WhenShopUnknown() {
         String token = loginAndGetToken();
-        web().patch().uri("/api/shops/{id}", nextId())
+        web().patch()
+                .uri("/api/shops/{id}", nextId())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("phone", "+34 900 00 00 00"))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
     void patchRejectsUnauthenticated() {
         long id = seedShop("Aldi", null, null, null, null);
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("phone", "+34 900 00 00 00"))
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus()
+                .isUnauthorized();
     }
 
     @Test
@@ -242,7 +260,8 @@ class ShopControllerIT {
         String token = loginAndGetToken();
         long id = seedShop("Consum", null, null, null, null);
 
-        web().patch().uri("/api/shops/{id}", id)
+        web().patch()
+                .uri("/api/shops/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
@@ -254,11 +273,12 @@ class ShopControllerIT {
                         "taxId", "C76543210",
                         "website", "https://consum.es"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT address_line, postal_code, city, country, phone, tax_id, website "
-              + "FROM shops WHERE id = ?", id);
+                "SELECT address_line, postal_code, city, country, phone, tax_id, website " + "FROM shops WHERE id = ?",
+                id);
         assertThat(row.get("address_line")).isEqualTo("Plaza del Ayuntamiento 5");
         assertThat(row.get("postal_code")).isEqualTo("46002");
         assertThat(row.get("city")).isEqualTo("Valencia");
@@ -269,8 +289,7 @@ class ShopControllerIT {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

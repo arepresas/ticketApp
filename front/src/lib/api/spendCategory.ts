@@ -26,6 +26,6 @@ export const DEFAULT_SPEND_CATEGORY: SpendCategory = 'other';
  * donut disagree with the total beside it.
  */
 export const asSpendCategory = (value: unknown): SpendCategory =>
-	SPEND_CATEGORIES.includes(value as SpendCategory)
-		? (value as SpendCategory)
-		: DEFAULT_SPEND_CATEGORY;
+  SPEND_CATEGORIES.includes(value as SpendCategory)
+    ? (value as SpendCategory)
+    : DEFAULT_SPEND_CATEGORY;

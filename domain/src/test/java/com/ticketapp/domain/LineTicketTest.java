@@ -1,14 +1,11 @@
 package com.ticketapp.domain;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 /**
  * Per-ticket line. Crucially, {@code lineTotal} may be negative
@@ -26,28 +23,45 @@ class LineTicketTest {
         // Discount line: €3 store credit on a ticket whose cart
         // contained the product at full price.
         LineTicket lt = new LineTicket(
-                nextId(), nextId(), nextId(), nextId(),
-                new BigDecimal("1"), new BigDecimal("-3.00"),
-                Instant.now(), Instant.now());
+                nextId(),
+                nextId(),
+                nextId(),
+                nextId(),
+                new BigDecimal("1"),
+                new BigDecimal("-3.00"),
+                Instant.now(),
+                Instant.now());
         assertEquals(new BigDecimal("-3.00"), lt.lineTotal());
     }
 
     @Test
     void constructorRejectsZeroQuantity() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> new LineTicket(
-                        nextId(), nextId(), nextId(), nextId(),
-                        BigDecimal.ZERO, BigDecimal.ONE,
-                        Instant.now(), Instant.now()));
+                        nextId(),
+                        nextId(),
+                        nextId(),
+                        nextId(),
+                        BigDecimal.ZERO,
+                        BigDecimal.ONE,
+                        Instant.now(),
+                        Instant.now()));
     }
 
     @Test
     void constructorRejectsNegativeQuantity() {
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> new LineTicket(
-                        nextId(), nextId(), nextId(), nextId(),
-                        new BigDecimal("-1"), BigDecimal.ONE,
-                        Instant.now(), Instant.now()));
+                        nextId(),
+                        nextId(),
+                        nextId(),
+                        nextId(),
+                        new BigDecimal("-1"),
+                        BigDecimal.ONE,
+                        Instant.now(),
+                        Instant.now()));
     }
 
     @Test
@@ -63,15 +77,12 @@ class LineTicketTest {
         long pr = nextId();
         BigDecimal one = BigDecimal.ONE;
 
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(nextId(), t, p, pr, null, one, now, now));
-        assertThrows(NullPointerException.class,
-                () -> new LineTicket(nextId(), t, p, pr, one, null, now, now));
+        assertThrows(NullPointerException.class, () -> new LineTicket(nextId(), t, p, pr, null, one, now, now));
+        assertThrows(NullPointerException.class, () -> new LineTicket(nextId(), t, p, pr, one, null, now, now));
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

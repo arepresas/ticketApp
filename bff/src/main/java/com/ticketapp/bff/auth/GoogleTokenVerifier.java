@@ -4,15 +4,14 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 /**
  * Verifies Google-issued id_tokens by checking:
@@ -49,13 +48,11 @@ public class GoogleTokenVerifier {
         }
         try {
             this.delegate = new GoogleIdTokenVerifier.Builder(
-                    GoogleNetHttpTransport.newTrustedTransport(),
-                    GsonFactory.getDefaultInstance())
+                            GoogleNetHttpTransport.newTrustedTransport(), GsonFactory.getDefaultInstance())
                     .setAudience(Collections.singletonList(expectedAudience))
                     .build();
         } catch (GeneralSecurityException | IOException e) {
-            throw new IllegalStateException(
-                    "Cannot initialise GoogleIdTokenVerifier", e);
+            throw new IllegalStateException("Cannot initialise GoogleIdTokenVerifier", e);
         }
         log.info("GoogleTokenVerifier ready (audience={}…)", mask(expectedAudience));
     }
@@ -89,7 +86,9 @@ public class GoogleTokenVerifier {
         try {
             GoogleIdToken parsed = delegate.verify(idToken);
             if (parsed == null) {
-                sink.onReject("verify_failed", "GoogleIdTokenVerifier returned null (bad signature, wrong audience, or expired)");
+                sink.onReject(
+                        "verify_failed",
+                        "GoogleIdTokenVerifier returned null (bad signature, wrong audience, or expired)");
                 return Optional.empty();
             }
             GoogleIdToken.Payload p = parsed.getPayload();
@@ -97,8 +96,8 @@ public class GoogleTokenVerifier {
                     ? null
                     : p.getAudienceAsList().stream().findFirst().orElse(null);
             if (!expectedAudience.equals(actualAudience)) {
-                sink.onReject("audience_mismatch",
-                        "expected=" + mask(expectedAudience) + " actual=" + mask(actualAudience));
+                sink.onReject(
+                        "audience_mismatch", "expected=" + mask(expectedAudience) + " actual=" + mask(actualAudience));
                 return Optional.empty();
             }
             String issuer = p.getIssuer();

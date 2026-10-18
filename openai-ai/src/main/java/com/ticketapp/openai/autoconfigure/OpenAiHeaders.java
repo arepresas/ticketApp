@@ -32,8 +32,7 @@ import java.util.Map;
  */
 public final class OpenAiHeaders {
 
-    private OpenAiHeaders() {
-    }
+    private OpenAiHeaders() {}
 
     /**
      * Parse the raw {@code OPENAI_HEADERS} value into an immutable
@@ -63,16 +62,13 @@ public final class OpenAiHeaders {
                 // error message should name the actual mistake.
                 if (eq < 0) {
                     throw new IllegalArgumentException(
-                            "OPENAI_HEADERS entry is malformed (expected `key=value`): "
-                                    + entry + " in " + raw.trim());
+                            "OPENAI_HEADERS entry is malformed (expected `key=value`): " + entry + " in " + raw.trim());
                 }
-                throw new IllegalArgumentException(
-                        "OPENAI_HEADERS entry has an empty key: " + entry);
+                throw new IllegalArgumentException("OPENAI_HEADERS entry has an empty key: " + entry);
             }
             if (eq < 0) {
                 throw new IllegalArgumentException(
-                        "OPENAI_HEADERS entry is malformed (expected `key=value`): "
-                                + entry + " in " + raw.trim());
+                        "OPENAI_HEADERS entry is malformed (expected `key=value`): " + entry + " in " + raw.trim());
             }
             out.put(name, trimmed.substring(eq + 1).trim());
         }

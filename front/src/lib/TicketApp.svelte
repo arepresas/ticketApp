@@ -62,16 +62,52 @@
 </section>
 
 <style>
-  :host { display: block; font-family: system-ui, sans-serif; }
-  .ticket-app { padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
-  header { display: flex; justify-content: space-between; align-items: center; }
-  ul { list-style: none; padding: 0; margin: 0; }
-  li { padding: 0.5rem 0; border-bottom: 1px solid #eee; }
-  .status { margin-left: 0.5rem; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem; }
-  .status-OPEN { background: #ddf; }
-  .status-IN_PROGRESS { background: #ffd; }
-  .status-DONE { background: #dfd; }
-  .status-CANCELLED { background: #fdd; }
-  .error { color: #b00; }
-  .empty { color: #666; font-style: italic; }
+  :host {
+    display: block;
+    font-family: system-ui, sans-serif;
+  }
+  .ticket-app {
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+  }
+  .status {
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+  }
+  .status-OPEN {
+    background: #ddf;
+  }
+  .status-IN_PROGRESS {
+    background: #ffd;
+  }
+  .status-DONE {
+    background: #dfd;
+  }
+  .status-CANCELLED {
+    background: #fdd;
+  }
+  .error {
+    color: #b00;
+  }
+  .empty {
+    color: #666;
+    font-style: italic;
+  }
 </style>

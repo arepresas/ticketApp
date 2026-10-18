@@ -1,22 +1,21 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
 import com.ticketapp.domain.ai.ReceiptExtractor;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 
 /**
  * Reusable {@code @TestConfiguration} that swaps the real
@@ -46,8 +45,7 @@ public class TestReceiptExtractorConfig {
      */
     @FunctionalInterface
     public interface StubbedExtractor {
-        ReceiptExtractionResult apply(ReceiptExtractionRequest request)
-                throws ReceiptExtractionException;
+        ReceiptExtractionResult apply(ReceiptExtractionRequest request) throws ReceiptExtractionException;
     }
 
     /**
@@ -55,11 +53,11 @@ public class TestReceiptExtractorConfig {
      * triggered an extraction" without having to mock Mockito in an
      * IT (the IT uses real Spring + real JdbcTemplate, not mocks).
      */
-    private static final List<ReceiptExtractionRequest> CALLS =
-            new ArrayList<>();
+    private static final List<ReceiptExtractionRequest> CALLS = new ArrayList<>();
 
     /** Last outcome returned, useful for assertions on retries. */
     private static final AtomicInteger SUCCESS_COUNT = new AtomicInteger();
+
     private static final AtomicInteger FAILURE_COUNT = new AtomicInteger();
 
     public static void reset() {
@@ -102,8 +100,7 @@ public class TestReceiptExtractorConfig {
     public static ReceiptExtractor stubbed(StubbedExtractor fn) {
         return new ReceiptExtractor() {
             @Override
-            public ReceiptExtraction extract(ReceiptExtractionRequest request)
-                    throws ReceiptExtractionException {
+            public ReceiptExtraction extract(ReceiptExtractionRequest request) throws ReceiptExtractionException {
                 CALLS.add(request);
                 ReceiptExtractionResult result = fn.apply(request);
                 SUCCESS_COUNT.incrementAndGet();
@@ -115,8 +112,7 @@ public class TestReceiptExtractorConfig {
     /** Counterpart that always throws — useful for failure-path ITs. */
     public static ReceiptExtractor alwaysFailing(String message) {
         return stubbed(req -> {
-            throw new ReceiptExtractionException(500, false,
-                message);
+            throw new ReceiptExtractionException(500, false, message);
         });
     }
 

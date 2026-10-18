@@ -1,15 +1,14 @@
 package com.ticketapp.openai;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import javax.imageio.ImageIO;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
-
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 
 /**
  * Extracts plain text from a digital-born PDF and rasterizes scanned
@@ -84,12 +83,12 @@ public class PdfTextExtractor {
                 return null;
             }
             if (pageCount > 1) {
-                log.warn("PDF has {} pages; rasterizing only the first page "
-                        + "— multi-page receipts are out of scope", pageCount);
+                log.warn(
+                        "PDF has {} pages; rasterizing only the first page " + "— multi-page receipts are out of scope",
+                        pageCount);
             }
             PDFRenderer renderer = new PDFRenderer(doc);
-            BufferedImage image = renderer.renderImageWithDPI(
-                    0, RASTERIZE_DPI);
+            BufferedImage image = renderer.renderImageWithDPI(0, RASTERIZE_DPI);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             if (!ImageIO.write(image, "png", out)) {
                 throw new IOException("no PNG ImageIO writer registered");

@@ -19,7 +19,7 @@ import './lib/auth/host';
 // needed. Target element is supplied by index.html.
 const headerTarget = document.getElementById('app-header-mount');
 if (headerTarget) {
-	mount(Header, { target: headerTarget });
+  mount(Header, { target: headerTarget });
 }
 
 export { TicketApp, LandingApp, DashboardApp, NewTicketApp, PendingTicketsApp, TicketDetailApp };

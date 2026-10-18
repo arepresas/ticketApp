@@ -1,5 +1,15 @@
 package com.ticketapp.openai;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.SpendCategory;
@@ -8,24 +18,11 @@ import com.ticketapp.domain.ai.ReceiptExtraction;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionRequest;
 import com.ticketapp.openai.autoconfigure.OpenAiProperties;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link OpenAiReceiptExtractor} — the provider
@@ -64,21 +61,21 @@ class OpenAiReceiptExtractorTest {
         properties = new OpenAiProperties(
                 "https://api.openai.com/v1", "k", MODEL, 30_000L, 0.0, 16384, 65_536, "low", "", false);
         extractor = new OpenAiReceiptExtractor(
-                client, pdfExtractor,
+                client,
+                pdfExtractor,
                 new ReceiptResponseParser(new ObjectMapper(), Clock.systemDefaultZone()),
                 properties);
     }
 
     @Test
     void imageInputForwardsBytesAndMimeTypeToTheClient() throws Exception {
-        byte[] png = new byte[]{1, 2, 3};
+        byte[] png = new byte[] {1, 2, 3};
         when(client.extractReceipt(any())).thenReturn("""
                 {"merchant":"Mercadona","purchase_date":"2026-07-04",
                  "products":[],"total_amount":1.20,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(png, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(png, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         assertThat(result.rawReply()).contains("Mercadona");
@@ -88,15 +85,14 @@ class OpenAiReceiptExtractorTest {
 
     @Test
     void pdfInputRoutesThroughPdfTextExtractor() throws Exception {
-        byte[] pdf = new byte[]{'%', 'P', 'D', 'F'};
+        byte[] pdf = new byte[] {'%', 'P', 'D', 'F'};
         when(pdfExtractor.extract(pdf)).thenReturn("MERCADONA 12,50");
         when(client.extractReceipt(any())).thenReturn("""
                 {"merchant":"Mercadona","purchase_date":"2026-07-04",
                  "products":[],"total_amount":12.50,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(pdf, "application/pdf"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(pdf, "application/pdf"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         verify(pdfExtractor).extract(pdf);
@@ -115,8 +111,8 @@ class OpenAiReceiptExtractorTest {
         // branch as a normal photo upload. Pinned here so a
         // future regression that re-throws on empty text, or that
         // skips the rasterization step, catches the eye.
-        byte[] pdf = new byte[]{'%', 'P', 'D', 'F'};
-        byte[] rasterized = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        byte[] pdf = new byte[] {'%', 'P', 'D', 'F'};
+        byte[] rasterized = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
         when(pdfExtractor.extract(pdf)).thenReturn("");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(rasterized);
         when(client.extractReceipt(any())).thenReturn("""
@@ -124,8 +120,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":12.50,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(pdf, "application/pdf"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(pdf, "application/pdf"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         assertThat(result.result().totalAmount()).isEqualByComparingTo("12.50");
@@ -136,8 +131,8 @@ class OpenAiReceiptExtractorTest {
         // Client must receive the rasterized PNG — not the raw PDF
         // bytes, not text. The mime is image/png so the API
         // actually accepts it.
-        verify(client).extractReceipt(argThat(input ->
-                input.pdfText() == null
+        verify(client)
+                .extractReceipt(argThat(input -> input.pdfText() == null
                         && "image/png".equals(input.mimeType())
                         && input.bytes() == rasterized));
     }
@@ -149,13 +144,11 @@ class OpenAiReceiptExtractorTest {
         // The fallback must surface the real cause (not a
         // generic "PDF text extraction" message) so operators can
         // see the underlying IOException in the dashboard.
-        byte[] pdf = new byte[]{1};
+        byte[] pdf = new byte[] {1};
         when(pdfExtractor.extract(pdf)).thenReturn("");
-        when(pdfExtractor.rasterizeFirstPageAsPng(pdf))
-                .thenThrow(new java.io.IOException("PDFBox boom"));
+        when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenThrow(new java.io.IOException("PDFBox boom"));
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(pdf, "application/pdf")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(pdf, "application/pdf")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("PDF rasterization failed")
                 .hasMessageContaining("PDFBox boom");
@@ -167,12 +160,11 @@ class OpenAiReceiptExtractorTest {
         // the PDF spec) should surface a clear error, not a silent
         // null deref. The fallback returns null and the extractor
         // throws a dedicated "no pages to rasterize" message.
-        byte[] pdf = new byte[]{1};
+        byte[] pdf = new byte[] {1};
         when(pdfExtractor.extract(pdf)).thenReturn("");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(null);
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(pdf, "application/pdf")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(pdf, "application/pdf")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("no pages to rasterize");
     }
@@ -185,15 +177,13 @@ class OpenAiReceiptExtractorTest {
         // underlying message — the operator sees the real cause,
         // not a stuck "PDF text extraction returned empty" string
         // that the fallback already handled.
-        byte[] pdf = new byte[]{1};
-        byte[] rasterized = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        byte[] pdf = new byte[] {1};
+        byte[] rasterized = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
         when(pdfExtractor.extract(pdf)).thenReturn("");
         when(pdfExtractor.rasterizeFirstPageAsPng(pdf)).thenReturn(rasterized);
-        when(client.extractReceipt(any())).thenThrow(
-                new RuntimeException("the provider 503"));
+        when(client.extractReceipt(any())).thenThrow(new RuntimeException("the provider 503"));
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(pdf, "application/pdf")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(pdf, "application/pdf")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("the provider 503")
                 .hasMessageNotContaining("PDF text extraction");
@@ -215,8 +205,7 @@ class OpenAiReceiptExtractorTest {
                 }
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         // Raw reply is preserved end-to-end so the orchestrator can
@@ -243,8 +232,7 @@ class OpenAiReceiptExtractorTest {
                 }
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         List<ProductLine> products = result.result().products();
         assertThat(products).hasSize(2);
@@ -257,8 +245,7 @@ class OpenAiReceiptExtractorTest {
     void unparseableReplyRaisesWithRawInMessage() throws Exception {
         when(client.extractReceipt(any())).thenReturn("not json at all");
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("not json at all");
     }
@@ -269,8 +256,7 @@ class OpenAiReceiptExtractorTest {
                 {"purchase_date":"2026-01-01","total_amount":1,"currency":"EUR"}
                 """);
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class);
     }
 
@@ -289,8 +275,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":32.01,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().purchaseDate()).isBetween(before, LocalDate.now());
     }
@@ -308,8 +293,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":32.01,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().purchaseDate()).isBetween(before, LocalDate.now());
     }
@@ -321,8 +305,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":10.00}
                 """);
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("does not match the expected schema")
                 .hasMessageContaining("missing or empty field: currency")
@@ -337,8 +320,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":1,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().category()).isEqualTo(SpendCategory.OTHER);
     }
@@ -355,8 +337,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":1,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().category()).isEqualTo(SpendCategory.TRANSPORT);
     }
@@ -374,8 +355,7 @@ class OpenAiReceiptExtractorTest {
         String giantThink = "<think>" + "x".repeat(8000);
         when(client.extractReceipt(any())).thenReturn(giantThink);
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("only thinking")
                 .hasMessageContaining("token budget");
@@ -391,8 +371,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":1,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("X");
     }
@@ -411,8 +390,7 @@ class OpenAiReceiptExtractorTest {
                 </output>
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         assertThat(result.result().totalAmount()).isEqualByComparingTo("12.50");
@@ -430,8 +408,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":22.54,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("LIDL");
     }
@@ -443,11 +420,9 @@ class OpenAiReceiptExtractorTest {
         // recovery finds no balanced brace block, the helper returns
         // null, and the original parse failure surfaces with the
         // raw text attached.
-        when(client.extractReceipt(any())).thenReturn(
-                "Sorry, I cannot extract that for you.");
+        when(client.extractReceipt(any())).thenReturn("Sorry, I cannot extract that for you.");
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("non-JSON reply")
                 .hasMessageContaining("Sorry");
@@ -458,11 +433,9 @@ class OpenAiReceiptExtractorTest {
         // No think tag, no closed brace, just broken JSON. Primary
         // parse fails, substring recovery finds no closing brace,
         // original failure surfaces.
-        when(client.extractReceipt(any())).thenReturn(
-                "{\"merchant\":\"X\",\"purchase_date\"");
+        when(client.extractReceipt(any())).thenReturn("{\"merchant\":\"X\",\"purchase_date\"");
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("non-JSON reply");
     }
@@ -477,8 +450,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":1,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("X {not a brace}");
     }
@@ -490,8 +462,7 @@ class OpenAiReceiptExtractorTest {
         // explicit "only thinking" message.
         when(client.extractReceipt(any())).thenReturn("");
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class)
                 .hasMessageContaining("only thinking");
     }
@@ -507,8 +478,7 @@ class OpenAiReceiptExtractorTest {
                 ```
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("LIDL");
     }
@@ -525,8 +495,7 @@ class OpenAiReceiptExtractorTest {
                  "products":[],"total_amount":1,"currency":"EURO"}
                 """);
 
-        assertThatThrownBy(() -> extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png")))
+        assertThatThrownBy(() -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")))
                 .isInstanceOf(ReceiptExtractionException.class);
     }
 
@@ -536,14 +505,13 @@ class OpenAiReceiptExtractorTest {
         // logs the diagnostic. So the adapter must classify, not
         // copy: a vendor-named endpoint or a key in the upstream
         // body must not be able to reach the row.
-        when(client.extractReceipt(any())).thenThrow(
-                new com.ticketapp.openai.OpenAiApiClient.OpenAiApiException(401,
-                        "401 for https://internal.acme/v1 key=sk-live-abcdef {\"note\":\"x\"}"));
+        when(client.extractReceipt(any()))
+                .thenThrow(new com.ticketapp.openai.OpenAiApiClient.OpenAiApiException(
+                        401, "401 for https://internal.acme/v1 key=sk-live-abcdef {\"note\":\"x\"}"));
 
         ReceiptExtractionException thrown = org.junit.jupiter.api.Assertions.assertThrows(
                 ReceiptExtractionException.class,
-                () -> extractor.extract(
-                        new ReceiptExtractionRequest(new byte[]{1}, "image/png")));
+                () -> extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png")));
 
         assertThat(thrown.safeMessage())
                 .contains("check the configured key")
@@ -573,13 +541,11 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":1.20,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("Mercadona");
         assertThat(result.result().products()).hasSize(1);
-        assertThat(result.rawReply()).contains("\"shop\"")
-                .contains("Calle Mayor 1");
+        assertThat(result.rawReply()).contains("\"shop\"").contains("Calle Mayor 1");
     }
 
     @Test
@@ -600,8 +566,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":11.10,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().products())
                 .extracting(ProductLine::name, ProductLine::unit)
@@ -638,8 +603,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":2.28,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         var line = result.result().products().get(0);
         assertThat(line.pricePerUnit()).isEqualByComparingTo("1.14");
@@ -663,8 +627,7 @@ class OpenAiReceiptExtractorTest {
                  "total_amount":0.90,"currency":"EUR"}
                 """);
 
-        ReceiptExtraction result = extractor.extract(
-                new ReceiptExtractionRequest(new byte[]{1}, "image/png"));
+        ReceiptExtraction result = extractor.extract(new ReceiptExtractionRequest(new byte[] {1}, "image/png"));
 
         assertThat(result.result().merchant()).isEqualTo("Dia");
         assertThat(result.result().products()).hasSize(1);

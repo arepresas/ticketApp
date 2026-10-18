@@ -4,15 +4,14 @@ import com.ticketapp.domain.CategorySpend;
 import com.ticketapp.domain.MonthlyTicketCount;
 import com.ticketapp.domain.TicketStats;
 import com.ticketapp.domain.TicketStatsRepository;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Clock;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Assembles the dashboard read-model for one owner.
@@ -98,14 +97,17 @@ public class DashboardService {
         // long or five.
         YearMonth currentMonth = YearMonth.now(clock.withZone(REPORTING_ZONE));
         YearMonth from = currentMonth.minusMonths(MONTHS_OF_HISTORY - 1L);
-        List<MonthlyTicketCount> perMonth = MonthlyTicketCount.complete(
-                from, currentMonth, stats.countByMonth(ownerId, from, currentMonth));
+        List<MonthlyTicketCount> perMonth =
+                MonthlyTicketCount.complete(from, currentMonth, stats.countByMonth(ownerId, from, currentMonth));
 
-        List<CategorySpend> perCategory = CategorySpend.complete(
-                stats.sumByCategory(ownerId, REPORTING_CURRENCY));
+        List<CategorySpend> perCategory = CategorySpend.complete(stats.sumByCategory(ownerId, REPORTING_CURRENCY));
 
-        log.debug("Dashboard for owner {}: {} tickets, {} open, {} extracted",
-                ownerId, kpis.totalTickets(), kpis.openTickets(), kpis.extractedTicketsInCurrency());
+        log.debug(
+                "Dashboard for owner {}: {} tickets, {} open, {} extracted",
+                ownerId,
+                kpis.totalTickets(),
+                kpis.openTickets(),
+                kpis.extractedTicketsInCurrency());
 
         return new DashboardView(kpis, perMonth, perCategory);
     }
@@ -116,8 +118,5 @@ public class DashboardService {
      * contract stays a separate concern from the domain records.
      */
     public record DashboardView(
-            TicketStats kpis,
-            List<MonthlyTicketCount> ticketsPerMonth,
-            List<CategorySpend> spendByCategory) {
-    }
+            TicketStats kpis, List<MonthlyTicketCount> ticketsPerMonth, List<CategorySpend> spendByCategory) {}
 }

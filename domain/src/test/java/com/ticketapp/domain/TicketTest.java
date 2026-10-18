@@ -1,11 +1,5 @@
 package com.ticketapp.domain;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -14,12 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
 class TicketTest {
 
     /** Fixed owner for all tests in this class. The UUID value is
      * arbitrary — Ticket equality/identity is id-based, so each
      * test that needs a specific owner can use its own. */
     private static final long OWNER = 1111L;
+
     private static final long OTHER_OWNER = 2222L;
 
     @Test
@@ -44,8 +43,7 @@ class TicketTest {
         assertEquals(t.description(), moved.description());
         assertEquals(t.createdAt(), moved.createdAt());
         assertNotNull(moved.updatedAt());
-        assertFalse(moved.updatedAt().isBefore(t.updatedAt()),
-                "updatedAt must not move backwards");
+        assertFalse(moved.updatedAt().isBefore(t.updatedAt()), "updatedAt must not move backwards");
     }
 
     @Test
@@ -58,8 +56,7 @@ class TicketTest {
         // reading the underlying extraction row. DELETED is the
         // soft-delete sink: invisible to every read path.
         assertEquals(7, List.of(Ticket.Status.values()).size());
-        assertEquals(Ticket.Status.DELETED,
-                Ticket.Status.valueOf("DELETED"));
+        assertEquals(Ticket.Status.DELETED, Ticket.Status.valueOf("DELETED"));
     }
 
     @Test
@@ -108,43 +105,82 @@ class TicketTest {
         assertFalse(failed.updatedAt().isBefore(created));
     }
 
-
-
     @Test
     void constructorRejectsNullTitle() {
         Instant now = Instant.now();
-        NullPointerException ex = assertThrows(NullPointerException.class,
+        NullPointerException ex = assertThrows(
+                NullPointerException.class,
                 () -> new Ticket(
-                        nextId(), OWNER, null, "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null, null, 0));
+                        nextId(),
+                        OWNER,
+                        null,
+                        "",
+                        Ticket.Status.OPEN,
+                        now,
+                        now,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        null,
+                        null,
+                        0));
         assertEquals("title", ex.getMessage());
     }
 
     @Test
     void constructorRejectsNullStatus() {
         Instant now = Instant.now();
-        assertThrows(NullPointerException.class,
-                () -> new Ticket(
-                        nextId(), OWNER, "x", "", null, now, now,
-                        null, null, null, null, 0, null, null, 0));
+        assertThrows(
+                NullPointerException.class,
+                () -> new Ticket(nextId(), OWNER, "x", "", null, now, now, null, null, null, null, 0, null, null, 0));
     }
 
     @Test
     void constructorRejectsNullCreatedAt() {
         Instant now = Instant.now();
-        assertThrows(NullPointerException.class,
+        assertThrows(
+                NullPointerException.class,
                 () -> new Ticket(
-                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, null, now,
-                        null, null, null, null, 0, null, null, 0));
+                        nextId(),
+                        OWNER,
+                        "x",
+                        "",
+                        Ticket.Status.OPEN,
+                        null,
+                        now,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        null,
+                        null,
+                        0));
     }
 
     @Test
     void constructorRejectsNullUpdatedAt() {
         Instant now = Instant.now();
-        assertThrows(NullPointerException.class,
+        assertThrows(
+                NullPointerException.class,
                 () -> new Ticket(
-                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, null,
-                        null, null, null, null, 0, null, null, 0));
+                        nextId(),
+                        OWNER,
+                        "x",
+                        "",
+                        Ticket.Status.OPEN,
+                        now,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        null,
+                        null,
+                        0));
     }
 
     @Test
@@ -153,8 +189,7 @@ class TicketTest {
         // an accidentally-empty message never sneaks into the DB row.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now,
-                null, null, null, "   ", 0, null, null, 0);
+                nextId(), OWNER, "x", "", Ticket.Status.ON_ERROR, now, now, null, null, null, "   ", 0, null, null, 0);
 
         assertNull(t.errorMessage());
     }
@@ -167,8 +202,7 @@ class TicketTest {
         // signal regardless of what the provider returned.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                null, null, null, null, 0, null, "   ", 0);
+                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now, null, null, null, null, 0, null, "   ", 0);
 
         assertNull(t.ocrText());
     }
@@ -179,10 +213,24 @@ class TicketTest {
         // The DB column is NOT NULL DEFAULT 0; the domain guards
         // against an accidentally-negative value (a bug elsewhere
         // could otherwise persist -1 through the UPSERT).
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> new Ticket(
-                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, -1, null, null, 0));
+                        nextId(),
+                        OWNER,
+                        "x",
+                        "",
+                        Ticket.Status.OPEN,
+                        now,
+                        now,
+                        null,
+                        null,
+                        null,
+                        null,
+                        -1,
+                        null,
+                        null,
+                        0));
     }
 
     @Test
@@ -194,8 +242,7 @@ class TicketTest {
         // one.
         Instant now = Instant.now();
         Ticket t = new Ticket(
-                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                null, null, null, null, 0, null, null, 0);
+                nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now, null, null, null, null, 0, null, null, 0);
 
         assertNull(t.shopId());
     }
@@ -230,10 +277,38 @@ class TicketTest {
         // Build the instances manually so the id is fixed.
         long id = nextId();
         Instant created = Instant.parse("2026-07-05T17:00:00Z");
-        Ticket a = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0, null, null, 0);
-        Ticket b = new Ticket(id, OWNER, "x", "", Ticket.Status.ON_ERROR, created, created,
-                null, null, null, "msg", 0, null, null, 0);
+        Ticket a = new Ticket(
+                id,
+                OWNER,
+                "x",
+                "",
+                Ticket.Status.ON_ERROR,
+                created,
+                created,
+                null,
+                null,
+                null,
+                "msg",
+                0,
+                null,
+                null,
+                0);
+        Ticket b = new Ticket(
+                id,
+                OWNER,
+                "x",
+                "",
+                Ticket.Status.ON_ERROR,
+                created,
+                created,
+                null,
+                null,
+                null,
+                "msg",
+                0,
+                null,
+                null,
+                0);
 
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
@@ -298,8 +373,7 @@ class TicketTest {
         // to identify the tenant.
         Ticket t = Ticket.open(OWNER, "x", "");
 
-        assertTrue(t.toString().contains(Long.toString(OWNER)),
-                "expected ownerId in toString: " + t);
+        assertTrue(t.toString().contains(Long.toString(OWNER)), "expected ownerId in toString: " + t);
     }
 
     @Test
@@ -307,8 +381,7 @@ class TicketTest {
         // User-driven edit through the detail screen. The id,
         // owner, status, file columns, and error state must all
         // survive — only the title swaps and updatedAt bumps.
-        Ticket t = Ticket.open(OWNER, "old", "desc")
-                .markError("previous failure");
+        Ticket t = Ticket.open(OWNER, "old", "desc").markError("previous failure");
         Ticket renamed = t.withTitle("new");
 
         assertEquals("new", renamed.title());
@@ -318,8 +391,7 @@ class TicketTest {
         assertEquals(t.status(), renamed.status());
         assertEquals(t.errorMessage(), renamed.errorMessage());
         assertEquals(t.createdAt(), renamed.createdAt());
-        assertFalse(renamed.updatedAt().isBefore(t.updatedAt()),
-                "updatedAt must not move backwards");
+        assertFalse(renamed.updatedAt().isBefore(t.updatedAt()), "updatedAt must not move backwards");
     }
 
     @Test
@@ -363,8 +435,7 @@ class TicketTest {
         assertEquals(t.status(), anchored.status());
         assertEquals(t.errorMessage(), anchored.errorMessage());
         assertEquals(t.attempts(), anchored.attempts());
-        assertFalse(anchored.updatedAt().isBefore(t.updatedAt()),
-                "updatedAt must not move backwards");
+        assertFalse(anchored.updatedAt().isBefore(t.updatedAt()), "updatedAt must not move backwards");
     }
 
     @Test
@@ -388,10 +459,24 @@ class TicketTest {
     @Test
     void constructorRejectsNegativeVersion() {
         Instant now = Instant.now();
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(
+                IllegalArgumentException.class,
                 () -> new Ticket(
-                        nextId(), OWNER, "x", "", Ticket.Status.OPEN, now, now,
-                        null, null, null, null, 0, null, null, -1));
+                        nextId(),
+                        OWNER,
+                        "x",
+                        "",
+                        Ticket.Status.OPEN,
+                        now,
+                        now,
+                        null,
+                        null,
+                        null,
+                        null,
+                        0,
+                        null,
+                        null,
+                        -1));
     }
 
     @Test
@@ -406,20 +491,17 @@ class TicketTest {
 
     @Test
     void toStringRedactsBlobsToSizes() {
-        Ticket t = Ticket.open(OWNER, "x", "d",
-                "image/png", "r.png", new byte[]{1, 2, 3}).withOcrText("hello");
+        Ticket t = Ticket.open(OWNER, "x", "d", "image/png", "r.png", new byte[] {1, 2, 3})
+                .withOcrText("hello");
 
         String rendered = t.toString();
 
-        assertTrue(rendered.contains("3 bytes"),
-                "expected file size, not contents: " + rendered);
-        assertTrue(rendered.contains("5 chars"),
-                "expected ocr size, not contents: " + rendered);
+        assertTrue(rendered.contains("3 bytes"), "expected file size, not contents: " + rendered);
+        assertTrue(rendered.contains("5 chars"), "expected ocr size, not contents: " + rendered);
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

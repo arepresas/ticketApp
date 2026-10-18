@@ -20,8 +20,8 @@ const TOKEN_KEY = 'ticketapp.session';
  * `window` is not a valid identifier outside browser globals.
  */
 const sessionStorage = (): Storage | null => {
-	const g = (globalThis as { window?: { sessionStorage?: Storage } }).window;
-	return g?.sessionStorage ?? null;
+  const g = (globalThis as { window?: { sessionStorage?: Storage } }).window;
+  return g?.sessionStorage ?? null;
 };
 
 const readToken = (): string | null => {
@@ -163,9 +163,7 @@ if (import.meta.env.DEV) {
     state.status = 'authenticated';
     state.error = null;
   };
-  (
-    globalThis as unknown as { __logout?: () => void }
-  ).__logout = () => {
+  (globalThis as unknown as { __logout?: () => void }).__logout = () => {
     state.user = null;
     state.status = 'idle';
     state.error = null;

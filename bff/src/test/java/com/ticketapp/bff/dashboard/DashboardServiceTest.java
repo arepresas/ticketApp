@@ -1,22 +1,5 @@
 package com.ticketapp.bff.dashboard;
 
-import com.ticketapp.domain.CategorySpend;
-import com.ticketapp.domain.MonthlyTicketCount;
-import com.ticketapp.domain.SpendCategory;
-import com.ticketapp.domain.TicketStats;
-import com.ticketapp.domain.TicketStatsRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.Month;
-import java.time.YearMonth;
-import java.time.ZoneId;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,6 +8,22 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.ticketapp.domain.CategorySpend;
+import com.ticketapp.domain.MonthlyTicketCount;
+import com.ticketapp.domain.SpendCategory;
+import com.ticketapp.domain.TicketStats;
+import com.ticketapp.domain.TicketStatsRepository;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.Month;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit test for {@link DashboardService}. The two policies it owns —
@@ -80,9 +79,9 @@ class DashboardServiceTest {
         // Clock says March 2026, so the window is October 2025 … March
         // 2026 inclusive — asserted as literals, not recomputed with
         // YearMonth.now(), which is the bug this test used to have.
-        verify(stats).countByMonth(OWNER,
-                YearMonth.of(2026, Month.FEBRUARY).minusMonths(4),
-                YearMonth.of(2026, Month.MARCH));
+        verify(stats)
+                .countByMonth(
+                        OWNER, YearMonth.of(2026, Month.FEBRUARY).minusMonths(4), YearMonth.of(2026, Month.MARCH));
     }
 
     @Test
@@ -104,8 +103,7 @@ class DashboardServiceTest {
                         YearMonth.of(2026, Month.JANUARY),
                         YearMonth.of(2026, Month.FEBRUARY),
                         YearMonth.of(2026, Month.MARCH));
-        assertThat(series.stream().map(MonthlyTicketCount::count).toList())
-                .containsExactly(0L, 0L, 0L, 0L, 0L, 4L);
+        assertThat(series.stream().map(MonthlyTicketCount::count).toList()).containsExactly(0L, 0L, 0L, 0L, 0L, 4L);
     }
 
     @Test
@@ -116,8 +114,7 @@ class DashboardServiceTest {
 
         service.load(OWNER);
 
-        verify(stats).countByMonth(OWNER,
-                YearMonth.of(2025, Month.NOVEMBER), YearMonth.of(2026, Month.APRIL));
+        verify(stats).countByMonth(OWNER, YearMonth.of(2025, Month.NOVEMBER), YearMonth.of(2026, Month.APRIL));
     }
 
     @Test
@@ -128,8 +125,7 @@ class DashboardServiceTest {
 
         service.load(OWNER);
 
-        verify(stats).countByMonth(OWNER,
-                YearMonth.of(2025, Month.OCTOBER), YearMonth.of(2026, Month.MARCH));
+        verify(stats).countByMonth(OWNER, YearMonth.of(2025, Month.OCTOBER), YearMonth.of(2026, Month.MARCH));
     }
 
     /**
@@ -187,8 +183,8 @@ class DashboardServiceTest {
         // Both bounds must come from a single read. With a clock that
         // rolls over on the second call, a second read would produce
         // April here and a seven-month window.
-        verify(stats).countByMonth(eq(OWNER),
-                eq(YearMonth.of(2025, Month.OCTOBER)), eq(YearMonth.of(2026, Month.MARCH)));
+        verify(stats)
+                .countByMonth(eq(OWNER), eq(YearMonth.of(2025, Month.OCTOBER)), eq(YearMonth.of(2026, Month.MARCH)));
         assertThat(clock.reads.get()).isEqualTo(1);
     }
 
@@ -199,21 +195,27 @@ class DashboardServiceTest {
 
         List<CategorySpend> series = service.load(OWNER).spendByCategory();
 
-        assertThat(series).extracting(CategorySpend::category)
-                .containsExactly(SpendCategory.FOOD, SpendCategory.TRANSPORT,
-                        SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER);
+        assertThat(series)
+                .extracting(CategorySpend::category)
+                .containsExactly(
+                        SpendCategory.FOOD,
+                        SpendCategory.TRANSPORT,
+                        SpendCategory.LODGING,
+                        SpendCategory.PHARMACY,
+                        SpendCategory.OTHER);
         // The amount must survive: an earlier version of this test
         // stubbed sumByCategory before the shared helper and so
         // asserted against an empty list, passing for the wrong reason.
-        assertThat(series).filteredOn(r -> r.category() == SpendCategory.FOOD)
+        assertThat(series)
+                .filteredOn(r -> r.category() == SpendCategory.FOOD)
                 .singleElement()
                 .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("12.00"));
         // Absent categories must be zero, not merely present — a
         // regression inventing non-zero defaults would pass a
         // presence-only check.
-        for (SpendCategory absent : List.of(SpendCategory.TRANSPORT,
-                SpendCategory.LODGING, SpendCategory.OTHER)) {
-            assertThat(series).filteredOn(r -> r.category() == absent)
+        for (SpendCategory absent : List.of(SpendCategory.TRANSPORT, SpendCategory.LODGING, SpendCategory.OTHER)) {
+            assertThat(series)
+                    .filteredOn(r -> r.category() == absent)
                     .singleElement()
                     .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo(BigDecimal.ZERO));
         }
@@ -222,8 +224,8 @@ class DashboardServiceTest {
     @Test
     @DisplayName("returns zeros rather than failing when the owner has no data")
     void handlesEmptyOwner() {
-        when(stats.loadStats(anyLong(), anyString())).thenReturn(new TicketStats(
-                0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, "EUR"));
+        when(stats.loadStats(anyLong(), anyString()))
+                .thenReturn(new TicketStats(0, 0, 0, BigDecimal.ZERO, BigDecimal.ZERO, "EUR"));
         when(stats.countByMonth(anyLong(), any(), any())).thenReturn(List.of());
         when(stats.sumByCategory(anyLong(), anyString())).thenReturn(List.of());
 
@@ -258,8 +260,8 @@ class DashboardServiceTest {
      * how {@code returnsAllCategories} came to assert nothing.
      */
     private void stubStats(List<CategorySpend> categories) {
-        when(stats.loadStats(anyLong(), anyString())).thenReturn(new TicketStats(
-                3, 1, 2, new BigDecimal("40.00"), new BigDecimal("20.00"), "EUR"));
+        when(stats.loadStats(anyLong(), anyString()))
+                .thenReturn(new TicketStats(3, 1, 2, new BigDecimal("40.00"), new BigDecimal("20.00"), "EUR"));
         when(stats.countByMonth(anyLong(), any(), any())).thenReturn(List.of());
         when(stats.sumByCategory(anyLong(), anyString())).thenReturn(categories);
     }

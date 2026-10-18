@@ -9,7 +9,10 @@ import type { SessionResponse, AuthUser } from './types';
 const API_BASE = '/api/auth';
 
 export class AuthApiError extends Error {
-  constructor(message: string, readonly status: number) {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
     super(message);
     this.name = 'AuthApiError';
   }

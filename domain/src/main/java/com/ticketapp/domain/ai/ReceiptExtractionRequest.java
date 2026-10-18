@@ -30,17 +30,13 @@ import java.util.Arrays;
  * @param contentType MIME type as reported by the uploader; never
  *                    blank when {@code content} is non-null
  */
-public record ReceiptExtractionRequest(
-        byte[] content,
-        String contentType
-) {
+public record ReceiptExtractionRequest(byte[] content, String contentType) {
     public ReceiptExtractionRequest {
         if (content == null || content.length == 0) {
             throw new IllegalArgumentException("content must not be empty");
         }
         if (contentType == null || contentType.isBlank()) {
-            throw new IllegalArgumentException(
-                    "contentType is required when content is set");
+            throw new IllegalArgumentException("contentType is required when content is set");
         }
     }
 
@@ -63,8 +59,7 @@ public record ReceiptExtractionRequest(
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof ReceiptExtractionRequest other)) return false;
-        return Arrays.equals(content, other.content)
-                && java.util.Objects.equals(contentType, other.contentType);
+        return Arrays.equals(content, other.content) && java.util.Objects.equals(contentType, other.contentType);
     }
 
     @Override
@@ -76,7 +71,6 @@ public record ReceiptExtractionRequest(
     @Override
     public String toString() {
         // Don't dump the raw bytes into a log line — just the size.
-        return "ReceiptExtractionRequest[content=" + content.length + " bytes"
-                + ", contentType=" + contentType + "]";
+        return "ReceiptExtractionRequest[content=" + content.length + " bytes" + ", contentType=" + contentType + "]";
     }
 }

@@ -1,39 +1,5 @@
 package com.ticketapp.bff.ai;
 
-import com.ticketapp.domain.SpendCategory;
-import com.ticketapp.domain.Ticket;
-import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketExtraction;
-import com.ticketapp.domain.QuantityUnit;
-import com.ticketapp.domain.TicketExtraction.ProductLine;
-import com.ticketapp.domain.TicketExtractionRepository;
-import com.ticketapp.domain.TicketRepository;
-import com.ticketapp.domain.ai.ReceiptExtraction;
-import com.ticketapp.domain.ai.ReceiptExtractionException;
-import com.ticketapp.domain.ai.ReceiptExtractionRequest;
-import com.ticketapp.domain.ai.ReceiptExtractionResult;
-import com.ticketapp.domain.ai.ReceiptExtractor;
-import com.ticketapp.domain.exceptions.OptimisticLockException;
-import com.ticketapp.persistence.JdbcTicketRepository;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.mockito.InOrder;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.SimpleTransactionStatus;
-import org.springframework.transaction.support.TransactionTemplate;
-
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -44,6 +10,37 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.SpendCategory;
+import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.Ticket.Status;
+import com.ticketapp.domain.TicketExtraction;
+import com.ticketapp.domain.TicketExtraction.ProductLine;
+import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.ai.ReceiptExtraction;
+import com.ticketapp.domain.ai.ReceiptExtractionException;
+import com.ticketapp.domain.ai.ReceiptExtractionRequest;
+import com.ticketapp.domain.ai.ReceiptExtractionResult;
+import com.ticketapp.domain.ai.ReceiptExtractor;
+import com.ticketapp.domain.exceptions.OptimisticLockException;
+import com.ticketapp.persistence.JdbcTicketRepository;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Unit tests for {@link TicketExtractionService}.
@@ -101,21 +98,51 @@ class TicketExtractionServiceTest {
         PlatformTransactionManager tm = mock(PlatformTransactionManager.class);
         when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new TicketExtractionService(
-                tickets, extractions, jdbcTickets, receiptExtractor,
-                new TransactionTemplate(tm), new AiProperties(false, "0 0 0 1 1 ?", 5, 2, Duration.ofMinutes(10)),
+                tickets,
+                extractions,
+                jdbcTickets,
+                receiptExtractor,
+                new TransactionTemplate(tm),
+                new AiProperties(false, "0 0 0 1 1 ?", 5, 2, Duration.ofMinutes(10)),
                 new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
     }
 
     private static Ticket sampleTicket(long id) {
-        return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
-                Instant.now(), Instant.now(),
-                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
+        return new Ticket(
+                id,
+                OWNER,
+                "r.png",
+                "",
+                Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                "image/png",
+                "r.png",
+                new byte[] {1, 2, 3},
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     private static Ticket sampleTicket(long id, byte[] bytes) {
-        return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
-                Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null, null, 0);
+        return new Ticket(
+                id,
+                OWNER,
+                "r.png",
+                "",
+                Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                "image/png",
+                "r.png",
+                bytes,
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     @Test
@@ -130,8 +157,8 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
                                 "Mercadona",
                                 LocalDate.of(2026, Month.JULY, 4),
@@ -184,12 +211,17 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
-                                List.of(), BigDecimal.ONE, "EUR"),
-                        "{}", MODEL));
+                                "X",
+                                LocalDate.of(2026, Month.JANUARY, 1),
+                                SpendCategory.OTHER,
+                                List.of(),
+                                BigDecimal.ONE,
+                                "EUR"),
+                        "{}",
+                        MODEL));
 
         service.processTicket(open);
 
@@ -209,7 +241,9 @@ class TicketExtractionServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, false,
+                .thenThrow(new ReceiptExtractionException(
+                        500,
+                        false,
                         "provider 500 at https://internal.acme/v1",
                         "the AI provider is failing on its side (status 500)"));
 
@@ -225,8 +259,8 @@ class TicketExtractionServiceTest {
         // the scheduler's POV.
         verify(tickets, times(2)).save(any(Ticket.class));
         verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS));
-        verify(tickets).save(argThat(t ->
-                t.status() == Status.ON_ERROR
+        verify(tickets)
+                .save(argThat(t -> t.status() == Status.ON_ERROR
                         && t.errorMessage() != null
                         && t.errorMessage().contains("500")
                         && t.errorMessage().contains("failing on its side")
@@ -252,9 +286,9 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenThrow(
-                new ReceiptExtractionException(401, false, hostile,
-                        "the AI provider rejected the request (check the configured key)"));
+        when(receiptExtractor.extract(any()))
+                .thenThrow(new ReceiptExtractionException(
+                        401, false, hostile, "the AI provider rejected the request (check the configured key)"));
 
         service.processTicket(open);
 
@@ -288,8 +322,7 @@ class TicketExtractionServiceTest {
         // otherwise a future bug that bypasses `markError` would
         // still leak via stdout/stderr.
         ch.qos.logback.classic.Logger svc =
-                (ch.qos.logback.classic.Logger)
-                        org.slf4j.LoggerFactory.getLogger(TicketExtractionService.class);
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TicketExtractionService.class);
         ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> sink =
                 new ch.qos.logback.core.read.ListAppender<>();
         sink.start();
@@ -303,9 +336,8 @@ class TicketExtractionServiceTest {
             when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
             when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
             when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(receiptExtractor.extract(any())).thenThrow(
-                    new ReceiptExtractionException(500, false, hostile,
-                            "the AI provider is unavailable"));
+            when(receiptExtractor.extract(any()))
+                    .thenThrow(new ReceiptExtractionException(500, false, hostile, "the AI provider is unavailable"));
 
             service.processTicket(open);
 
@@ -337,9 +369,7 @@ class TicketExtractionServiceTest {
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         String huge = "x".repeat(TicketExtractionService.ERROR_MESSAGE_MAX_CHARS + 500);
-        when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(502, false,
-                huge));
+        when(receiptExtractor.extract(any())).thenThrow(new ReceiptExtractionException(502, false, huge));
 
         service.processTicket(open);
 
@@ -355,11 +385,19 @@ class TicketExtractionServiceTest {
     @Test
     void alreadyExtractedTicketsAreSkipped() throws Exception {
         long id = nextId();
-        Ticket open = sampleTicket(id, new byte[]{1});
-        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
-                new TicketExtraction(id, "X", LocalDate.now(), SpendCategory.OTHER,
-                        List.of(), BigDecimal.ZERO, "EUR", MODEL,
-                        Instant.now(), "{}")));
+        Ticket open = sampleTicket(id, new byte[] {1});
+        when(extractions.findByTicketId(id, OWNER))
+                .thenReturn(Optional.of(new TicketExtraction(
+                        id,
+                        "X",
+                        LocalDate.now(),
+                        SpendCategory.OTHER,
+                        List.of(),
+                        BigDecimal.ZERO,
+                        "EUR",
+                        MODEL,
+                        Instant.now(),
+                        "{}")));
 
         boolean processed = service.processTicket(open);
 
@@ -371,24 +409,41 @@ class TicketExtractionServiceTest {
     @Test
     void ticketBytesAndContentTypeAreForwardedToThePort() throws Exception {
         long id = nextId();
-        byte[] bytes = new byte[]{1, 2, 3, 4};
-        Ticket png = new Ticket(id, OWNER, "r.png", "", Status.OPEN,
-                Instant.now(), Instant.now(),
-                "image/png", "r.png", bytes, null, 0, null, null, 0);
+        byte[] bytes = new byte[] {1, 2, 3, 4};
+        Ticket png = new Ticket(
+                id,
+                OWNER,
+                "r.png",
+                "",
+                Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                "image/png",
+                "r.png",
+                bytes,
+                null,
+                0,
+                null,
+                null,
+                0);
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(png));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
-                                List.of(), BigDecimal.ONE, "EUR"),
-                        "{}", MODEL));
+                                "X",
+                                LocalDate.of(2026, Month.JANUARY, 1),
+                                SpendCategory.OTHER,
+                                List.of(),
+                                BigDecimal.ONE,
+                                "EUR"),
+                        "{}",
+                        MODEL));
 
         service.processTicket(png);
 
-        ArgumentCaptor<ReceiptExtractionRequest> cap =
-                ArgumentCaptor.forClass(ReceiptExtractionRequest.class);
+        ArgumentCaptor<ReceiptExtractionRequest> cap = ArgumentCaptor.forClass(ReceiptExtractionRequest.class);
         verify(receiptExtractor).extract(cap.capture());
         ReceiptExtractionRequest sent = cap.getValue();
         assertThat(sent.content()).isEqualTo(bytes);
@@ -402,25 +457,30 @@ class TicketExtractionServiceTest {
         // ticket lands in ON_ERROR so the scheduler does not pick it
         // up on the next tick and loop on the same broken write.
         long id = nextId();
-        Ticket open = sampleTicket(id, new byte[]{1});
+        Ticket open = sampleTicket(id, new byte[] {1});
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
-                                List.of(), BigDecimal.ONE, "EUR"),
-                        "{}", MODEL));
-        when(extractions.save(any())).thenThrow(
-                new DataIntegrityViolationException("DB boom"));
+                                "X",
+                                LocalDate.of(2026, Month.JANUARY, 1),
+                                SpendCategory.OTHER,
+                                List.of(),
+                                BigDecimal.ONE,
+                                "EUR"),
+                        "{}",
+                        MODEL));
+        when(extractions.save(any())).thenThrow(new DataIntegrityViolationException("DB boom"));
 
         boolean processed = service.processTicket(open);
 
         assertThat(processed).isFalse();
-        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR
-                && t.errorMessage() != null
-                && t.errorMessage().contains("DB boom")));
+        verify(tickets)
+                .save(argThat(t -> t.status() == Status.ON_ERROR
+                        && t.errorMessage() != null
+                        && t.errorMessage().contains("DB boom")));
     }
 
     @Test
@@ -433,9 +493,7 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.empty()); // race: gone
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, false,
-                        "boom"));
+        when(receiptExtractor.extract(any())).thenThrow(new ReceiptExtractionException(500, false, "boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -459,8 +517,8 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
                                 "Mercadona",
                                 LocalDate.of(2026, Month.JULY, 4),
@@ -474,8 +532,7 @@ class TicketExtractionServiceTest {
         service.processTicket(open);
 
         // First save is the IN_ANALYSIS pre-set with attempts bumped to 1.
-        verify(tickets).save(argThat(t ->
-                t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
+        verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
     }
 
     @Test
@@ -495,16 +552,15 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         // Mutable holder so the save() answer can publish the bumped
         // ticket that the subsequent markError findById() must return.
-        java.util.concurrent.atomic.AtomicReference<Ticket> stored = new java.util.concurrent.atomic.AtomicReference<>(open);
+        java.util.concurrent.atomic.AtomicReference<Ticket> stored =
+                new java.util.concurrent.atomic.AtomicReference<>(open);
         when(tickets.save(any())).thenAnswer(inv -> {
             Ticket saved = inv.getArgument(0);
             stored.set(saved);
             return saved;
         });
         when(tickets.findById(id, OWNER)).thenAnswer(inv -> Optional.of(stored.get()));
-        when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, false,
-                "boom"));
+        when(receiptExtractor.extract(any())).thenThrow(new ReceiptExtractionException(500, false, "boom"));
 
         service.processTicket(open);
 
@@ -513,10 +569,8 @@ class TicketExtractionServiceTest {
         // increment again on the failure path — incrementAttempts()
         // is called once per processTicket invocation.
         verify(tickets, times(2)).save(any(Ticket.class));
-        verify(tickets).save(argThat(t ->
-                t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
-        verify(tickets).save(argThat(t ->
-                t.status() == Status.ON_ERROR && t.attempts() == 1));
+        verify(tickets).save(argThat(t -> t.status() == Status.IN_ANALYSIS && t.attempts() == 1));
+        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR && t.attempts() == 1));
     }
 
     @Test
@@ -526,13 +580,17 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(503, true,
-                        "overloaded"))
+                .thenThrow(new ReceiptExtractionException(503, true, "overloaded"))
                 .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
-                                List.of(), new BigDecimal("1.20"), "EUR"),
-                        "{}", MODEL));
+                                "Mercadona",
+                                LocalDate.of(2026, Month.JULY, 4),
+                                SpendCategory.FOOD,
+                                List.of(),
+                                new BigDecimal("1.20"),
+                                "EUR"),
+                        "{}",
+                        MODEL));
 
         boolean processed = service.processTicket(open);
 
@@ -548,9 +606,7 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
-        when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(400, false,
-                "bad request"));
+        when(receiptExtractor.extract(any())).thenThrow(new ReceiptExtractionException(400, false, "bad request"));
 
         boolean processed = service.processTicket(open);
 
@@ -566,9 +622,7 @@ class TicketExtractionServiceTest {
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
-        when(receiptExtractor.extract(any()))
-                .thenThrow(new ReceiptExtractionException(500, true,
-                        "boom"));
+        when(receiptExtractor.extract(any())).thenThrow(new ReceiptExtractionException(500, true, "boom"));
 
         boolean processed = service.processTicket(open);
 
@@ -607,12 +661,17 @@ class TicketExtractionServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0))
                 .thenThrow(new OptimisticLockException(id, "boom"));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
-                                List.of(), new BigDecimal("1.20"), "EUR"),
-                        "{}", MODEL));
+                                "Mercadona",
+                                LocalDate.of(2026, Month.JULY, 4),
+                                SpendCategory.FOOD,
+                                List.of(),
+                                new BigDecimal("1.20"),
+                                "EUR"),
+                        "{}",
+                        MODEL));
 
         boolean processed = service.processTicket(open);
 
@@ -635,19 +694,25 @@ class TicketExtractionServiceTest {
                 .thenThrow(new OptimisticLockException(id, "boom"))
                 .thenAnswer(inv -> inv.getArgument(0));
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(staleAnalysis));
-        when(receiptExtractor.extract(any())).thenReturn(
-                new ReceiptExtraction(
+        when(receiptExtractor.extract(any()))
+                .thenReturn(new ReceiptExtraction(
                         new ReceiptExtractionResult(
-                                "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD,
-                                List.of(), new BigDecimal("1.20"), "EUR"),
-                        "{}", MODEL));
+                                "Mercadona",
+                                LocalDate.of(2026, Month.JULY, 4),
+                                SpendCategory.FOOD,
+                                List.of(),
+                                new BigDecimal("1.20"),
+                                "EUR"),
+                        "{}",
+                        MODEL));
 
         boolean processed = service.processTicket(open);
 
         assertThat(processed).isFalse();
-        verify(tickets).save(argThat(t -> t.status() == Status.ON_ERROR
-                && t.errorMessage() != null
-                && t.errorMessage().contains("optimistic race")));
+        verify(tickets)
+                .save(argThat(t -> t.status() == Status.ON_ERROR
+                        && t.errorMessage() != null
+                        && t.errorMessage().contains("optimistic race")));
     }
 
     private void verifyNoExtractorCall() throws Exception {
@@ -655,8 +720,7 @@ class TicketExtractionServiceTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

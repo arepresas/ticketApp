@@ -1,5 +1,7 @@
 package com.ticketapp.bff.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.domain.identity.SessionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,14 +9,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
-import org.springframework.http.MediaType;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end IT for the auth surface:
@@ -31,20 +31,17 @@ class AuthControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     @LocalServerPort
     int port;
 
     private WebTestClient web() {
-        return WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     @Autowired
@@ -52,18 +49,22 @@ class AuthControllerIT {
 
     @Test
     void rejectsBlankIdToken() {
-        web().post().uri("/api/auth/google")
+        web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(""))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void rejectsInvalidGoogleToken() {
-        web().post().uri("/api/auth/google")
+        web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest("bogus"))
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus()
+                .isUnauthorized();
     }
 
     @Test
@@ -72,11 +73,14 @@ class AuthControllerIT {
         // messages. They are logged, never returned: this profile is
         // not `local` (.rules/security.md, "Returning detailed error
         // messages to clients in non-local profiles").
-        String body = web().post().uri("/api/auth/google")
+        String body = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest("bogus"))
                 .exchange()
-                .expectStatus().isUnauthorized()
-                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
@@ -87,10 +91,12 @@ class AuthControllerIT {
     @Test
     void exchangesValidGoogleTokenThenMeThenLogout() {
         // 1) exchange
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -100,28 +106,32 @@ class AuthControllerIT {
         assertThat(resp.user().email()).isEqualTo("stub@example.com");
 
         // 2) /me with Bearer → 200
-        web().get().uri("/api/auth/me")
+        web().get()
+                .uri("/api/auth/me")
                 .header("authorization", "Bearer " + resp.token())
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.UserDto.class)
                 .value(u -> assertThat(u.email()).isEqualTo("stub@example.com"));
 
         // 3) /me without Bearer → 401
-        web().get().uri("/api/auth/me")
-                .exchange()
-                .expectStatus().isUnauthorized();
+        web().get().uri("/api/auth/me").exchange().expectStatus().isUnauthorized();
 
         // 4) logout → 204
-        web().post().uri("/api/auth/logout")
+        web().post()
+                .uri("/api/auth/logout")
                 .header("authorization", "Bearer " + resp.token())
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus()
+                .isNoContent();
 
         // 5) /me after logout → 401 (session revoked)
-        web().get().uri("/api/auth/me")
+        web().get()
+                .uri("/api/auth/me")
                 .header("authorization", "Bearer " + resp.token())
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus()
+                .isUnauthorized();
     }
 }

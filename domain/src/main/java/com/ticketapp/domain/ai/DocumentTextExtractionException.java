@@ -46,7 +46,6 @@ public class DocumentTextExtractionException extends TicketAppException {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName()
-                + "[statusCode=" + statusCode + ", message=" + getMessage() + "]";
+        return getClass().getSimpleName() + "[statusCode=" + statusCode + ", message=" + getMessage() + "]";
     }
 }

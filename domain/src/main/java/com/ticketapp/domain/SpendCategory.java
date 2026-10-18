@@ -35,7 +35,6 @@ import java.util.Map;
  * category total disagree with the spend total beside it.
  */
 public enum SpendCategory {
-
     FOOD("food"),
     TRANSPORT("transport"),
     LODGING("lodging"),

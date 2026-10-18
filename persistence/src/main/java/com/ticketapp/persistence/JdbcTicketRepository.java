@@ -5,11 +5,6 @@ import com.ticketapp.domain.TicketExtractionQueue;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.TicketSummary;
 import com.ticketapp.domain.exceptions.OptimisticLockException;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -20,6 +15,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /**
  * JDBC implementation of {@link TicketRepository}. Plain SQL, no ORM.
@@ -51,10 +50,9 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         this.namedJdbc = new NamedParameterJdbcTemplate(jdbc);
     }
 
-    private static final String SELECT_COLS =
-            "id, owner_id, title, description, status, created_at, updated_at, " +
-            "content_type, file_name, file_data, error_message, attempts, shop_id, " +
-            "ocr_text, version";
+    private static final String SELECT_COLS = "id, owner_id, title, description, status, created_at, updated_at, "
+            + "content_type, file_name, file_data, error_message, attempts, shop_id, "
+            + "ocr_text, version";
 
     /**
      * List-view projection: everything the dashboard renders except
@@ -64,10 +62,9 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * (octet_length yields int4, which pgjdbc will not widen to
      * {@code Long} on read).
      */
-    private static final String SUMMARY_COLS =
-            "id, owner_id, title, description, status, created_at, updated_at, " +
-            "content_type, file_name, octet_length(file_data)::bigint AS size_bytes, " +
-            "error_message, attempts, shop_id";
+    private static final String SUMMARY_COLS = "id, owner_id, title, description, status, created_at, updated_at, "
+            + "content_type, file_name, octet_length(file_data)::bigint AS size_bytes, "
+            + "error_message, attempts, shop_id";
 
     /** Single source of truth for the SELECT prefix used in every read query. */
     private static final String SELECT_PREFIX = "SELECT ";
@@ -104,13 +101,16 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         // behave as missing on every path (no separate "is
         // deleted" signal leaks existence either). No "exists then
         // check" two-step that would let an attacker probe ids.
-        return jdbc.query(
-                SELECT_PREFIX + SELECT_COLS
-                        + " FROM tickets WHERE id = ? AND owner_id = ?"
-                        + " AND status <> 'DELETED'",
-                mapper,
-                id, ownerId
-        ).stream().findFirst();
+        return jdbc
+                .query(
+                        SELECT_PREFIX + SELECT_COLS
+                                + " FROM tickets WHERE id = ? AND owner_id = ?"
+                                + " AND status <> 'DELETED'",
+                        mapper,
+                        id,
+                        ownerId)
+                .stream()
+                .findFirst();
     }
 
     @Override
@@ -149,13 +149,12 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                         + " WHERE e.ticket_id = t.id)"
                         + " ORDER BY t.last_extraction_attempt_at ASC LIMIT ?",
                 mapper,
-                java.sql.Timestamp.from(attemptedBefore), limit);
+                java.sql.Timestamp.from(attemptedBefore),
+                limit);
         // Re-queue through the version-guarded save so a worker that
         // is still alive and about to write its extraction wins the
         // race instead of being silently overwritten.
-        return stuck.stream()
-                .map(t -> save(t.withStatus(Ticket.Status.OPEN)))
-                .toList();
+        return stuck.stream().map(t -> save(t.withStatus(Ticket.Status.OPEN))).toList();
     }
 
     /**
@@ -177,30 +176,30 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         if (updated == 1) {
             return ticket.nextVersion();
         }
-        boolean exists = Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM tickets WHERE id = ?)",
-                Boolean.class, ticket.id()));
+        boolean exists = Boolean.TRUE.equals(
+                jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM tickets WHERE id = ?)", Boolean.class, ticket.id()));
         if (exists) {
-            throw new OptimisticLockException(ticket.id(),
-                    "ticket " + ticket.id() + " was modified concurrently"
-                            + " (expected version " + ticket.version() + ")");
+            throw new OptimisticLockException(
+                    ticket.id(),
+                    "ticket " + ticket.id() + " was modified concurrently" + " (expected version " + ticket.version()
+                            + ")");
         }
         // New row: the id comes from the identity column and the
         // version always starts at 0 regardless of what the caller
         // carries, so bind neither. RETURNING gives us the assigned id
         // so the caller gets the persisted entity back.
-        return jdbc.query(
-                con -> {
-                    PreparedStatement ps = con.prepareStatement(INSERT_SQL + " RETURNING id");
-                    bindTicket(ps, ticket, 1);
-                    ps.setLong(14, 0);
-                    return ps;
-                },
-                (rs, n) -> ticket.withId(rs.getLong(1)).withVersion(0))
+        return jdbc
+                .query(
+                        con -> {
+                            PreparedStatement ps = con.prepareStatement(INSERT_SQL + " RETURNING id");
+                            bindTicket(ps, ticket, 1);
+                            ps.setLong(14, 0);
+                            return ps;
+                        },
+                        (rs, n) -> ticket.withId(rs.getLong(1)).withVersion(0))
                 .stream()
                 .findFirst()
-                .orElseThrow(() -> new OptimisticLockException(ticket.id(),
-                        "ticket insert returned no id"));
+                .orElseThrow(() -> new OptimisticLockException(ticket.id(), "ticket insert returned no id"));
     }
 
     /**
@@ -210,33 +209,33 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * because their positions differ per statement.
      */
     private static void bindTicket(PreparedStatement ps, Ticket ticket, int base) throws SQLException {
-            ps.setLong(base, ticket.ownerId());
-            ps.setString(base + 1, ticket.title());
-            ps.setString(base + 2, ticket.description());
-            // Types.OTHER against the native `ticket_status` column:
-            // setString would send character varying and Postgres
-            // rejects it ("column status is of type ticket_status but
-            // expression is of type character varying"). A status that
-            // is not a member fails at the bind rather than after the
-            // write — which is the point of the type: it cannot be
-            // widened by a typo the way a CHECK's string list could.
-            ps.setObject(base + 3, ticket.status().name(), Types.OTHER);
-            ps.setObject(base + 4, OffsetDateTime.ofInstant(ticket.createdAt(), ZoneOffset.UTC));
-            ps.setObject(base + 5, OffsetDateTime.ofInstant(ticket.updatedAt(), ZoneOffset.UTC));
-            // Each nullable column routes through the same
-            // bindNullable helpers — the per-column if/else lived
-            // inline previously and ballooned the cognitive complexity
-            // of this method past Sonar's ceiling. Pulling the
-            // null-handling into one-liners keeps the column list
-            // scannable and the SQL types centrally typed (changes to
-            // a column's SQL type land in one place instead of seven).
-            bindStringOrNull(ps, base + 6, ticket.contentType(), Types.VARCHAR);
-            bindStringOrNull(ps, base + 7, ticket.fileName(), Types.VARCHAR);
-            bindBytesOrNull(ps, base + 8, ticket.fileData(), Types.BINARY);
-            bindStringOrNull(ps, base + 9, ticket.errorMessage(), Types.VARCHAR);
-            ps.setInt(base + 10, ticket.attempts());
-            bindObjectOrNull(ps, base + 11, ticket.shopId(), Types.BIGINT);
-            bindStringOrNull(ps, base + 12, ticket.ocrText(), Types.LONGVARCHAR);
+        ps.setLong(base, ticket.ownerId());
+        ps.setString(base + 1, ticket.title());
+        ps.setString(base + 2, ticket.description());
+        // Types.OTHER against the native `ticket_status` column:
+        // setString would send character varying and Postgres
+        // rejects it ("column status is of type ticket_status but
+        // expression is of type character varying"). A status that
+        // is not a member fails at the bind rather than after the
+        // write — which is the point of the type: it cannot be
+        // widened by a typo the way a CHECK's string list could.
+        ps.setObject(base + 3, ticket.status().name(), Types.OTHER);
+        ps.setObject(base + 4, OffsetDateTime.ofInstant(ticket.createdAt(), ZoneOffset.UTC));
+        ps.setObject(base + 5, OffsetDateTime.ofInstant(ticket.updatedAt(), ZoneOffset.UTC));
+        // Each nullable column routes through the same
+        // bindNullable helpers — the per-column if/else lived
+        // inline previously and ballooned the cognitive complexity
+        // of this method past Sonar's ceiling. Pulling the
+        // null-handling into one-liners keeps the column list
+        // scannable and the SQL types centrally typed (changes to
+        // a column's SQL type land in one place instead of seven).
+        bindStringOrNull(ps, base + 6, ticket.contentType(), Types.VARCHAR);
+        bindStringOrNull(ps, base + 7, ticket.fileName(), Types.VARCHAR);
+        bindBytesOrNull(ps, base + 8, ticket.fileData(), Types.BINARY);
+        bindStringOrNull(ps, base + 9, ticket.errorMessage(), Types.VARCHAR);
+        ps.setInt(base + 10, ticket.attempts());
+        bindObjectOrNull(ps, base + 11, ticket.shopId(), Types.BIGINT);
+        bindStringOrNull(ps, base + 12, ticket.ocrText(), Types.LONGVARCHAR);
     }
 
     /**
@@ -245,8 +244,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * SQL type. Keeps the {@link #save} method flat without
      * per-column if/else branches.
      */
-    private static void bindStringOrNull(PreparedStatement ps, int idx,
-                                         String value, int sqlType) throws SQLException {
+    private static void bindStringOrNull(PreparedStatement ps, int idx, String value, int sqlType) throws SQLException {
         if (value == null) ps.setNull(idx, sqlType);
         else ps.setString(idx, value);
     }
@@ -258,8 +256,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * {@link java.sql.PreparedStatement#setObject} round-trip on
      * every null.
      */
-    private static void bindBytesOrNull(PreparedStatement ps, int idx,
-                                        byte[] value, int sqlType) throws SQLException {
+    private static void bindBytesOrNull(PreparedStatement ps, int idx, byte[] value, int sqlType) throws SQLException {
         if (value == null) ps.setNull(idx, sqlType);
         else ps.setBytes(idx, value);
     }
@@ -271,8 +268,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * a separate helper so the SQL type for shop_id (UUID column →
      * {@code Types.OTHER}) lives next to the binding it belongs to.
      */
-    private static void bindObjectOrNull(PreparedStatement ps, int idx,
-                                          Object value, int sqlType) throws SQLException {
+    private static void bindObjectOrNull(PreparedStatement ps, int idx, Object value, int sqlType) throws SQLException {
         if (value == null) ps.setNull(idx, sqlType);
         else ps.setObject(idx, value);
     }
@@ -285,7 +281,8 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
         int rows = jdbc.update(
                 "UPDATE tickets SET status = 'DELETED', updated_at = now()"
                         + " WHERE id = ? AND owner_id = ? AND status <> 'DELETED'",
-                id, ownerId);
+                id,
+                ownerId);
         return rows > 0;
     }
 
@@ -311,8 +308,7 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 // in SQL, which fails because the template hands the
                 // values over as separate parameters — "malformed
                 // array literal: ON_ERROR".
-                .addValue("statuses", statuses.stream().map(Enum::name).toList(),
-                        Types.OTHER);
+                .addValue("statuses", statuses.stream().map(Enum::name).toList(), Types.OTHER);
         return namedJdbc.query(sql, params, mapper);
     }
 
@@ -334,22 +330,24 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
                 // in SQL, which fails because the template hands the
                 // values over as separate parameters — "malformed
                 // array literal: ON_ERROR".
-                .addValue("statuses", statuses.stream().map(Enum::name).toList(),
-                        Types.OTHER);
-        return namedJdbc.query(sql, params, (rs, n) -> new TicketSummary(
-                rs.getLong("id"),
-                rs.getLong("owner_id"),
-                rs.getString("title"),
-                rs.getString("description"),
-                Ticket.Status.valueOf(rs.getString("status")),
-                rs.getObject("created_at", OffsetDateTime.class).toInstant(),
-                rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
-                rs.getString("content_type"),
-                rs.getString("file_name"),
-                rs.getObject("size_bytes", Long.class),
-                rs.getString("error_message"),
-                rs.getInt("attempts"),
-                nullableShopId(rs)));
+                .addValue("statuses", statuses.stream().map(Enum::name).toList(), Types.OTHER);
+        return namedJdbc.query(
+                sql,
+                params,
+                (rs, n) -> new TicketSummary(
+                        rs.getLong("id"),
+                        rs.getLong("owner_id"),
+                        rs.getString("title"),
+                        rs.getString("description"),
+                        Ticket.Status.valueOf(rs.getString("status")),
+                        rs.getObject("created_at", OffsetDateTime.class).toInstant(),
+                        rs.getObject("updated_at", OffsetDateTime.class).toInstant(),
+                        rs.getString("content_type"),
+                        rs.getString("file_name"),
+                        rs.getObject("size_bytes", Long.class),
+                        rs.getString("error_message"),
+                        rs.getInt("attempts"),
+                        nullableShopId(rs)));
     }
 
     /**
@@ -362,7 +360,8 @@ public class JdbcTicketRepository implements TicketRepository, TicketExtractionQ
      * writes the {@code tickets} aggregate.
      */
     public void recordAttempt(long ticketId) {
-        jdbc.update("UPDATE tickets SET last_extraction_attempt_at = ? WHERE id = ?",
+        jdbc.update(
+                "UPDATE tickets SET last_extraction_attempt_at = ? WHERE id = ?",
                 OffsetDateTime.ofInstant(java.time.Instant.now(), ZoneOffset.UTC),
                 ticketId);
     }

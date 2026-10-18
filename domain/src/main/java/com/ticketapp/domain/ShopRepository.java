@@ -2,7 +2,6 @@ package com.ticketapp.domain;
 
 import java.util.Optional;
 
-
 /**
  * Outbound port for the {@link Shop} master registry. The shop is
  * the merchant the receipt came from; the lookup key is the

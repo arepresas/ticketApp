@@ -1,5 +1,7 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.ai.TestDocumentTextExtractorConfig;
 import com.ticketapp.bff.api.dto.CatalogueResponse;
@@ -29,10 +31,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * End-to-end IT for the ticket upload endpoint.
  *
@@ -58,12 +56,11 @@ class TicketControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     @LocalServerPort
     int port;
@@ -105,16 +102,16 @@ class TicketControllerIT {
     }
 
     private WebTestClient web() {
-        return WebTestClient.bindToServer()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        return WebTestClient.bindToServer().baseUrl("http://localhost:" + port).build();
     }
 
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -122,14 +119,16 @@ class TicketControllerIT {
         return resp.token();
     }
 
-    private MultiValueMap<String, HttpEntity<?>> pdfMultipart(String filename,
-                                                              byte[] bytes,
-                                                              String contentType,
-                                                              String description) {
+    private MultiValueMap<String, HttpEntity<?>> pdfMultipart(
+            String filename, byte[] bytes, String contentType, String description) {
         var bb = new MultipartBodyBuilder();
         bb.part("file", new ByteArrayResource(bytes) {
-            @Override public String getFilename() { return filename; }
-        }).header("Content-Type", contentType);
+                    @Override
+                    public String getFilename() {
+                        return filename;
+                    }
+                })
+                .header("Content-Type", contentType);
         if (description != null) {
             bb.part("description", description);
         }
@@ -143,58 +142,68 @@ class TicketControllerIT {
         // list no longer contains it, and a second DELETE 404s too.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
-        web().delete().uri("/api/tickets/{id}", created.id())
+        web().delete()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNoContent();
+                .expectStatus()
+                .isNoContent();
 
-        web().get().uri("/api/tickets/{id}", created.id())
+        web().get()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
-        java.util.List<TicketResponse> listed = web().get().uri("/api/tickets")
+        java.util.List<TicketResponse> listed = web().get()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(listed).isNotNull();
         assertThat(listed).extracting(TicketResponse::id).doesNotContain(created.id());
 
-        web().delete().uri("/api/tickets/{id}", created.id())
+        web().delete()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         // The row itself survives for audit.
-        assertThat(jdbc.queryForObject(
-                "SELECT status FROM tickets WHERE id = ?", String.class, created.id()))
+        assertThat(jdbc.queryForObject("SELECT status FROM tickets WHERE id = ?", String.class, created.id()))
                 .isEqualTo("DELETED");
     }
 
     @Test
     void rejectsUnauthenticatedUpload() {
-        var body = pdfMultipart("receipt.pdf", "%PDF-1.4\n".getBytes(),
-                MediaType.APPLICATION_PDF_VALUE, null);
-        web().post().uri("/api/tickets")
+        var body = pdfMultipart("receipt.pdf", "%PDF-1.4\n".getBytes(), MediaType.APPLICATION_PDF_VALUE, null);
+        web().post()
+                .uri("/api/tickets")
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus()
+                .isUnauthorized();
     }
 
     @Test
@@ -205,25 +214,28 @@ class TicketControllerIT {
         // MissingServletRequestPartException; we exercise that path here.
         var bb = new MultipartBodyBuilder();
         bb.part("description", "hello");
-        web().post().uri("/api/tickets")
+        web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(bb.build()))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void rejectsUnsupportedMime() {
         String token = loginAndGetToken();
-        var body = pdfMultipart("notes.txt", "hello".getBytes(),
-                MediaType.TEXT_PLAIN_VALUE, null);
-        web().post().uri("/api/tickets")
+        var body = pdfMultipart("notes.txt", "hello".getBytes(), MediaType.TEXT_PLAIN_VALUE, null);
+        web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -231,27 +243,30 @@ class TicketControllerIT {
         String token = loginAndGetToken();
         byte[] oversized = new byte[(int) TicketApplicationService.MAX_FILE_BYTES + 1];
         var body = pdfMultipart("big.pdf", oversized, MediaType.APPLICATION_PDF_VALUE, null);
-        web().post().uri("/api/tickets")
+        web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void acceptsPdfAndStoresBytesInDb() {
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\n%hello world\n%%EOF\n".getBytes();
-        var body = pdfMultipart("receipt.pdf", bytes,
-                MediaType.APPLICATION_PDF_VALUE, "Lunch at Mercadona");
+        var body = pdfMultipart("receipt.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, "Lunch at Mercadona");
 
-        var response = web().post().uri("/api/tickets")
+        var response = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -268,8 +283,8 @@ class TicketControllerIT {
 
         // Verify the bytes round-tripped through the DB.
         long owner = users.findByGoogleSub("google-sub-stub")
-                .orElseThrow(() -> new IllegalStateException(
-                        "test setup: user row not created — call loginAndGetToken first"))
+                .orElseThrow(() ->
+                        new IllegalStateException("test setup: user row not created — call loginAndGetToken first"))
                 .id();
         var persisted = tickets.findById(response.id(), owner);
         assertThat(persisted).isPresent();
@@ -281,15 +296,17 @@ class TicketControllerIT {
     @Test
     void acceptsImageUpload() {
         String token = loginAndGetToken();
-        byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+        byte[] pngBytes = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
         var body = pdfMultipart("photo.png", pngBytes, "image/png", null);
 
-        var response = web().post().uri("/api/tickets")
+        var response = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -308,8 +325,7 @@ class TicketControllerIT {
         // transcript. With the kill switch off this is SKIPPED, not
         // FAILED — the two mean very different things to an operator
         // and the whole point of PR2 is that they are distinguishable.
-        assertThat(response.ocrStatus())
-                .isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED.name());
+        assertThat(response.ocrStatus()).isEqualTo(DocumentTextExtractionSyncService.OcrStatus.SKIPPED.name());
     }
 
     @Test
@@ -319,29 +335,38 @@ class TicketControllerIT {
         // "OCR failed" from "row predates the OCR step". Asserting
         // null here pins that the DTO does not start guessing.
         String token = loginAndGetToken();
-        byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
-        long id = web().post().uri("/api/tickets")
+        byte[] pngBytes = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
+        long id = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(pdfMultipart("photo.png", pngBytes, "image/png", null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
-                .returnResult().getResponseBody().id();
+                .returnResult()
+                .getResponseBody()
+                .id();
 
-        web().get().uri("/api/tickets/{id}", id)
+        web().get()
+                .uri("/api/tickets/{id}", id)
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .value(response -> assertThat(response.ocrStatus()).isNull());
 
-        web().get().uri("/api/tickets")
+        web().get()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(TicketResponse.class)
-                .value(list -> assertThat(list).allSatisfy(r -> assertThat(r.ocrStatus()).isNull()));
+                .value(list -> assertThat(list)
+                        .allSatisfy(r -> assertThat(r.ocrStatus()).isNull()));
     }
 
     @Test
@@ -350,26 +375,32 @@ class TicketControllerIT {
         // the browser will use the Content-Type header to render it
         // as <img> or <iframe>. Bytes must round-trip unchanged.
         String token = loginAndGetToken();
-        byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
+        byte[] pngBytes = new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 1, 2, 3};
         var body = pdfMultipart("photo.png", pngBytes, "image/png", null);
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(body))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
         // Re-fetch via the file endpoint.
-        byte[] fetched = web().get().uri("/api/tickets/{id}/file", created.id())
+        byte[] fetched = web().get()
+                .uri("/api/tickets/{id}/file", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
-                .expectHeader().contentType("image/png")
-                .expectHeader().valueMatches("Content-Disposition", "inline; filename=\"photo\\.png\"")
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .contentType("image/png")
+                .expectHeader()
+                .valueMatches("Content-Disposition", "inline; filename=\"photo\\.png\"")
                 .expectBody(byte[].class)
                 .returnResult()
                 .getResponseBody();
@@ -385,32 +416,38 @@ class TicketControllerIT {
         String tokenA = loginAndGetToken();
         long ownerA = users.findByGoogleSub("google-sub-stub").orElseThrow().id();
         byte[] bytes = "%PDF-1.4\n%receipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(pdfMultipart("secret.pdf", bytes, "application/pdf", null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 
         // Seed user B directly (no Google login round-trip needed) and
         // mint a Bearer via the same helper the ownership IT uses.
-        com.ticketapp.domain.identity.AuthenticatedUser userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other", null);
+        com.ticketapp.domain.identity.AuthenticatedUser userB =
+                users.upsertFromGoogle("google-sub-other", "other@example.com", "Other", null);
         String tokenB = mintTokenFor(userB);
 
-        web().get().uri("/api/tickets/{id}/file", created.id())
+        web().get()
+                .uri("/api/tickets/{id}/file", created.id())
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         // And the original owner still gets it normally.
-        web().get().uri("/api/tickets/{id}/file", created.id())
+        web().get()
+                .uri("/api/tickets/{id}/file", created.id())
                 .header("authorization", "Bearer " + tokenA)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // Suppress unused warning on ownerA — kept for readability.
         assertThat(ownerA).isNotNull();
@@ -422,21 +459,25 @@ class TicketControllerIT {
         // scheduler hasn't picked it up). 404, not 200-with-empty.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(pdfMultipart("r.pdf", bytes, "application/pdf", null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
-        web().get().uri("/api/tickets/{id}/extraction", created.id())
+        web().get()
+                .uri("/api/tickets/{id}/extraction", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
@@ -446,24 +487,28 @@ class TicketControllerIT {
         // when the ticket belongs to someone else, not the extraction.
         String tokenA = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(BodyInserters.fromMultipartData(pdfMultipart("r.pdf", bytes, "application/pdf", null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
 
-        com.ticketapp.domain.identity.AuthenticatedUser userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other", null);
+        com.ticketapp.domain.identity.AuthenticatedUser userB =
+                users.upsertFromGoogle("google-sub-other", "other@example.com", "Other", null);
         String tokenB = mintTokenFor(userB);
 
-        web().get().uri("/api/tickets/{id}/extraction", created.id())
+        web().get()
+                .uri("/api/tickets/{id}/extraction", created.id())
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     /**
@@ -483,8 +528,8 @@ class TicketControllerIT {
         java.time.Instant now = java.time.Instant.now();
         java.time.Instant exp = now.plus(java.time.Duration.ofHours(1));
         java.util.UUID jti = java.util.UUID.randomUUID();
-        sessionRepository.save(new com.ticketapp.domain.identity.SessionRepository.Session(
-                jti, user.id(), now, exp, null));
+        sessionRepository.save(
+                new com.ticketapp.domain.identity.SessionRepository.Session(jti, user.id(), now, exp, null));
         org.springframework.security.oauth2.jwt.JwtClaimsSet claims =
                 org.springframework.security.oauth2.jwt.JwtClaimsSet.builder()
                         .issuer("ticketapp-bff")
@@ -493,11 +538,13 @@ class TicketControllerIT {
                         .subject(Long.toString(user.id()))
                         .id(jti.toString())
                         .build();
-        return jwtEncoder.encode(
-                org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
+        return jwtEncoder
+                .encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
                         org.springframework.security.oauth2.jwt.JwsHeader.with(
-                                org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256).build(),
-                        claims)).getTokenValue();
+                                        org.springframework.security.oauth2.jose.jws.MacAlgorithm.HS256)
+                                .build(),
+                        claims))
+                .getTokenValue();
     }
 
     // ---------------------------------------------------------------------
@@ -515,9 +562,10 @@ class TicketControllerIT {
      * so the PUT path has a row to update. Mirrors the JSONB shape
      * the persistence layer expects.
      */
-    private void seedExtraction(long ticketId, String merchant, String category,
-                                java.math.BigDecimal total, String currency) {
-        jdbc.update("""
+    private void seedExtraction(
+            long ticketId, String merchant, String category, java.math.BigDecimal total, String currency) {
+        jdbc.update(
+                """
                 INSERT INTO ticket_extractions
                   (ticket_id, merchant, purchase_date, category, products,
                    total_amount, currency, model, extracted_at,
@@ -525,21 +573,27 @@ class TicketControllerIT {
                 VALUES (?, ?, '2026-07-03', ?::spend_category, ?::jsonb, ?, ?, 'test-model',
                         now(), 'seeded', NULL)
                 """,
-                ticketId, merchant, category, "[{\"name\":\"x\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1,\"lineTotal\":1}]",
-                total, currency);
+                ticketId,
+                merchant,
+                category,
+                "[{\"name\":\"x\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1,\"lineTotal\":1}]",
+                total,
+                currency);
     }
 
     @Test
     void patchTicketUpdatesTitleAndDescription() {
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, "old desc")))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, "old desc")))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -549,12 +603,14 @@ class TicketControllerIT {
         patchBody.put("title", "Renamed");
         patchBody.put("description", "New description");
 
-        TicketResponse patched = web().patch().uri("/api/tickets/{id}", created.id())
+        TicketResponse patched = web().patch()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(patchBody)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -564,7 +620,8 @@ class TicketControllerIT {
         assertThat(patched.description()).isEqualTo("New description");
 
         // Sanity check: GET round-trips the edited fields too.
-        TicketResponse fetched = web().get().uri("/api/tickets/{id}", created.id())
+        TicketResponse fetched = web().get()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
                 .expectBody(TicketResponse.class)
@@ -578,71 +635,79 @@ class TicketControllerIT {
     void patchTicketRejectsBlankTitle() {
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
-        web().patch().uri("/api/tickets/{id}", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("title", "   "))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void patchTicketReturns404ForOtherUsersTicket() {
         String tokenA = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
-        var userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other", null);
+        var userB = users.upsertFromGoogle("google-sub-other", "other@example.com", "Other", null);
         String tokenB = mintTokenFor(userB);
 
-        web().patch().uri("/api/tickets/{id}", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}", created.id())
                 .header("authorization", "Bearer " + tokenB)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("title", "Hostile"))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
     void putExtractionUpdatesEditableFieldsAndPreservesAiAudit() {
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtraction(created.id(), "Mercadona", "food",
-                new java.math.BigDecimal("3.00"), "EUR");
+        seedExtraction(created.id(), "Mercadona", "food", new java.math.BigDecimal("3.00"), "EUR");
 
         var products = java.util.List.of(java.util.Map.of(
                 "name", "Bread",
@@ -664,7 +729,8 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(ExtractionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -688,13 +754,15 @@ class TicketControllerIT {
         // missing row must NOT silently insert one.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -716,7 +784,8 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
@@ -725,19 +794,20 @@ class TicketControllerIT {
         // null element — the controller must 400, not NPE into a 500.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtraction(created.id(), "Mercadona", "food",
-                new java.math.BigDecimal("3.00"), "EUR");
+        seedExtraction(created.id(), "Mercadona", "food", new java.math.BigDecimal("3.00"), "EUR");
 
         var payload = new java.util.HashMap<String, Object>();
         payload.put("merchant", "Mercadona");
@@ -752,7 +822,8 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -761,19 +832,20 @@ class TicketControllerIT {
         // a currency code.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtraction(created.id(), "Mercadona", "food",
-                new java.math.BigDecimal("3.00"), "EUR");
+        seedExtraction(created.id(), "Mercadona", "food", new java.math.BigDecimal("3.00"), "EUR");
 
         var payload = new java.util.HashMap<String, Object>();
         payload.put("merchant", "Mercadona");
@@ -788,29 +860,30 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
     void putExtractionReturns404ForOtherUsersTicket() {
         String tokenA = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtraction(created.id(), "Mercadona", "food",
-                new java.math.BigDecimal("3.00"), "EUR");
+        seedExtraction(created.id(), "Mercadona", "food", new java.math.BigDecimal("3.00"), "EUR");
 
-        var userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other", null);
+        var userB = users.upsertFromGoogle("google-sub-other", "other@example.com", "Other", null);
         String tokenB = mintTokenFor(userB);
 
         var payload = new java.util.HashMap<String, Object>();
@@ -827,7 +900,8 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     // ---------------------------------------------------------------------
@@ -850,9 +924,7 @@ class TicketControllerIT {
      * {@code merchant} parameter so tests can pin normalisation
      * dedup behaviour.
      */
-    private void seedExtractionWithProducts(long ticketId,
-                                            String merchant,
-                                            java.util.List<String> productJsons) {
+    private void seedExtractionWithProducts(long ticketId, String merchant, java.util.List<String> productJsons) {
         String productsJson = "[" + String.join(",", productJsons) + "]";
         jdbc.update("""
                 INSERT INTO ticket_extractions
@@ -862,8 +934,7 @@ class TicketControllerIT {
                 VALUES (?, ?, '2026-07-03', 'food'::spend_category, ?::jsonb,
                         100, 'EUR', 'test-model',
                         now(), 'seeded', NULL)
-                """,
-                ticketId, merchant, productsJson);
+                """, ticketId, merchant, productsJson);
     }
 
     @Test
@@ -874,39 +945,45 @@ class TicketControllerIT {
         // rows.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Mercadona", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}",
-                "{\"name\":\"Milk 1L\",\"quantity\":2,\"unit\":\"L\",\"pricePerUnit\":0.90,\"lineTotal\":1.80}",
-                "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.50,\"lineTotal\":1.50}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Mercadona",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}",
+                        "{\"name\":\"Milk 1L\",\"quantity\":2,\"unit\":\"L\",\"pricePerUnit\":0.90,\"lineTotal\":1.80}",
+                        "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.50,\"lineTotal\":1.50}"));
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // One shop master row, regardless of capitalisation.
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class))
+                .isEqualTo(1);
 
         // Two products: "Bread" + null unit collapses the two
         // Bread lines into one master row; "Milk 1L" + "L" stands
         // alone.
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class))
+                .isEqualTo(2);
 
         // Two distinct price rows: Bread at €1.20 (last emission
         // wins — the upsert collapses the two Bread prices because
@@ -918,26 +995,25 @@ class TicketControllerIT {
         // (Wait — revalidation same-ticket would collapse the two
         // prices. Here we only normalise ONCE, so both amounts stay
         // distinct rows.)
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices WHERE ticket_id = ?",
-                Integer.class, created.id())).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM prices WHERE ticket_id = ?", Integer.class, created.id()))
+                .isEqualTo(3);
 
         // Two line_ticket rows: the second Bread line collapses
         // with the first (UNIQUE on (ticket_id, product_id)
         // triggers an update, not an insert) — quantity / lineTotal
         // reflect the LAST emission.
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
-                Integer.class, created.id())).isEqualTo(2);
+                        "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?", Integer.class, created.id()))
+                .isEqualTo(2);
 
         // The bread row's line_total should be the second
         // emission (1.50), since the upsert overwrites the
         // previously-stored 1.20.
         assertThat(jdbc.queryForObject(
-                "SELECT line_total FROM line_tickets lt " +
-                        "JOIN products p ON p.id = lt.product_id " +
-                        "WHERE lt.ticket_id = ? AND p.normalised_name = 'bread'",
-                java.math.BigDecimal.class, created.id()))
+                        "SELECT line_total FROM line_tickets lt " + "JOIN products p ON p.id = lt.product_id "
+                                + "WHERE lt.ticket_id = ? AND p.normalised_name = 'bread'",
+                        java.math.BigDecimal.class,
+                        created.id()))
                 .isEqualByComparingTo("1.50");
     }
 
@@ -949,20 +1025,22 @@ class TicketControllerIT {
         // across all my tickets this month".
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse first = web().post().uri("/api/tickets")
+        TicketResponse first = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "first.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("first.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
-        TicketResponse second = web().post().uri("/api/tickets")
+        TicketResponse second = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "second.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("second.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
@@ -971,41 +1049,49 @@ class TicketControllerIT {
         assertThat(second).isNotNull();
 
         // First ticket — merchant capitalised one way.
-        seedExtractionWithProducts(first.id(), "MERCADONA", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"
-        ));
+        seedExtractionWithProducts(
+                first.id(),
+                "MERCADONA",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"));
         // Second ticket — capitalised differently, but same shop.
-        seedExtractionWithProducts(second.id(), "Mercadona", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":2,\"unit\":null,\"pricePerUnit\":1.50,\"lineTotal\":3.00}"
-        ));
+        seedExtractionWithProducts(
+                second.id(),
+                "Mercadona",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":2,\"unit\":null,\"pricePerUnit\":1.50,\"lineTotal\":3.00}"));
 
-        web().patch().uri("/api/tickets/{id}/status", first.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", first.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
-        web().patch().uri("/api/tickets/{id}/status", second.id())
+                .expectStatus()
+                .isOk();
+        web().patch()
+                .uri("/api/tickets/{id}/status", second.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // One Mercadona row across both tickets — same normalised
         // name "mercadona" → same shop.id.
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class))
+                .isEqualTo(1);
         // One Bread master row across both tickets.
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class))
+                .isEqualTo(1);
         // Two prices (one per ticket — different amounts), one
         // line_ticket per ticket — both pointing at the same
         // product id.
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices", Integer.class)).isEqualTo(2);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM prices", Integer.class))
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM line_tickets", Integer.class))
+                .isEqualTo(2);
     }
 
     @Test
@@ -1020,64 +1106,64 @@ class TicketControllerIT {
         // - line_ticket: same product → row updates quantity / lineTotal
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Lidl", java.util.List.of(
-                "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Lidl",
+                java.util.List.of(
+                        "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"));
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
-        Integer shopCountAfterFirst = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class);
-        Integer productCountAfterFirst = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class);
-        Integer priceCountAfterFirst = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices WHERE ticket_id = ?",
-                Integer.class, created.id());
+                .expectStatus()
+                .isOk();
+        Integer shopCountAfterFirst = jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class);
+        Integer productCountAfterFirst = jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class);
+        Integer priceCountAfterFirst =
+                jdbc.queryForObject("SELECT COUNT(*) FROM prices WHERE ticket_id = ?", Integer.class, created.id());
         Integer lineCountAfterFirst = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
-                Integer.class, created.id());
+                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?", Integer.class, created.id());
 
         // Cancel then re-mark as DONE.
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "CANCELLED"))
                 .exchange()
-                .expectStatus().isOk();
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .expectStatus()
+                .isOk();
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class))
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class))
                 .isEqualTo(shopCountAfterFirst);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class))
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class))
                 .isEqualTo(productCountAfterFirst);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices WHERE ticket_id = ?",
-                Integer.class, created.id()))
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM prices WHERE ticket_id = ?", Integer.class, created.id()))
                 .isEqualTo(priceCountAfterFirst);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
-                Integer.class, created.id()))
+                        "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?", Integer.class, created.id()))
                 .isEqualTo(lineCountAfterFirst);
     }
 
@@ -1092,35 +1178,43 @@ class TicketControllerIT {
         // extraction (rename) → DONE.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus()
+                .isCreated()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Lidl", java.util.List.of(
-                "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Lidl",
+                java.util.List.of(
+                        "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"));
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // Reopen for editing, then rename the line via the extraction PUT.
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "IN_PROGRESS"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
         var renamedProducts = java.util.List.of(java.util.Map.of(
                 "name", "Green Tea",
                 "quantity", 1,
@@ -1140,38 +1234,45 @@ class TicketControllerIT {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // Re-validate: cancel first mirrors the UI (a DONE ticket
         // cannot be patched straight back to DONE), then DONE.
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "CANCELLED"))
                 .exchange()
-                .expectStatus().isOk();
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+                .expectStatus()
+                .isOk();
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // Exactly one line for this ticket — the renamed one. The
         // stale "Tea" row is gone.
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
-                Integer.class, created.id())).isEqualTo(1);
+                        "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?", Integer.class, created.id()))
+                .isEqualTo(1);
         assertThat(jdbc.queryForObject(
-                "SELECT p.name FROM line_tickets lt JOIN products p ON p.id = lt.product_id"
-                        + " WHERE lt.ticket_id = ?",
-                String.class, created.id())).isEqualTo("Green Tea");
+                        "SELECT p.name FROM line_tickets lt JOIN products p ON p.id = lt.product_id"
+                                + " WHERE lt.ticket_id = ?",
+                        String.class,
+                        created.id()))
+                .isEqualTo("Green Tea");
         // Both product masters survive — "Tea" stays in the catalogue
         // for other tickets / search; only this ticket's link row
         // was dropped.
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products WHERE name IN ('Tea', 'Green Tea')",
-                Integer.class)).isEqualTo(2);
+                        "SELECT COUNT(*) FROM products WHERE name IN ('Tea', 'Green Tea')", Integer.class))
+                .isEqualTo(2);
     }
 
     @Test
@@ -1188,23 +1289,26 @@ class TicketControllerIT {
         // one price + one line_ticket.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // The stub was called exactly once — the controller triggered
         // the AI pipeline synchronously because no extraction row
@@ -1212,16 +1316,15 @@ class TicketControllerIT {
         assertThat(TestReceiptExtractorConfig.calls()).hasSize(1);
         assertThat(TestReceiptExtractorConfig.successCount()).isEqualTo(1);
         // Catalogue populated end-to-end.
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM prices WHERE ticket_id = ?", Integer.class, created.id()))
+                .isEqualTo(1);
         assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class)).isEqualTo(1);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices WHERE ticket_id = ?",
-                Integer.class, created.id())).isEqualTo(1);
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?",
-                Integer.class, created.id())).isEqualTo(1);
+                        "SELECT COUNT(*) FROM line_tickets WHERE ticket_id = ?", Integer.class, created.id()))
+                .isEqualTo(1);
     }
 
     @Test
@@ -1234,11 +1337,12 @@ class TicketControllerIT {
         // tokens for no reason.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
@@ -1246,16 +1350,20 @@ class TicketControllerIT {
         assertThat(created).isNotNull();
         // Pre-seed an extraction row so the controller treats the
         // ticket as already-extracted on the mark-as-done path.
-        seedExtractionWithProducts(created.id(), "Lidl", java.util.List.of(
-                "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Lidl",
+                java.util.List.of(
+                        "{\"name\":\"Tea\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":2.00,\"lineTotal\":2.00}"));
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         assertThat(TestReceiptExtractorConfig.calls()).isEmpty();
     }
@@ -1266,35 +1374,40 @@ class TicketControllerIT {
         // cancelled spend would skew the dashboard's analytics.
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Carrefour", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Carrefour",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"));
 
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "CANCELLED"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM shops", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM products", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM prices", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM line_tickets", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM shops", Integer.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM products", Integer.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM prices", Integer.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM line_tickets", Integer.class))
+                .isZero();
     }
 
     // ---------------------------------------------------------------------
@@ -1317,34 +1430,40 @@ class TicketControllerIT {
     void catalogueReturnsJoinedShopAndLinesAfterDone() {
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Mercadona", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":2,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":2.40}",
-                "{\"name\":\"Milk 1L\",\"quantity\":1,\"unit\":\"L\",\"pricePerUnit\":0.90,\"lineTotal\":0.90}"
-        ));
+        seedExtractionWithProducts(
+                created.id(),
+                "Mercadona",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":2,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":2.40}",
+                        "{\"name\":\"Milk 1L\",\"quantity\":1,\"unit\":\"L\",\"pricePerUnit\":0.90,\"lineTotal\":0.90}"));
 
         // Trigger the normaliser.
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         CatalogueResponse cat = web().get()
                 .uri("/api/tickets/{id}/catalogue", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(CatalogueResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -1380,11 +1499,12 @@ class TicketControllerIT {
         // "show the JSONB extraction view".
         String token = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
@@ -1395,41 +1515,47 @@ class TicketControllerIT {
                 .uri("/api/tickets/{id}/catalogue", created.id())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 
     @Test
     void catalogueReturns404ForCrossTenant() {
         String tokenA = loginAndGetToken();
         byte[] bytes = "%PDF-1.4\nreceipt\n%%EOF\n".getBytes();
-        TicketResponse created = web().post().uri("/api/tickets")
+        TicketResponse created = web().post()
+                .uri("/api/tickets")
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData(pdfMultipart(
-                        "r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
+                .body(BodyInserters.fromMultipartData(
+                        pdfMultipart("r.pdf", bytes, MediaType.APPLICATION_PDF_VALUE, null)))
                 .exchange()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(created).isNotNull();
-        seedExtractionWithProducts(created.id(), "Mercadona", java.util.List.of(
-                "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"
-        ));
-        web().patch().uri("/api/tickets/{id}/status", created.id())
+        seedExtractionWithProducts(
+                created.id(),
+                "Mercadona",
+                java.util.List.of(
+                        "{\"name\":\"Bread\",\"quantity\":1,\"unit\":null,\"pricePerUnit\":1.20,\"lineTotal\":1.20}"));
+        web().patch()
+                .uri("/api/tickets/{id}/status", created.id())
                 .header("authorization", "Bearer " + tokenA)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(java.util.Map.of("status", "DONE"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
-        var userB = users.upsertFromGoogle(
-                "google-sub-other", "other@example.com", "Other", null);
+        var userB = users.upsertFromGoogle("google-sub-other", "other@example.com", "Other", null);
         String tokenB = mintTokenFor(userB);
 
         web().get()
                 .uri("/api/tickets/{id}/catalogue", created.id())
                 .header("authorization", "Bearer " + tokenB)
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 }

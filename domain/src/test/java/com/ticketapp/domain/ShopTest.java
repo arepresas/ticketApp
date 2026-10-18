@@ -1,15 +1,13 @@
 package com.ticketapp.domain;
 
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
 
 /**
  * Shop master row. The match key (normalised name) has to dedupe
@@ -34,8 +32,7 @@ class ShopTest {
         // preserved so the original name (display) and the lookup
         // key stay close enough that an operator can spot the
         // match by eye.
-        assertEquals("el corte inglés",
-                Shop.normalisedNameOf("  El Corte Inglés  "));
+        assertEquals("el corte inglés", Shop.normalisedNameOf("  El Corte Inglés  "));
     }
 
     @Test
@@ -48,8 +45,7 @@ class ShopTest {
     @Test
     void constructorRejectsNullName() {
         Instant now = Instant.now();
-        assertThrows(NullPointerException.class,
-                () -> new Shop(nextId(), null, null, now));
+        assertThrows(NullPointerException.class, () -> new Shop(nextId(), null, null, now));
     }
 
     @Test
@@ -82,15 +78,21 @@ class ShopTest {
     void withContactAppliesNonNullFieldsAndKeepsOthers() {
         Instant now = Instant.now();
         Shop original = new Shop(
-                nextId(), "Mercadona", "mercadona",
-                "Calle Mayor 1", "28013", "Madrid", "ES",
-                "+34 911 22 33 44", "A12345678", "https://mercadona.es",
+                nextId(),
+                "Mercadona",
+                "mercadona",
+                "Calle Mayor 1",
+                "28013",
+                "Madrid",
+                "ES",
+                "+34 911 22 33 44",
+                "A12345678",
+                "https://mercadona.es",
                 now);
 
         // Single-field patch: only the phone changes, everything
         // else carries over verbatim.
-        Shop patched = original.withContact(null, null, null, null,
-                "+34 900 00 00 00", null, null);
+        Shop patched = original.withContact(null, null, null, null, "+34 900 00 00 00", null, null);
 
         assertEquals("Calle Mayor 1", patched.addressLine());
         assertEquals("28013", patched.postalCode());
@@ -111,14 +113,20 @@ class ShopTest {
     void withContactReplacesAllFieldsWhenAllProvided() {
         Instant now = Instant.now();
         Shop original = new Shop(
-                nextId(), "Dia", "dia",
-                "Old Street 1", "08001", "Barcelona", "ES",
-                "+34 930 00 00 00", "B12345678", "https://dia.es",
+                nextId(),
+                "Dia",
+                "dia",
+                "Old Street 1",
+                "08001",
+                "Barcelona",
+                "ES",
+                "+34 930 00 00 00",
+                "B12345678",
+                "https://dia.es",
                 now);
 
         Shop patched = original.withContact(
-                "New Avenue 2", "08002", "Barcelona", "ES",
-                "+34 931 00 00 00", "B87654321", "https://dia.com");
+                "New Avenue 2", "08002", "Barcelona", "ES", "+34 931 00 00 00", "B87654321", "https://dia.com");
 
         assertEquals("New Avenue 2", patched.addressLine());
         assertEquals("08002", patched.postalCode());
@@ -130,8 +138,7 @@ class ShopTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

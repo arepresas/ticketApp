@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
-
 /**
  * Outbound port for the normalised catalogue view of a ticket: the
  * shop it was validated against plus one line per catalogue row.
@@ -77,8 +76,7 @@ public interface TicketCatalogueRepository {
             QuantityUnit unit,
             java.math.BigDecimal quantity,
             BigDecimal pricePerUnit,
-            BigDecimal lineTotal
-    ) {
+            BigDecimal lineTotal) {
         public CatalogueLine {
             if (quantity == null) throw new NullPointerException("quantity");
             if (lineTotal == null) throw new NullPointerException("lineTotal");

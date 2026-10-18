@@ -4,14 +4,13 @@ import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.TicketSummary;
 import com.ticketapp.persistence.JdbcTicketRepository;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 
 /**
  * Failure injection for the transaction tests: a ticket repository that
@@ -35,16 +34,14 @@ public class ConcurrentWriterTicketRepositoryConfig {
 
     @Bean
     @Primary
-    TicketRepository concurrentWriterTicketRepository(
-            JdbcTicketRepository delegate, JdbcTemplate jdbc) {
+    TicketRepository concurrentWriterTicketRepository(JdbcTicketRepository delegate, JdbcTemplate jdbc) {
         return new DelegatingTicketRepository(delegate) {
             @Override
             public Optional<Ticket> findById(long id, long ownerId) {
                 Optional<Ticket> found = delegate.findById(id, ownerId);
                 // Simulate another writer committing between the
                 // service's read and its write-back.
-                found.ifPresent(t -> jdbc.update(
-                        "UPDATE tickets SET version = version + 1 WHERE id = ?", id));
+                found.ifPresent(t -> jdbc.update("UPDATE tickets SET version = version + 1 WHERE id = ?", id));
                 return found;
             }
         };
@@ -80,8 +77,7 @@ public class ConcurrentWriterTicketRepositoryConfig {
         }
 
         @Override
-        public List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses,
-                                                            long ownerId) {
+        public List<TicketSummary> findSummariesByStatusIn(Set<Ticket.Status> statuses, long ownerId) {
             return delegate.findSummariesByStatusIn(statuses, ownerId);
         }
     }

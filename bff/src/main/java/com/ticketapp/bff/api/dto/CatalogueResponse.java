@@ -3,7 +3,6 @@ package com.ticketapp.bff.api.dto;
 import java.math.BigDecimal;
 import java.util.List;
 
-
 /**
  * Wire response for {@code GET /api/tickets/{id}/catalogue}.
  *
@@ -21,10 +20,7 @@ import java.util.List;
  * the same product (e.g. loyalty discount variant) keeps both
  * rows here.
  */
-public record CatalogueResponse(
-        long shopId,
-        String shopName,
-        List<CatalogueLine> lines) {
+public record CatalogueResponse(long shopId, String shopName, List<CatalogueLine> lines) {
 
     /**
      * One catalogue line on the wire. {@code unit} is the
@@ -35,11 +31,7 @@ public record CatalogueResponse(
      * documented on the port.
      */
     public record CatalogueLine(
-            String productName,
-            String unit,
-            BigDecimal quantity,
-            BigDecimal pricePerUnit,
-            BigDecimal lineTotal) { }
+            String productName, String unit, BigDecimal quantity, BigDecimal pricePerUnit, BigDecimal lineTotal) {}
 
     /**
      * Project the domain view onto the wire. The only mapping rule
@@ -47,18 +39,13 @@ public record CatalogueResponse(
      * or price amount, which means the master row is gone — the
      * catalogue row itself is still shown.
      */
-    public static CatalogueResponse of(
-            com.ticketapp.domain.TicketCatalogueRepository.TicketCatalogue catalogue) {
+    public static CatalogueResponse of(com.ticketapp.domain.TicketCatalogueRepository.TicketCatalogue catalogue) {
         return new CatalogueResponse(
                 catalogue.shop().id(),
                 catalogue.shop().name(),
                 catalogue.lines().stream()
                         .map(l -> new CatalogueLine(
-                                l.productName(),
-                                l.unit().wireName(),
-                                l.quantity(),
-                                l.pricePerUnit(),
-                                l.lineTotal()))
+                                l.productName(), l.unit().wireName(), l.quantity(), l.pricePerUnit(), l.lineTotal()))
                         .toList());
     }
 }

@@ -1,11 +1,9 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.domain.exceptions.OptimisticLockException;
 import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler}. The 409 contract
@@ -18,8 +16,7 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void optimisticLockMapsToConflictWithRetryGuidance() {
-        var problem = handler.handleOptimisticLock(
-                new OptimisticLockException(nextId(), "boom"));
+        var problem = handler.handleOptimisticLock(new OptimisticLockException(nextId(), "boom"));
 
         assertThat(problem.getStatus()).isEqualTo(409);
         assertThat(problem.getTitle()).isEqualTo("Concurrent modification");
@@ -27,8 +24,7 @@ class GlobalExceptionHandlerTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

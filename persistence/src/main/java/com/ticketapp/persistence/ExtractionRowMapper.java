@@ -6,11 +6,6 @@ import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
-import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import lombok.experimental.UtilityClass;
-import org.postgresql.util.PGobject;
-
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,7 +13,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
-
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.UtilityClass;
+import org.postgresql.util.PGobject;
 
 /**
  * Maps {@code ticket_extractions} rows to {@link TicketExtraction}
@@ -59,20 +57,15 @@ final class ExtractionRowMapper {
      * column keeps its lower-case wire names.
      */
     private record ProductLineJson(
-            String name,
-            BigDecimal quantity,
-            String unit,
-            BigDecimal pricePerUnit,
-            BigDecimal lineTotal) {
+            String name, BigDecimal quantity, String unit, BigDecimal pricePerUnit, BigDecimal lineTotal) {
 
         ProductLine toDomain() {
-            return new ProductLine(name, quantity, QuantityUnit.fromLabel(unit),
-                    pricePerUnit, lineTotal);
+            return new ProductLine(name, quantity, QuantityUnit.fromLabel(unit), pricePerUnit, lineTotal);
         }
 
         static ProductLineJson fromDomain(ProductLine line) {
-            return new ProductLineJson(line.name(), line.quantity(), line.unit().wireName(),
-                    line.pricePerUnit(), line.lineTotal());
+            return new ProductLineJson(
+                    line.name(), line.quantity(), line.unit().wireName(), line.pricePerUnit(), line.lineTotal());
         }
     }
 
@@ -102,12 +95,20 @@ final class ExtractionRowMapper {
             // Don't swallow — surface the broken JSON as a SQLException so
             // the caller logs the row id and moves on. Backend.md: never
             // catch-and-log without rethrow.
-            throw new SQLException("Failed to parse products JSONB for extraction "
-                    + ticketId, e);
+            throw new SQLException("Failed to parse products JSONB for extraction " + ticketId, e);
         }
 
-        return new TicketExtraction(ticketId, merchant, purchaseDate, category,
-                products, totalAmount, currency, model, extractedAt, rawResponse,
+        return new TicketExtraction(
+                ticketId,
+                merchant,
+                purchaseDate,
+                category,
+                products,
+                totalAmount,
+                currency,
+                model,
+                extractedAt,
+                rawResponse,
                 extractionPayload);
     }
 
@@ -118,9 +119,8 @@ final class ExtractionRowMapper {
      */
     String writeProducts(List<ProductLine> products) throws SQLException {
         try {
-            return objectMapper.writeValueAsString(products.stream()
-                    .map(ProductLineJson::fromDomain)
-                    .toList());
+            return objectMapper.writeValueAsString(
+                    products.stream().map(ProductLineJson::fromDomain).toList());
         } catch (Exception ex) {
             throw new SQLException("Failed to serialise products to JSONB", ex);
         }

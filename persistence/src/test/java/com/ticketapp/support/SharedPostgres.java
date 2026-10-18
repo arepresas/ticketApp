@@ -28,15 +28,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
  */
 public final class SharedPostgres {
 
-    private static final PostgreSQLContainer<?> INSTANCE =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp")
-                    // Postgres 18 stores data under a major-version subdir.
-                    // PGDATA below the tmpfs mount avoids the
-                    // "unused mount/volume" error.
-                    .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
+    private static final PostgreSQLContainer<?> INSTANCE = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp")
+            // Postgres 18 stores data under a major-version subdir.
+            // PGDATA below the tmpfs mount avoids the
+            // "unused mount/volume" error.
+            .withEnv("PGDATA", "/var/lib/postgresql/data/pgdata");
 
     static {
         INSTANCE.start();

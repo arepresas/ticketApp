@@ -1,93 +1,102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" class="scroll-smooth">
-<head>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<meta name="theme-color" content="#10b981" media="(prefers-color-scheme: light)" />
-	<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
-	<meta name="description" content="TicketApp turns every receipt — supermarket, pharmacy, restaurant, fuel — into a clean, searchable timeline. Open source, local-first, private." />
-	<meta property="og:title" content="TicketApp — Every receipt. One searchable place." />
-	<meta property="og:description" content="From paper to insight in 3 steps. Open source, privacy-first." />
-	<meta property="og:type" content="website" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="TicketApp — Every receipt. One searchable place." />
-	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-	<title>TicketApp — Every receipt. One searchable place.</title>
-	<script src="https://accounts.google.com/gsi/client" async defer></script>
-	<script>
-		(function () {
-			try {
-				var s = localStorage.getItem('ticketapp-theme');
-				var m = s === 'light' || s === 'dark' ? s : 'system';
-				var r = m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-				document.documentElement.classList.toggle('dark', r === 'dark');
-				document.documentElement.style.colorScheme = r;
-			} catch (_) {}
-		})();
-	</script>
-</head>
-<body>
-	<div id="app-header-mount"></div>
-	<landing-app></landing-app>
-	<dashboard-app></dashboard-app>
-	<new-ticket-app></new-ticket-app>
-	<pending-tickets-app></pending-tickets-app>
-	<ticket-detail-app></ticket-detail-app>
-	<style>
-		/* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10b981" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta
+      name="description"
+      content="TicketApp turns every receipt — supermarket, pharmacy, restaurant, fuel — into a clean, searchable timeline. Open source, local-first, private."
+    />
+    <meta property="og:title" content="TicketApp — Every receipt. One searchable place." />
+    <meta
+      property="og:description"
+      content="From paper to insight in 3 steps. Open source, privacy-first."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TicketApp — Every receipt. One searchable place." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>TicketApp — Every receipt. One searchable place.</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      (function () {
+        try {
+          var s = localStorage.getItem('ticketapp-theme');
+          var m = s === 'light' || s === 'dark' ? s : 'system';
+          var r =
+            m === 'dark' || (m === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+              ? 'dark'
+              : 'light';
+          document.documentElement.classList.toggle('dark', r === 'dark');
+          document.documentElement.style.colorScheme = r;
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app-header-mount"></div>
+    <landing-app></landing-app>
+    <dashboard-app></dashboard-app>
+    <new-ticket-app></new-ticket-app>
+    <pending-tickets-app></pending-tickets-app>
+    <ticket-detail-app></ticket-detail-app>
+    <style>
+      /* Mutual-exclusion gate between <landing-app> and <dashboard-app>.
 		   Toggled reactively by front/src/lib/auth/host.ts based on
 		   `auth.isAuthenticated`. Default (unauthenticated): landing shows.
 		   Authenticated: dashboard shows. */
-		body:not(.is-authenticated) dashboard-app {
-			display: none;
-		}
-		body.is-authenticated landing-app {
-			display: none;
-		}
+      body:not(.is-authenticated) dashboard-app {
+        display: none;
+      }
+      body.is-authenticated landing-app {
+        display: none;
+      }
 
-		/* <new-ticket-app> shows only when the `is-new` body class is set
+      /* <new-ticket-app> shows only when the `is-new` body class is set
 		   by the Header "New" link (or any future router action). When
 		   it is set, both landing and dashboard hide so the upload screen
 		   gets the full viewport. The element itself gates on auth and
 		   renders nothing when signed-out — see NewTicketApp.svelte. */
-		body:not(.is-new) new-ticket-app {
-			display: none;
-		}
-		body.is-new landing-app,
-		body.is-new dashboard-app {
-			display: none;
-		}
+      body:not(.is-new) new-ticket-app {
+        display: none;
+      }
+      body.is-new landing-app,
+      body.is-new dashboard-app {
+        display: none;
+      }
 
-		/* <pending-tickets-app> mirrors the new-ticket gate: visible
+      /* <pending-tickets-app> mirrors the new-ticket gate: visible
 		   only when the Header "Pending tickets" link adds `is-pending`,
 		   hides landing + dashboard so the list gets the full viewport.
 		   The element gates on auth and renders nothing when signed-out
 		   — see PendingTicketsApp.svelte. */
-		body:not(.is-pending) pending-tickets-app {
-			display: none;
-		}
-		body.is-pending landing-app,
-		body.is-pending dashboard-app,
-		body.is-pending new-ticket-app {
-			display: none;
-		}
+      body:not(.is-pending) pending-tickets-app {
+        display: none;
+      }
+      body.is-pending landing-app,
+      body.is-pending dashboard-app,
+      body.is-pending new-ticket-app {
+        display: none;
+      }
 
-		/* <ticket-detail-app> is the per-ticket view (extraction +
+      /* <ticket-detail-app> is the per-ticket view (extraction +
 		   file preview + DONE / CANCELLED actions). Opens via a card
 		   click in PendingTicketsApp which sets `body.is-detail` +
 		   `#ticket/<id>`. Same mutual-exclusion pattern as the other
 		   overlays — hides landing, dashboard, new, pending so the
 		   detail gets the full viewport. */
-		body:not(.is-detail) ticket-detail-app {
-			display: none;
-		}
-		body.is-detail landing-app,
-		body.is-detail dashboard-app,
-		body.is-detail new-ticket-app,
-		body.is-detail pending-tickets-app {
-			display: none;
-		}
-	</style>
-	<script type="module" src="/src/index.ts"></script>
-</body>
+      body:not(.is-detail) ticket-detail-app {
+        display: none;
+      }
+      body.is-detail landing-app,
+      body.is-detail dashboard-app,
+      body.is-detail new-ticket-app,
+      body.is-detail pending-tickets-app {
+        display: none;
+      }
+    </style>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
 </html>

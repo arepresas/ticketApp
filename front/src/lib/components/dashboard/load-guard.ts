@@ -19,47 +19,47 @@
  * state.
  */
 export type LoadHandle = {
-	/** Monotonic id. Only the newest handle may commit a result. */
-	generation: number;
-	/** Signal wired into the request this handle represents. */
-	signal: AbortSignal;
+  /** Monotonic id. Only the newest handle may commit a result. */
+  generation: number;
+  /** Signal wired into the request this handle represents. */
+  signal: AbortSignal;
 };
 
 export type LoadGuard = {
-	/**
-	 * Start a load: invalidate every earlier one and abort its request.
-	 *
-	 * @returns the handle for the load that is now current.
-	 */
-	begin(): LoadHandle;
-	/** True while `generation` is still the newest load. */
-	isCurrent(generation: number): boolean;
-	/**
-	 * Cancel whatever is in flight and invalidate its handle.
-	 *
-	 * <p>Used on teardown, so an unmount mid-flight cannot write into a
-	 * component that no longer exists.
-	 */
-	abort(): void;
+  /**
+   * Start a load: invalidate every earlier one and abort its request.
+   *
+   * @returns the handle for the load that is now current.
+   */
+  begin(): LoadHandle;
+  /** True while `generation` is still the newest load. */
+  isCurrent(generation: number): boolean;
+  /**
+   * Cancel whatever is in flight and invalidate its handle.
+   *
+   * <p>Used on teardown, so an unmount mid-flight cannot write into a
+   * component that no longer exists.
+   */
+  abort(): void;
 };
 
 export const createLoadGuard = (): LoadGuard => {
-	let newest = 0;
-	let inFlight: AbortController | null = null;
+  let newest = 0;
+  let inFlight: AbortController | null = null;
 
-	return {
-		begin(): LoadHandle {
-			inFlight?.abort();
-			inFlight = new AbortController();
-			return { generation: ++newest, signal: inFlight.signal };
-		},
-		isCurrent: (generation: number): boolean => generation === newest,
-		abort(): void {
-			inFlight?.abort();
-			inFlight = null;
-			// Bump so a late resolution from the aborted request is stale
-			// rather than current-but-ignored.
-			newest++;
-		}
-	};
+  return {
+    begin(): LoadHandle {
+      inFlight?.abort();
+      inFlight = new AbortController();
+      return { generation: ++newest, signal: inFlight.signal };
+    },
+    isCurrent: (generation: number): boolean => generation === newest,
+    abort(): void {
+      inFlight?.abort();
+      inFlight = null;
+      // Bump so a late resolution from the aborted request is stale
+      // rather than current-but-ignored.
+      newest++;
+    }
+  };
 };

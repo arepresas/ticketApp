@@ -5,7 +5,6 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 
-
 /**
  * Outbound port for the {@link Price} per-ticket snapshot.
  *

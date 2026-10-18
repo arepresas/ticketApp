@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-
 /**
  * Outbound port defined by domain. Infrastructure implements it.
  *

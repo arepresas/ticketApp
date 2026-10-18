@@ -18,4 +18,4 @@ public record UpdateExtractionRequest(
         String category,
         List<ProductLineDto> products,
         BigDecimal totalAmount,
-        String currency) { }
+        String currency) {}

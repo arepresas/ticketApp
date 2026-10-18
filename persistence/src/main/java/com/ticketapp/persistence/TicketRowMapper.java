@@ -1,14 +1,12 @@
 package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Ticket;
-import org.springframework.jdbc.core.RowMapper;
-
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.UUID;
+import org.springframework.jdbc.core.RowMapper;
 
 /**
  * Maps {@code tickets} rows to {@link Ticket} domain objects.
@@ -58,8 +56,22 @@ final class TicketRowMapper implements RowMapper<Ticket> {
         // could not transcribe anything stay NULL.
         String ocrText = rs.getString("ocr_text");
         long version = rs.getLong("version");
-        return new Ticket(id, ownerId, title, description, status, createdAt, updatedAt,
-                contentType, fileName, fileData, errorMessage, attempts, shopId, ocrText, version);
+        return new Ticket(
+                id,
+                ownerId,
+                title,
+                description,
+                status,
+                createdAt,
+                updatedAt,
+                contentType,
+                fileName,
+                fileData,
+                errorMessage,
+                attempts,
+                shopId,
+                ocrText,
+                version);
     }
 
     /** Treat the stored timestamp as UTC (database columns are timestamptz). */

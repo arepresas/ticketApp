@@ -2,7 +2,6 @@ package com.ticketapp.domain.ai;
 
 import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -41,8 +40,7 @@ public record ReceiptExtractionResult(
         SpendCategory category,
         List<ProductLine> products,
         BigDecimal totalAmount,
-        String currency
-) {
+        String currency) {
     public ReceiptExtractionResult {
         if (merchant == null || merchant.isBlank()) {
             throw new IllegalArgumentException("merchant must not be blank");

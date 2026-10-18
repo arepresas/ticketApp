@@ -1,9 +1,9 @@
 package com.ticketapp.openai.autoconfigure;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link OpenAiAutoConfiguration}.
@@ -17,8 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OpenAiAutoConfigurationTest {
 
     private static final OpenAiProperties PROPS = new OpenAiProperties(
-            "https://api.openai.com/v1", "test-api-key", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536,
-            "low", "", false);
+            "https://api.openai.com/v1", "test-api-key", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536, "low", "", false);
 
     @Test
     void openAIClientReturnsNonNullClient() {
@@ -49,8 +48,16 @@ class OpenAiAutoConfigurationTest {
     void openAIClientRejectsPlaceholderKey() {
         OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
         var props = new OpenAiProperties(
-                "https://api.openai.com/v1", "dev-placeholder", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536,
-                "low", "", false);
+                "https://api.openai.com/v1",
+                "dev-placeholder",
+                "gpt-4o-mini",
+                30_000L,
+                0.0,
+                16384,
+                65_536,
+                "low",
+                "",
+                false);
 
         assertThatThrownBy(() -> config.openAIClient(props))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -61,11 +68,9 @@ class OpenAiAutoConfigurationTest {
     void openAIClientRejectsBlankKey() {
         OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
         var props = new OpenAiProperties(
-                "https://api.openai.com/v1", "  ", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536,
-                "low", "", false);
+                "https://api.openai.com/v1", "  ", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536, "low", "", false);
 
-        assertThatThrownBy(() -> config.openAIClient(props))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> config.openAIClient(props)).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -76,8 +81,16 @@ class OpenAiAutoConfigurationTest {
         // — here we only assert the factory accepts the configuration.
         OpenAiAutoConfiguration config = new OpenAiAutoConfiguration();
         var props = new OpenAiProperties(
-                "https://api.openai.com/v1", "test-api-key", "gpt-4o-mini", 30_000L, 0.0, 16384, 65_536,
-                "low", "X-OpenCode-Session=ses-1234,X-Org-Id=org-1", true);
+                "https://api.openai.com/v1",
+                "test-api-key",
+                "gpt-4o-mini",
+                30_000L,
+                0.0,
+                16384,
+                65_536,
+                "low",
+                "X-OpenCode-Session=ses-1234,X-Org-Id=org-1",
+                true);
 
         var client = config.openAIClient(props);
 

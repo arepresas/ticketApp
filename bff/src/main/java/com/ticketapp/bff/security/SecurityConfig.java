@@ -1,7 +1,11 @@
 package com.ticketapp.bff.security;
 
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
+import java.nio.charset.StandardCharsets;
+import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,13 +20,6 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import com.nimbusds.jose.proc.SecurityContext;
-import com.nimbusds.jose.jwk.source.JWKSource;
 
 /**
  * Spring Security configuration for the BFF.
@@ -88,12 +85,10 @@ public class SecurityConfig {
         if (secret == null || secret.length() < 32) {
             // Mirrors the old SessionTokenService guard — fail fast at
             // boot rather than signing tokens with a weak key.
-            throw new IllegalStateException(
-                    "bff.jwt.secret must be at least 32 chars (256 bits) for HS256");
+            throw new IllegalStateException("bff.jwt.secret must be at least 32 chars (256 bits) for HS256");
         }
         this.secretBytes = secret.getBytes(StandardCharsets.UTF_8);
-        log.info("SecurityConfig initialised: HS256 resource server, secret={} chars",
-                secret.length());
+        log.info("SecurityConfig initialised: HS256 resource server, secret={} chars", secret.length());
     }
 
     /**
@@ -105,8 +100,7 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     SecurityFilterChain publicChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher("/api/auth/google", "/actuator/health")
+        http.securityMatcher("/api/auth/google", "/actuator/health")
                 .authorizeHttpRequests(a -> a.anyRequest().permitAll())
                 // Intentional — ADR 0008: stateless Bearer header, no
                 // cookie, so there is no ambient credential for CSRF
@@ -127,19 +121,15 @@ public class SecurityConfig {
      */
     @Bean
     @Order(2)
-    SecurityFilterChain apiChain(HttpSecurity http,
-                                 JwtDecoder jwtDecoder,
-                                 JwtToAuthenticatedUserConverter jwtConverter) throws Exception {
-        http
-                .securityMatcher("/api/**")
+    SecurityFilterChain apiChain(HttpSecurity http, JwtDecoder jwtDecoder, JwtToAuthenticatedUserConverter jwtConverter)
+            throws Exception {
+        http.securityMatcher("/api/**")
                 .authorizeHttpRequests(a -> a.anyRequest().authenticated())
                 // codeql[java/spring-csrf-protection-disabled] — ADR 0008
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt
-                                .decoder(jwtDecoder)
-                                .jwtAuthenticationConverter(jwtConverter)))
+                .oauth2ResourceServer(
+                        oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtConverter)))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable);
@@ -187,8 +177,7 @@ public class SecurityConfig {
     @Bean
     JwtDecoder jwtDecoder() {
         SecretKeySpec key = new SecretKeySpec(secretBytes, "HmacSHA256");
-        return NimbusJwtDecoder
-                .withSecretKey(key)
+        return NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
     }

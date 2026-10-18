@@ -28,4 +28,4 @@ export const DEFAULT_QUANTITY_UNIT: QuantityUnit = 'unit';
  * rather than blanking the editor.
  */
 export const asQuantityUnit = (value: unknown): QuantityUnit =>
-	QUANTITY_UNITS.includes(value as QuantityUnit) ? (value as QuantityUnit) : DEFAULT_QUANTITY_UNIT;
+  QUANTITY_UNITS.includes(value as QuantityUnit) ? (value as QuantityUnit) : DEFAULT_QUANTITY_UNIT;

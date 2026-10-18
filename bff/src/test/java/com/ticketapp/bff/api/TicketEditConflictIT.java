@@ -1,7 +1,10 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.failureinjection.ConcurrentWriterTicketRepositoryConfig;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,10 +15,6 @@ import org.springframework.http.MediaType;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Proves the detail edit cannot silently overwrite a concurrent change.
@@ -43,31 +42,36 @@ class TicketEditConflictIT extends AbstractTicketEditIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @Test
     @DisplayName("answers 409 ProblemDetail instead of overwriting the newer row")
     void conflictsInsteadOfOverwriting() {
-        long ticketId = seedTicketWithExtraction(
-                "Original title", "Original description", "Mercadona", "25.28");
+        long ticketId = seedTicketWithExtraction("Original title", "Original description", "Mercadona", "25.28");
         Map<String, String> extractionBefore = extractionSnapshot(ticketId);
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(editBody("Weekly shop", "edited by hand", "Should Not Persist", "45.60"))
                 .exchange()
-                .expectStatus().isEqualTo(HttpStatus.CONFLICT)
-                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectStatus()
+                .isEqualTo(HttpStatus.CONFLICT)
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(409)
-                .jsonPath("$.title").isEqualTo("Concurrent modification")
-                .jsonPath("$.detail").isNotEmpty()
-                .jsonPath("$.code").exists();
+                .jsonPath("$.status")
+                .isEqualTo(409)
+                .jsonPath("$.title")
+                .isEqualTo("Concurrent modification")
+                .jsonPath("$.detail")
+                .isNotEmpty()
+                .jsonPath("$.code")
+                .exists();
 
         // The stale snapshot must not have landed. The version bump
         // the simulated writer performed is rolled back with the

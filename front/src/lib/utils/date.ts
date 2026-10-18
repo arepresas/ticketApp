@@ -27,8 +27,8 @@ const LOCALE = 'en-GB';
 
 const dateFmt = new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium' });
 const dtFmt = new Intl.DateTimeFormat(LOCALE, {
-	dateStyle: 'medium',
-	timeStyle: 'short'
+  dateStyle: 'medium',
+  timeStyle: 'short'
 });
 
 /**
@@ -38,8 +38,8 @@ const dtFmt = new Intl.DateTimeFormat(LOCALE, {
 type DateLike = Date | string | number;
 
 function toDate(value: DateLike): Date {
-	if (value instanceof Date) return value;
-	return new Date(value);
+  if (value instanceof Date) return value;
+  return new Date(value);
 }
 
 /**
@@ -50,11 +50,11 @@ function toDate(value: DateLike): Date {
  * from the backend.
  */
 export function formatDate(value: DateLike): string {
-	try {
-		return dateFmt.format(toDate(value));
-	} catch {
-		return typeof value === 'string' ? value : '';
-	}
+  try {
+    return dateFmt.format(toDate(value));
+  } catch {
+    return typeof value === 'string' ? value : '';
+  }
 }
 
 /**
@@ -62,9 +62,9 @@ export function formatDate(value: DateLike): string {
  * Same fallback as {@link formatDate}.
  */
 export function formatDateTime(value: DateLike): string {
-	try {
-		return dtFmt.format(toDate(value));
-	} catch {
-		return typeof value === 'string' ? value : '';
-	}
+  try {
+    return dtFmt.format(toDate(value));
+  } catch {
+    return typeof value === 'string' ? value : '';
+  }
 }

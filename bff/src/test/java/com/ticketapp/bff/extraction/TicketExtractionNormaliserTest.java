@@ -1,32 +1,5 @@
 package com.ticketapp.bff.extraction;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketapp.domain.SpendCategory;
-import com.ticketapp.domain.LineTicketRepository;
-import com.ticketapp.domain.PriceRepository;
-import com.ticketapp.domain.ProductRepository;
-import com.ticketapp.domain.QuantityUnit;
-import com.ticketapp.domain.Shop;
-import com.ticketapp.domain.ShopRepository;
-import com.ticketapp.domain.Ticket;
-import com.ticketapp.domain.Ticket.Status;
-import com.ticketapp.domain.TicketExtraction;
-import com.ticketapp.domain.TicketExtraction.ProductLine;
-import com.ticketapp.domain.TicketExtractionRepository;
-import com.ticketapp.domain.TicketRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
@@ -34,6 +7,31 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketapp.domain.LineTicketRepository;
+import com.ticketapp.domain.PriceRepository;
+import com.ticketapp.domain.ProductRepository;
+import com.ticketapp.domain.QuantityUnit;
+import com.ticketapp.domain.Shop;
+import com.ticketapp.domain.ShopRepository;
+import com.ticketapp.domain.SpendCategory;
+import com.ticketapp.domain.Ticket;
+import com.ticketapp.domain.Ticket.Status;
+import com.ticketapp.domain.TicketExtraction;
+import com.ticketapp.domain.TicketExtraction.ProductLine;
+import com.ticketapp.domain.TicketExtractionRepository;
+import com.ticketapp.domain.TicketRepository;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 /**
  * Unit tests for {@link TicketExtractionNormaliser} focused on the
@@ -105,7 +103,7 @@ class TicketExtractionNormaliserTest {
                 Instant.parse("2026-07-04T09:00:00Z"),
                 "image/png",
                 "mercadona.png",
-                new byte[]{1, 2, 3},
+                new byte[] {1, 2, 3},
                 null,
                 0,
                 null,
@@ -120,8 +118,7 @@ class TicketExtractionNormaliserTest {
      * that column). Anything the normaliser can read about the shop
      * has to come from the reply.
      */
-    private TicketExtraction extraction(long ticketId, String merchant,
-                                        String rawReply, List<ProductLine> lines) {
+    private TicketExtraction extraction(long ticketId, String merchant, String rawReply, List<ProductLine> lines) {
         return new TicketExtraction(
                 ticketId,
                 merchant,
@@ -138,8 +135,8 @@ class TicketExtractionNormaliserTest {
 
     private ProductLine sampleLine() {
         // UNIT, not a null unit: a line that printed none is a piece.
-        return new ProductLine("Bread", new BigDecimal("1"), QuantityUnit.UNIT,
-                new BigDecimal("3.50"), new BigDecimal("3.50"));
+        return new ProductLine(
+                "Bread", new BigDecimal("1"), QuantityUnit.UNIT, new BigDecimal("3.50"), new BigDecimal("3.50"));
     }
 
     @Test
@@ -150,8 +147,8 @@ class TicketExtractionNormaliserTest {
         // via PATCH later.
         long ticketId = nextId();
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
-                        "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
+                .thenReturn(Optional.of(
+                        extraction(ticketId, "Mercadona", "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -194,8 +191,7 @@ class TicketExtractionNormaliserTest {
                 }
                 """;
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", rawReply,
-                        List.of(sampleLine()))));
+                .thenReturn(Optional.of(extraction(ticketId, "Mercadona", rawReply, List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -228,8 +224,7 @@ class TicketExtractionNormaliserTest {
                 }
                 """;
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
-                        List.of(sampleLine()))));
+                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply, List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -249,8 +244,7 @@ class TicketExtractionNormaliserTest {
                 {"shop": {"city": "Madrid", "country": "ES"}}
                 """;
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Dia", rawReply,
-                        List.of(sampleLine()))));
+                .thenReturn(Optional.of(extraction(ticketId, "Dia", rawReply, List.of(sampleLine()))));
         when(shops.findByNormalisedName("dia")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -278,8 +272,7 @@ class TicketExtractionNormaliserTest {
                 {"purchase_date": "2026-07-04", "total_amount": 3.50}
                 """;
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply,
-                        List.of(sampleLine()))));
+                .thenReturn(Optional.of(extraction(ticketId, "Lidl", rawReply, List.of(sampleLine()))));
         when(shops.findByNormalisedName("lidl")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -299,8 +292,7 @@ class TicketExtractionNormaliserTest {
         // The shop row is still created, just without contact info.
         long ticketId = nextId();
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Consum",
-                        "{not valid json", List.of(sampleLine()))));
+                .thenReturn(Optional.of(extraction(ticketId, "Consum", "{not valid json", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -319,13 +311,21 @@ class TicketExtractionNormaliserTest {
         // in the upsert; the normaliser doesn't need to pass it
         // through.
         long ticketId = nextId();
-        Shop existing = new Shop(nextId(), "Mercadona", "mercadona",
-                "Calle Mayor 1", "28013", "Madrid", "ES",
-                "+34 911 22 33 44", "A12345678", "https://mercadona.es",
+        Shop existing = new Shop(
+                nextId(),
+                "Mercadona",
+                "mercadona",
+                "Calle Mayor 1",
+                "28013",
+                "Madrid",
+                "ES",
+                "+34 911 22 33 44",
+                "A12345678",
+                "https://mercadona.es",
                 Instant.parse("2026-01-01T00:00:00Z"));
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
-                        "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
+                .thenReturn(Optional.of(
+                        extraction(ticketId, "Mercadona", "{\"merchant\":\"Mercadona\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.of(existing));
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -352,12 +352,21 @@ class TicketExtractionNormaliserTest {
         // the controller's catalogue() read can join through the
         // ticket rather than through the (now shopless) line row.
         long ticketId = nextId();
-        Shop created = new Shop(nextId(), "Consum", "consum",
-                null, null, null, null, null, null, null,
+        Shop created = new Shop(
+                nextId(),
+                "Consum",
+                "consum",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 Instant.parse("2026-07-04T10:00:00Z"));
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Consum",
-                        "{\"merchant\":\"Consum\"}", List.of(sampleLine()))));
+                .thenReturn(Optional.of(
+                        extraction(ticketId, "Consum", "{\"merchant\":\"Consum\"}", List.of(sampleLine()))));
         when(shops.findByNormalisedName("consum")).thenReturn(Optional.empty());
         when(shops.save(any())).thenReturn(created);
 
@@ -382,11 +391,11 @@ class TicketExtractionNormaliserTest {
         // Pin the two halves: the delete ran, and the fresh line was
         // saved after it (same ticket).
         long ticketId = nextId();
-        ProductLine renamed = new ProductLine("Green Tea", new BigDecimal("1"),
-                QuantityUnit.UNIT, new BigDecimal("2.00"), new BigDecimal("2.00"));
+        ProductLine renamed = new ProductLine(
+                "Green Tea", new BigDecimal("1"), QuantityUnit.UNIT, new BigDecimal("2.00"), new BigDecimal("2.00"));
         when(extractions.findByTicketId(ticketId, OWNER))
-                .thenReturn(Optional.of(extraction(ticketId, "Mercadona",
-                        "{\"merchant\":\"Mercadona\"}", List.of(renamed))));
+                .thenReturn(Optional.of(
+                        extraction(ticketId, "Mercadona", "{\"merchant\":\"Mercadona\"}", List.of(renamed))));
         when(shops.findByNormalisedName("mercadona")).thenReturn(Optional.empty());
 
         normaliser.normaliseOnDone(sampleTicket(ticketId));
@@ -400,8 +409,7 @@ class TicketExtractionNormaliserTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

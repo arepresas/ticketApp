@@ -1,12 +1,10 @@
 package com.ticketapp.bff.api.dto;
 
 import com.ticketapp.domain.TicketExtraction;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
-
 
 /**
  * Wire response for {@code GET /api/tickets/{id}/extraction}.
@@ -40,11 +38,7 @@ public record ExtractionResponse(
     public static ExtractionResponse of(TicketExtraction e) {
         List<ProductLineDto> products = e.products().stream()
                 .map(p -> new ProductLineDto(
-                        p.name(),
-                        p.quantity(),
-                        p.unit().wireName(),
-                        p.pricePerUnit(),
-                        p.lineTotal()))
+                        p.name(), p.quantity(), p.unit().wireName(), p.pricePerUnit(), p.lineTotal()))
                 .toList();
         return new ExtractionResponse(
                 e.ticketId(),

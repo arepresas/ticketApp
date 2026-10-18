@@ -35,7 +35,6 @@ public class TicketAppException extends RuntimeException {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName()
-                + "[code=" + code + ", message=" + getMessage() + "]";
+        return getClass().getSimpleName() + "[code=" + code + ", message=" + getMessage() + "]";
     }
 }

@@ -3,7 +3,6 @@ package com.ticketapp.bff.api;
 import com.ticketapp.domain.exceptions.OptimisticLockException;
 import com.ticketapp.domain.exceptions.TicketAppException;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,8 +36,7 @@ public class GlobalExceptionHandler {
         log.info("Optimistic lock conflict for ticket {}: {}", e.ticketId(), e.getMessage());
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.CONFLICT);
         problem.setTitle("Concurrent modification");
-        problem.setDetail("The ticket changed while your request was in flight. "
-                + "Re-read it and retry.");
+        problem.setDetail("The ticket changed while your request was in flight. " + "Re-read it and retry.");
         problem.setProperty("code", e.code());
         return problem;
     }
@@ -52,8 +50,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(TicketAppException.class)
     public ProblemDetail handleDomainFailure(TicketAppException e) {
-        log.warn("Domain failure code={} type={}: {}",
-                e.code(), e.getClass().getSimpleName(), e.getMessage());
+        log.warn("Domain failure code={} type={}: {}", e.code(), e.getClass().getSimpleName(), e.getMessage());
         ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNPROCESSABLE_ENTITY);
         problem.setTitle("Request refused by the domain");
         problem.setProperty("code", e.code());

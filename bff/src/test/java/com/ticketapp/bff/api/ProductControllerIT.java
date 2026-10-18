@@ -1,8 +1,13 @@
 package com.ticketapp.bff.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.ProductSearchResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,13 +21,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * End-to-end IT for {@link ProductController#search(String, Integer)}.
@@ -41,11 +39,10 @@ class ProductControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @LocalServerPort
     int port;
@@ -65,10 +62,12 @@ class ProductControllerIT {
     }
 
     private String loginAndGetToken() {
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -77,10 +76,10 @@ class ProductControllerIT {
     }
 
     private long seedProduct(String name, String unit) {
-        return jdbc.queryForObject("""
+        return jdbc.queryForObject(
+                """
                 INSERT INTO products (name, normalised_name, unit, created_at)
-                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit,
-                Timestamp.from(Instant.now()));
+                VALUES (?, ?, ?::quantity_unit, ?) RETURNING id""", Long.class, name, name.trim().toLowerCase(), unit, Timestamp.from(Instant.now()));
     }
 
     @Test
@@ -90,18 +89,19 @@ class ProductControllerIT {
         long bananaId = seedProduct("Banana", "unit");
         seedProduct("Milk", "unit");
 
-        List<ProductSearchResponse> body = web()
-                .get().uri(uri -> uri.path("/api/products/search").queryParam("name", "B").build())
+        List<ProductSearchResponse> body = web().get()
+                .uri(uri ->
+                        uri.path("/api/products/search").queryParam("name", "B").build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
 
         assertThat(body).isNotNull();
-        assertThat(body).extracting(ProductSearchResponse::id)
-                .containsExactlyInAnyOrder(breadId, bananaId);
+        assertThat(body).extracting(ProductSearchResponse::id).containsExactlyInAnyOrder(breadId, bananaId);
     }
 
     @Test
@@ -109,11 +109,14 @@ class ProductControllerIT {
         String token = loginAndGetToken();
         seedProduct("Bread", "kg");
 
-        List<ProductSearchResponse> body = web()
-                .get().uri(uri -> uri.path("/api/products/search").queryParam("name", "bread").build())
+        List<ProductSearchResponse> body = web().get()
+                .uri(uri -> uri.path("/api/products/search")
+                        .queryParam("name", "bread")
+                        .build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -127,19 +130,19 @@ class ProductControllerIT {
     @Test
     void searchRespectsLimit() {
         String token = loginAndGetToken();
-        for (String n : new String[]{"Apple", "Avocado", "Almond", "Artichoke"}) {
+        for (String n : new String[] {"Apple", "Avocado", "Almond", "Artichoke"}) {
             seedProduct(n, "unit");
         }
 
-        List<ProductSearchResponse> body = web()
-                .get().uri(uri -> uri
-                        .path("/api/products/search")
+        List<ProductSearchResponse> body = web().get()
+                .uri(uri -> uri.path("/api/products/search")
                         .queryParam("name", "A")
                         .queryParam("limit", 2)
                         .build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -157,15 +160,15 @@ class ProductControllerIT {
             seedProduct("Apple " + i, "unit");
         }
 
-        List<ProductSearchResponse> body = web()
-                .get().uri(uri -> uri
-                        .path("/api/products/search")
+        List<ProductSearchResponse> body = web().get()
+                .uri(uri -> uri.path("/api/products/search")
                         .queryParam("name", "Apple")
                         .queryParam("limit", 9999)
                         .build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -179,14 +182,14 @@ class ProductControllerIT {
         String token = loginAndGetToken();
         seedProduct("Bread", "unit");
 
-        List<ProductSearchResponse> body = web()
-                .get().uri(uri -> uri
-                        .path("/api/products/search")
+        List<ProductSearchResponse> body = web().get()
+                .uri(uri -> uri.path("/api/products/search")
                         .queryParam("name", "   ")
                         .build())
                 .header("authorization", "Bearer " + token)
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBodyList(ProductSearchResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -197,8 +200,11 @@ class ProductControllerIT {
 
     @Test
     void searchRejectsUnauthenticated() {
-        web().get().uri(uri -> uri.path("/api/products/search").queryParam("name", "B").build())
+        web().get()
+                .uri(uri ->
+                        uri.path("/api/products/search").queryParam("name", "B").build())
                 .exchange()
-                .expectStatus().isUnauthorized();
+                .expectStatus()
+                .isUnauthorized();
     }
 }

@@ -2,15 +2,12 @@ package com.ticketapp.persistence;
 
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.ShopRepository;
+import java.sql.PreparedStatement;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-
-import java.sql.PreparedStatement;
-import java.sql.Types;
-import java.util.Optional;
-
 
 /**
  * JDBC implementation of {@link ShopRepository}. Plain SQL, no ORM.
@@ -42,9 +39,8 @@ public class JdbcShopRepository implements ShopRepository {
         this.namedJdbc = new NamedParameterJdbcTemplate(jdbc);
     }
 
-    private static final String SHOP_COLS =
-            "id, name, normalised_name, address_line, postal_code, "
-          + "city, country, phone, tax_id, website, created_at";
+    private static final String SHOP_COLS = "id, name, normalised_name, address_line, postal_code, "
+            + "city, country, phone, tax_id, website, created_at";
 
     /**
      * ON CONFLICT on the {@code uq_shops_normalised_name} index.
@@ -73,48 +69,45 @@ public class JdbcShopRepository implements ShopRepository {
             RETURNING id
             """;
 
-    private static final String FIND_BY_NAME_SQL =
-            "SELECT " + SHOP_COLS + " FROM shops WHERE normalised_name = :name";
+    private static final String FIND_BY_NAME_SQL = "SELECT " + SHOP_COLS + " FROM shops WHERE normalised_name = :name";
 
-    private static final String FIND_BY_ID_SQL =
-            "SELECT " + SHOP_COLS + " FROM shops WHERE id = :id";
+    private static final String FIND_BY_ID_SQL = "SELECT " + SHOP_COLS + " FROM shops WHERE id = :id";
 
     @Override
     public Optional<Shop> findByNormalisedName(String normalisedName) {
         var rows = namedJdbc.query(
-                FIND_BY_NAME_SQL,
-                new MapSqlParameterSource("name", normalisedName),
-                (rs, n) -> mapShop(rs));
+                FIND_BY_NAME_SQL, new MapSqlParameterSource("name", normalisedName), (rs, n) -> mapShop(rs));
         return rows.stream().findFirst();
     }
 
     @Override
     public Optional<Shop> findById(long id) {
-        var rows = namedJdbc.query(
-                FIND_BY_ID_SQL,
-                new MapSqlParameterSource("id", id),
-                (rs, n) -> mapShop(rs));
+        var rows = namedJdbc.query(FIND_BY_ID_SQL, new MapSqlParameterSource("id", id), (rs, n) -> mapShop(rs));
         return rows.stream().findFirst();
     }
 
     @Override
     public Shop save(Shop shop) {
-        return jdbc.query(
-                con -> {
-                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
-                ps.setString(1, shop.name());
-                ps.setString(2, shop.normalisedName());
-                ps.setString(3, shop.addressLine());
-                ps.setString(4, shop.postalCode());
-                ps.setString(5, shop.city());
-                ps.setString(6, shop.country());
-                ps.setString(7, shop.phone());
-                ps.setString(8, shop.taxId());
-                ps.setString(9, shop.website());
-                ps.setObject(10, java.sql.Timestamp.from(shop.createdAt()));
-                    return ps;
-                },
-                (rs, n) -> shop.withId(rs.getLong(1))).stream().findFirst().orElse(shop);
+        return jdbc
+                .query(
+                        con -> {
+                            PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                            ps.setString(1, shop.name());
+                            ps.setString(2, shop.normalisedName());
+                            ps.setString(3, shop.addressLine());
+                            ps.setString(4, shop.postalCode());
+                            ps.setString(5, shop.city());
+                            ps.setString(6, shop.country());
+                            ps.setString(7, shop.phone());
+                            ps.setString(8, shop.taxId());
+                            ps.setString(9, shop.website());
+                            ps.setObject(10, java.sql.Timestamp.from(shop.createdAt()));
+                            return ps;
+                        },
+                        (rs, n) -> shop.withId(rs.getLong(1)))
+                .stream()
+                .findFirst()
+                .orElse(shop);
     }
 
     private static Shop mapShop(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -122,15 +115,24 @@ public class JdbcShopRepository implements ShopRepository {
         String name = rs.getString("name");
         String normalised = rs.getString("normalised_name");
         String addressLine = rs.getString("address_line");
-        String postalCode  = rs.getString("postal_code");
-        String city        = rs.getString("city");
-        String country     = rs.getString("country");
-        String phone       = rs.getString("phone");
-        String taxId       = rs.getString("tax_id");
-        String website     = rs.getString("website");
+        String postalCode = rs.getString("postal_code");
+        String city = rs.getString("city");
+        String country = rs.getString("country");
+        String phone = rs.getString("phone");
+        String taxId = rs.getString("tax_id");
+        String website = rs.getString("website");
         var createdAt = rs.getObject("created_at", java.time.OffsetDateTime.class);
-        return new Shop(id, name, normalised,
-                addressLine, postalCode, city, country, phone, taxId, website,
+        return new Shop(
+                id,
+                name,
+                normalised,
+                addressLine,
+                postalCode,
+                city,
+                country,
+                phone,
+                taxId,
+                website,
                 createdAt != null ? createdAt.toInstant() : java.time.Instant.now());
     }
 }

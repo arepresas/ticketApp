@@ -1,9 +1,8 @@
 package com.ticketapp.bff.dashboard;
 
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.time.Clock;
 
 /**
  * Wires the single {@link Clock} the application reads time through.

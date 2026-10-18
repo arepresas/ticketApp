@@ -1,13 +1,12 @@
 package com.ticketapp.domain;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
 import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 @DisplayName("CategorySpend")
 class CategorySpendTest {
@@ -15,8 +14,7 @@ class CategorySpendTest {
     @Test
     @DisplayName("rejects a null category")
     void rejectsNullCategory() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new CategorySpend(null, BigDecimal.ONE));
+        assertThrows(IllegalArgumentException.class, () -> new CategorySpend(null, BigDecimal.ONE));
     }
 
     @Test
@@ -24,8 +22,7 @@ class CategorySpendTest {
     void rejectsNullAmount() {
         // An adapter that cannot produce a number is a bug. Silently
         // turning it into 0 would understate the user's spending.
-        assertThrows(IllegalArgumentException.class,
-                () -> new CategorySpend(SpendCategory.FOOD, null));
+        assertThrows(IllegalArgumentException.class, () -> new CategorySpend(SpendCategory.FOOD, null));
     }
 
     @Test
@@ -33,15 +30,14 @@ class CategorySpendTest {
     void rejectsNegativeAmount() {
         // A donut renderer cannot draw a negative slice, so the type
         // that feeds it refuses one at the boundary.
-        assertThrows(IllegalArgumentException.class,
-                () -> new CategorySpend(SpendCategory.FOOD, new BigDecimal("-1.00")));
+        assertThrows(
+                IllegalArgumentException.class, () -> new CategorySpend(SpendCategory.FOOD, new BigDecimal("-1.00")));
     }
 
     @Test
     @DisplayName("accepts a zero amount")
     void acceptsZeroAmount() {
-        assertEquals(BigDecimal.ZERO,
-                new CategorySpend(SpendCategory.FOOD, BigDecimal.ZERO).amount());
+        assertEquals(BigDecimal.ZERO, new CategorySpend(SpendCategory.FOOD, BigDecimal.ZERO).amount());
     }
 
     @Test
@@ -56,16 +52,21 @@ class CategorySpendTest {
                 new CategorySpend(SpendCategory.FOOD, new BigDecimal("3.00")),
                 new CategorySpend(SpendCategory.TRANSPORT, new BigDecimal("4.00"))));
 
-        assertEquals(List.of(SpendCategory.FOOD, SpendCategory.TRANSPORT,
-                        SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER),
+        assertEquals(
+                List.of(
+                        SpendCategory.FOOD,
+                        SpendCategory.TRANSPORT,
+                        SpendCategory.LODGING,
+                        SpendCategory.PHARMACY,
+                        SpendCategory.OTHER),
                 complete.stream().map(CategorySpend::category).toList());
     }
 
     @Test
     @DisplayName("complete emits one arc per category so the donut legend is stable")
     void completeEmitsEveryCategory() {
-        List<CategorySpend> complete = CategorySpend.complete(List.of(
-                new CategorySpend(SpendCategory.FOOD, new BigDecimal("10.00"))));
+        List<CategorySpend> complete =
+                CategorySpend.complete(List.of(new CategorySpend(SpendCategory.FOOD, new BigDecimal("10.00"))));
 
         assertEquals(SpendCategory.values().length, complete.size());
         assertEquals(new BigDecimal("10.00"), amountOf(complete, SpendCategory.FOOD));

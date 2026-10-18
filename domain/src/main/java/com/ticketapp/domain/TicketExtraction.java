@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-
 /**
  * Structured data extracted from a ticket receipt by the AI extraction
  * pipeline (see ADR 0006). One row per ticket — the {@code ticketId}
@@ -40,8 +39,7 @@ public record TicketExtraction(
         String model,
         Instant extractedAt,
         String rawResponse,
-        String extractionPayload
-) {
+        String extractionPayload) {
 
     public TicketExtraction {
         if (merchant == null || merchant.isBlank()) {
@@ -83,18 +81,29 @@ public record TicketExtraction(
      * Maps the missing field to {@code null}, which is what the
      * orchestrator does for every write today.
      */
-    public TicketExtraction(long ticketId,
-                            String merchant,
-                            LocalDate purchaseDate,
-                            SpendCategory category,
-                            List<ProductLine> products,
-                            BigDecimal totalAmount,
-                            String currency,
-                            String model,
-                            Instant extractedAt,
-                            String rawResponse) {
-        this(ticketId, merchant, purchaseDate, category, products,
-                totalAmount, currency, model, extractedAt, rawResponse, null);
+    public TicketExtraction(
+            long ticketId,
+            String merchant,
+            LocalDate purchaseDate,
+            SpendCategory category,
+            List<ProductLine> products,
+            BigDecimal totalAmount,
+            String currency,
+            String model,
+            Instant extractedAt,
+            String rawResponse) {
+        this(
+                ticketId,
+                merchant,
+                purchaseDate,
+                category,
+                products,
+                totalAmount,
+                currency,
+                model,
+                extractedAt,
+                rawResponse,
+                null);
     }
 
     /**
@@ -120,12 +129,7 @@ public record TicketExtraction(
      * = 1} with a negative price, not as a negative count.
      */
     public record ProductLine(
-            String name,
-            BigDecimal quantity,
-            QuantityUnit unit,
-            BigDecimal pricePerUnit,
-            BigDecimal lineTotal
-    ) {
+            String name, BigDecimal quantity, QuantityUnit unit, BigDecimal pricePerUnit, BigDecimal lineTotal) {
         public ProductLine {
             if (name == null || name.isBlank()) {
                 throw new IllegalArgumentException("product name must not be blank");
@@ -164,8 +168,7 @@ public record TicketExtraction(
             SpendCategory category,
             List<ProductLine> products,
             BigDecimal totalAmount,
-            String currency
-    ) {
+            String currency) {
         public EditableFields {
             if (merchant == null || merchant.isBlank()) {
                 throw new IllegalArgumentException("merchant must not be blank");

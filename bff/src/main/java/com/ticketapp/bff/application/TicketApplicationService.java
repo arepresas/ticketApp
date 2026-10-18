@@ -2,22 +2,19 @@ package com.ticketapp.bff.application;
 
 import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.ai.TicketExtractionService;
-import com.ticketapp.domain.identity.AuthenticatedUser;
 import com.ticketapp.bff.extraction.TicketExtractionNormaliser;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
+import com.ticketapp.domain.identity.AuthenticatedUser;
+import java.io.IOException;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.io.IOException;
-import java.util.Set;
-
 
 /**
  * Application service for ticket write flows that span more than one
@@ -40,15 +37,8 @@ public class TicketApplicationService {
     /** 10 MB hard cap, mirrored in front/src/lib/new/validation.ts. */
     public static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
 
-    private static final Set<String> ALLOWED_MIME = Set.of(
-            "application/pdf",
-            "image/png",
-            "image/jpeg",
-            "image/jpg",
-            "image/webp",
-            "image/heic",
-            "image/heif"
-    );
+    private static final Set<String> ALLOWED_MIME =
+            Set.of("application/pdf", "image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic", "image/heif");
 
     private final TicketRepository tickets;
     private final TicketExtractionRepository extractions;
@@ -75,10 +65,8 @@ public class TicketApplicationService {
      * @return the ticket to return to the caller, plus the OCR
      *         outcome that describes it
      */
-    public DocumentTextExtractionSyncService.Outcome createTicket(AuthenticatedUser user,
-                                MultipartFile file,
-                                String titleOverride,
-                                String description) {
+    public DocumentTextExtractionSyncService.Outcome createTicket(
+            AuthenticatedUser user, MultipartFile file, String titleOverride, String description) {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "file is required");
         }
@@ -87,8 +75,7 @@ public class TicketApplicationService {
         }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_MIME.contains(contentType.toLowerCase(java.util.Locale.ROOT))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "unsupported file type: " + contentType);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported file type: " + contentType);
         }
 
         byte[] bytes;
@@ -102,34 +89,39 @@ public class TicketApplicationService {
         // Default title = the original filename so the dashboard list shows
         // what was uploaded without an extra form field. Callers can
         // override via the `title` field (e.g. a future "rename" flow).
-        String title = (titleOverride == null || titleOverride.isBlank())
-                ? file.getOriginalFilename()
-                : titleOverride;
+        String title = (titleOverride == null || titleOverride.isBlank()) ? file.getOriginalFilename() : titleOverride;
         if (title == null || title.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "title could not be derived");
         }
         String desc = description == null ? "" : description;
 
         // Ownership: the ticket's owner is the authenticated user.
-        Ticket created = tickets.save(Ticket.open(
-                user.id(), title, desc, contentType, file.getOriginalFilename(), bytes));
+        Ticket created =
+                tickets.save(Ticket.open(user.id(), title, desc, contentType, file.getOriginalFilename(), bytes));
         // Sanitise the user-controlled filename for the log line
         // (CR/LF would forge log lines); the stored value is
         // untouched.
         String rawName = file.getOriginalFilename();
         String logName = rawName == null ? "" : rawName.replace('\n', '_').replace('\r', '_');
-        DocumentTextExtractionSyncService.Outcome outcome =
-                documentTextExtractionService.runOnUpload(created);
+        DocumentTextExtractionSyncService.Outcome outcome = documentTextExtractionService.runOnUpload(created);
         // `ocr=` counts the characters, and is now qualified by the
         // outcome so a 0-length transcript is distinguishable in the
         // boot-time log from a transcript that was never attempted.
-        log.info("Created ticket {} for user {} (file={} {} bytes, ocr={} chars, ocrStatus={})",
-                outcome.ticket().id(), user.id(), logName, bytes.length,
-                outcome.ticket().ocrText() == null ? 0 : outcome.ticket().ocrText().length(),
+        log.info(
+                "Created ticket {} for user {} (file={} {} bytes, ocr={} chars, ocrStatus={})",
+                outcome.ticket().id(),
+                user.id(),
+                logName,
+                bytes.length,
+                outcome.ticket().ocrText() == null
+                        ? 0
+                        : outcome.ticket().ocrText().length(),
                 outcome.status());
         if (outcome.status() == DocumentTextExtractionSyncService.OcrStatus.FAILED) {
-            log.error("Ticket {} uploaded with no transcript — detail: {}",
-                    outcome.ticket().id(), outcome.detail());
+            log.error(
+                    "Ticket {} uploaded with no transcript — detail: {}",
+                    outcome.ticket().id(),
+                    outcome.detail());
         }
         return outcome;
     }
@@ -224,8 +216,7 @@ public class TicketApplicationService {
                             // because of a catalogue hiccup. The next
                             // mark-as-done is idempotent and re-runs
                             // the normaliser.
-                            log.warn("normaliseOnDone failed for ticket {}",
-                                    updated.id(), ex);
+                            log.warn("normaliseOnDone failed for ticket {}", updated.id(), ex);
                         }
                     }
                     return updated;

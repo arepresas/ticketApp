@@ -1,19 +1,18 @@
 package com.ticketapp.bff.auth;
 
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class GoogleTokenVerifierTest {
 
@@ -88,19 +87,18 @@ class GoogleTokenVerifierTest {
 
     @Test
     void returnsEmptyWhenDelegateThrows() throws Exception {
-        Mockito.doThrow(new GeneralSecurityException("network"))
-                .when(delegate).verify(anyString());
+        Mockito.doThrow(new GeneralSecurityException("network")).when(delegate).verify(anyString());
         assertThat(verifier.verify("any.token")).isEmpty();
 
-        Mockito.doThrow(new IOException("timeout"))
-                .when(delegate).verify(anyString());
+        Mockito.doThrow(new IOException("timeout")).when(delegate).verify(anyString());
         assertThat(verifier.verify("any.token")).isEmpty();
 
         // google-oauth-client's GoogleIdToken.parse throws IllegalArgumentException
         // on malformed JWTs (e.g. "bogus" or random strings). The verifier must
         // swallow it and return empty, never propagate.
         Mockito.doThrow(new IllegalArgumentException("not a JWT"))
-                .when(delegate).verify(anyString());
+                .when(delegate)
+                .verify(anyString());
         assertThat(verifier.verify("bogus.token")).isEmpty();
     }
 
@@ -108,7 +106,10 @@ class GoogleTokenVerifierTest {
     void sinkReceivesEmptyTokenReason() {
         String[] reason = new String[1];
         String[] details = new String[1];
-        verifier.verify(null, (r, d) -> { reason[0] = r; details[0] = d; });
+        verifier.verify(null, (r, d) -> {
+            reason[0] = r;
+            details[0] = d;
+        });
         assertThat(reason[0]).isEqualTo("empty_token");
         assertThat(details[0]).contains("null or blank");
     }
@@ -125,7 +126,10 @@ class GoogleTokenVerifierTest {
 
         String[] reason = new String[1];
         String[] details = new String[1];
-        verifier.verify("good.jwt", (r, d) -> { reason[0] = r; details[0] = d; });
+        verifier.verify("good.jwt", (r, d) -> {
+            reason[0] = r;
+            details[0] = d;
+        });
 
         assertThat(reason[0]).isEqualTo("audience_mismatch");
         assertThat(details[0]).contains("expected=");
@@ -143,7 +147,9 @@ class GoogleTokenVerifierTest {
         when(delegate.verify(anyString())).thenReturn(token);
 
         String[] reason = new String[1];
-        verifier.verify("good.jwt", (r, d) -> { reason[0] = r; });
+        verifier.verify("good.jwt", (r, d) -> {
+            reason[0] = r;
+        });
 
         assertThat(reason[0]).isEqualTo("bad_issuer");
     }
@@ -153,7 +159,9 @@ class GoogleTokenVerifierTest {
         when(delegate.verify(anyString())).thenReturn(null);
 
         String[] reason = new String[1];
-        verifier.verify("good.jwt", (r, d) -> { reason[0] = r; });
+        verifier.verify("good.jwt", (r, d) -> {
+            reason[0] = r;
+        });
 
         assertThat(reason[0]).isEqualTo("verify_failed");
     }
@@ -165,7 +173,6 @@ class GoogleTokenVerifierTest {
         // 401 every login. Fail fast at boot instead. We exercise the public
         // single-arg production constructor which has the empty-audience check
         // (the test-only two-arg constructor skips it so unit tests can stub).
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
-                () -> new GoogleTokenVerifier(""));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> new GoogleTokenVerifier(""));
     }
 }

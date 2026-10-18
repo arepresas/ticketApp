@@ -32,8 +32,7 @@ public class ReceiptExtractionException extends TicketAppException {
      * the diagnostic would reintroduce whatever the provider put in
      * the diagnostic (response bodies, endpoint URLs, model ids).
      */
-    public static final String GENERIC_SAFE_MESSAGE =
-            "the AI provider could not complete the extraction";
+    public static final String GENERIC_SAFE_MESSAGE = "the AI provider could not complete the extraction";
 
     private final int statusCode;
     private final boolean retryable;
@@ -62,8 +61,7 @@ public class ReceiptExtractionException extends TicketAppException {
      *                    503"), never provider output. This is the
      *                    only part the orchestrator persists.
      */
-    public ReceiptExtractionException(int statusCode, boolean retryable,
-                                      String message, String safeMessage) {
+    public ReceiptExtractionException(int statusCode, boolean retryable, String message, String safeMessage) {
         this(statusCode, retryable, message, safeMessage, null);
     }
 
@@ -78,8 +76,7 @@ public class ReceiptExtractionException extends TicketAppException {
         return safeMessage;
     }
 
-    public ReceiptExtractionException(int statusCode, boolean retryable,
-                                      String message, Throwable cause) {
+    public ReceiptExtractionException(int statusCode, boolean retryable, String message, Throwable cause) {
         // Convenience overload for adapters that have no status-aware
         // category to offer: the `message` it accepts is the
         // diagnostic, which is never persisted or sent to clients, so
@@ -101,15 +98,12 @@ public class ReceiptExtractionException extends TicketAppException {
      * {@code OpenAiReceiptExtractor} does for every failed provider
      * call.
      */
-    public ReceiptExtractionException(int statusCode, boolean retryable,
-                                      String message, String safeMessage,
-                                      Throwable cause) {
+    public ReceiptExtractionException(
+            int statusCode, boolean retryable, String message, String safeMessage, Throwable cause) {
         super(ERROR_CODE, message, cause);
         this.statusCode = statusCode;
         this.retryable = retryable;
-        this.safeMessage = safeMessage == null || safeMessage.isBlank()
-                ? GENERIC_SAFE_MESSAGE
-                : safeMessage;
+        this.safeMessage = safeMessage == null || safeMessage.isBlank() ? GENERIC_SAFE_MESSAGE : safeMessage;
     }
 
     public int statusCode() {
@@ -128,7 +122,6 @@ public class ReceiptExtractionException extends TicketAppException {
         // should never reach a logger or a `Throwable.toString()`
         // chain that may eventually get serialised. Status + safe
         // message is all an operator needs.
-        return getClass().getSimpleName()
-                + "[statusCode=" + statusCode + ", safeMessage=" + safeMessage + "]";
+        return getClass().getSimpleName() + "[statusCode=" + statusCode + ", safeMessage=" + safeMessage + "]";
     }
 }

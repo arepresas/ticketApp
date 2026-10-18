@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
  */
 public final class CurrentUser {
 
-    private CurrentUser() { }
+    private CurrentUser() {}
 
     /**
      * Returns the {@link AuthenticatedUser} stored in the current
@@ -40,8 +40,7 @@ public final class CurrentUser {
             // without our principal. Surface as 401 (not 500) so a
             // misconfigured security chain doesn't crash the
             // controller.
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
-                    "authentication required");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "authentication required");
         }
         return user;
     }

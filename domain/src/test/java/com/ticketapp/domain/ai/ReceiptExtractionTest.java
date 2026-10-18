@@ -1,17 +1,16 @@
 package com.ticketapp.domain.ai;
 
-import com.ticketapp.domain.SpendCategory;
-import org.junit.jupiter.api.Test;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.Month;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import com.ticketapp.domain.SpendCategory;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Month;
+import java.util.List;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link ReceiptExtraction} (ADR 0007).
@@ -24,8 +23,7 @@ class ReceiptExtractionTest {
 
     private static ReceiptExtractionResult sampleResult() {
         return new ReceiptExtractionResult(
-                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER,
-                List.of(), BigDecimal.ONE, "EUR");
+                "X", LocalDate.of(2026, Month.JANUARY, 1), SpendCategory.OTHER, List.of(), BigDecimal.ONE, "EUR");
     }
 
     @Test
@@ -51,21 +49,20 @@ class ReceiptExtractionTest {
 
     @Test
     void rejectsNullResult() {
-        NullPointerException ex = assertThrows(NullPointerException.class,
-                () -> new ReceiptExtraction(null, "raw", "gpt-4o-mini"));
+        NullPointerException ex =
+                assertThrows(NullPointerException.class, () -> new ReceiptExtraction(null, "raw", "gpt-4o-mini"));
         assertEquals("result", ex.getMessage());
     }
 
     @Test
     void rejectsNullModel() {
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtraction(sampleResult(), "raw", null));
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> new ReceiptExtraction(sampleResult(), "raw", null));
         assertEquals("model must not be blank", ex.getMessage());
     }
 
     @Test
     void rejectsBlankModel() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new ReceiptExtraction(sampleResult(), "raw", "   "));
+        assertThrows(IllegalArgumentException.class, () -> new ReceiptExtraction(sampleResult(), "raw", "   "));
     }
 }

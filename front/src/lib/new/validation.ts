@@ -10,21 +10,21 @@ export const ACCEPTED_MIME_EXACT = ['application/pdf'] as const;
 export const ACCEPTED_MIME_PREFIXES = ['image/'] as const;
 
 export function isAcceptedFile(file: { type: string }): boolean {
-	if ((ACCEPTED_MIME_EXACT as readonly string[]).includes(file.type)) return true;
-	return ACCEPTED_MIME_PREFIXES.some((p) => file.type.startsWith(p));
+  if ((ACCEPTED_MIME_EXACT as readonly string[]).includes(file.type)) return true;
+  return ACCEPTED_MIME_PREFIXES.some((p) => file.type.startsWith(p));
 }
 
 export function humanSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function fileSizeError(file: { size: number }): string | null {
-	if (file.size > MAX_BYTES) {
-		return `File is too large (${humanSize(file.size)}). Max is ${humanSize(MAX_BYTES)}.`;
-	}
-	return null;
+  if (file.size > MAX_BYTES) {
+    return `File is too large (${humanSize(file.size)}). Max is ${humanSize(MAX_BYTES)}.`;
+  }
+  return null;
 }
 
 /**
@@ -36,8 +36,8 @@ export function fileSizeError(file: { size: number }): string | null {
  * inline.
  */
 export type FileDecision =
-	| { file: File; status: 'accepted'; bytes: Uint8Array }
-	| { file: File; status: 'rejected'; reason: string };
+  | { file: File; status: 'accepted'; bytes: Uint8Array }
+  | { file: File; status: 'rejected'; reason: string };
 
 /**
  * Validate a batch of files in one pass. Returns a {@link FileDecision}
@@ -53,25 +53,25 @@ export type FileDecision =
  * offending file before resubmitting.
  */
 export async function validateFiles(files: File[]): Promise<FileDecision[]> {
-	// Promise.all keeps the per-file decisions in submission order, so
-	// the error chips line up with the file list the user sees. The
-	// reads are independent, so they run concurrently instead of
-	// stalling the queue on one slow disk read at a time.
-	return Promise.all(files.map(validateOneFile));
+  // Promise.all keeps the per-file decisions in submission order, so
+  // the error chips line up with the file list the user sees. The
+  // reads are independent, so they run concurrently instead of
+  // stalling the queue on one slow disk read at a time.
+  return Promise.all(files.map(validateOneFile));
 }
 
 async function validateOneFile(file: File): Promise<FileDecision> {
-	if (!isAcceptedFile(file)) {
-		return { file, status: 'rejected', reason: 'Only images and PDFs are accepted.' };
-	}
-	const tooBig = fileSizeError(file);
-	if (tooBig) {
-		return { file, status: 'rejected', reason: tooBig };
-	}
-	try {
-		const bytes = new Uint8Array(await file.arrayBuffer());
-		return { file, status: 'accepted', bytes };
-	} catch {
-		return { file, status: 'rejected', reason: 'Could not read the file. Try again.' };
-	}
+  if (!isAcceptedFile(file)) {
+    return { file, status: 'rejected', reason: 'Only images and PDFs are accepted.' };
+  }
+  const tooBig = fileSizeError(file);
+  if (tooBig) {
+    return { file, status: 'rejected', reason: tooBig };
+  }
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    return { file, status: 'accepted', bytes };
+  } catch {
+    return { file, status: 'rejected', reason: 'Could not read the file. Try again.' };
+  }
 }

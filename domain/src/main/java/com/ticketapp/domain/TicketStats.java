@@ -44,10 +44,9 @@ public record TicketStats(
 
     public TicketStats {
         if (totalTickets < 0 || openTickets < 0 || extractedTicketsInCurrency < 0) {
-            throw new IllegalArgumentException(
-                    "ticket counts must not be negative: total=" + totalTickets
-                            + " open=" + openTickets
-                            + " extracted=" + extractedTicketsInCurrency);
+            throw new IllegalArgumentException("ticket counts must not be negative: total=" + totalTickets
+                    + " open=" + openTickets
+                    + " extracted=" + extractedTicketsInCurrency);
         }
         if (totalSpent == null || averageTicketValue == null) {
             throw new IllegalArgumentException("amounts must not be null");
@@ -61,12 +60,10 @@ public record TicketStats(
             // different filters, so the narrower one can only ever be
             // smaller. A larger value means the projection disagreed
             // with itself and every figure it produced is suspect.
-            throw new IllegalArgumentException(
-                    "extractedTicketsInCurrency (" + extractedTicketsInCurrency
-                            + ") cannot exceed totalTickets (" + totalTickets + ")");
+            throw new IllegalArgumentException("extractedTicketsInCurrency (" + extractedTicketsInCurrency
+                    + ") cannot exceed totalTickets (" + totalTickets + ")");
         }
-        if (extractedTicketsInCurrency == 0
-                && (totalSpent.signum() != 0 || averageTicketValue.signum() != 0)) {
+        if (extractedTicketsInCurrency == 0 && (totalSpent.signum() != 0 || averageTicketValue.signum() != 0)) {
             // Money summed over nothing has to be zero, and the average
             // of no samples has no value to report. Allowing a
             // non-zero pair here would publish a KPI the database

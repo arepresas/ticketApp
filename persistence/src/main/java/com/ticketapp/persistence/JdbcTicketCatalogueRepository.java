@@ -3,15 +3,12 @@ package com.ticketapp.persistence;
 import com.ticketapp.domain.QuantityUnit;
 import com.ticketapp.domain.Shop;
 import com.ticketapp.domain.TicketCatalogueRepository;
-
+import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
-import java.util.Optional;
-
 
 /**
  * JDBC adapter for {@link TicketCatalogueRepository}.
@@ -41,8 +38,7 @@ import java.util.Optional;
 @Repository
 public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository {
 
-    private static final String SHOP_SQL =
-            """
+    private static final String SHOP_SQL = """
             SELECT s.id, s.name, s.normalised_name, s.address_line, s.postal_code,
                    s.city, s.country, s.phone, s.tax_id, s.website, s.created_at
             FROM tickets t
@@ -51,8 +47,7 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
               AND t.status <> 'DELETED'
             """;
 
-    private static final String LINES_SQL =
-            """
+    private static final String LINES_SQL = """
             SELECT p.name AS product_name, p.unit AS product_unit,
                    l.quantity, pr.amount AS price_per_unit, l.line_total
             FROM line_tickets l
@@ -72,11 +67,10 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
 
     @Override
     public Optional<TicketCatalogue> findByTicketId(long ticketId, long ownerId) {
-        Optional<Shop> shop = namedJdbc.query(
+        Optional<Shop> shop = namedJdbc
+                .query(
                         SHOP_SQL,
-                        new MapSqlParameterSource()
-                                .addValue("ticket", ticketId)
-                                .addValue("owner", ownerId),
+                        new MapSqlParameterSource().addValue("ticket", ticketId).addValue("owner", ownerId),
                         (rs, n) -> mapShop(rs))
                 .stream()
                 .findFirst();
@@ -87,15 +81,13 @@ public class JdbcTicketCatalogueRepository implements TicketCatalogueRepository 
         }
         List<CatalogueLine> lines = namedJdbc.query(
                 LINES_SQL,
-                new MapSqlParameterSource()
-                        .addValue("ticket", ticketId)
-                        .addValue("owner", ownerId),
-(rs, n) -> new CatalogueLine(
-                                rs.getString("product_name"),
-                                QuantityUnit.fromStorage(rs.getString("product_unit")),
-                                rs.getBigDecimal("quantity"),
-                                rs.getBigDecimal("price_per_unit"),
-                                rs.getBigDecimal("line_total")));
+                new MapSqlParameterSource().addValue("ticket", ticketId).addValue("owner", ownerId),
+                (rs, n) -> new CatalogueLine(
+                        rs.getString("product_name"),
+                        QuantityUnit.fromStorage(rs.getString("product_unit")),
+                        rs.getBigDecimal("quantity"),
+                        rs.getBigDecimal("price_per_unit"),
+                        rs.getBigDecimal("line_total")));
         if (lines.isEmpty()) {
             return Optional.empty();
         }

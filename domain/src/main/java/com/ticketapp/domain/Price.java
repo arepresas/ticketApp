@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-
 /**
  * Per-ticket price snapshot. A {@link Product} can have many
  * {@code Price} rows over time — one per ticket where the price was
@@ -17,14 +16,7 @@ import java.time.Instant;
  * row, so multiple distinct amounts can coexist for one
  * (product, ticket) pair when the AI legitimately sees them.
  */
-public record Price(
-        long id,
-        long productId,
-        long ticketId,
-        BigDecimal amount,
-        Instant createdAt,
-        Instant updatedAt
-) {
+public record Price(long id, long productId, long ticketId, BigDecimal amount, Instant createdAt, Instant updatedAt) {
     public Price {
         if (amount == null) throw new NullPointerException("amount");
         if (amount.signum() < 0) {

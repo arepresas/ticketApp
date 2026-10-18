@@ -1,20 +1,17 @@
 package com.ticketapp.bff.api;
 
 import com.ticketapp.bff.api.dto.CatalogueResponse;
+import com.ticketapp.bff.security.CurrentUser;
 import com.ticketapp.domain.TicketCatalogueRepository;
 import com.ticketapp.domain.identity.AuthenticatedUser;
-import com.ticketapp.bff.security.CurrentUser;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST surface for the normalised catalogue view of a ticket.
@@ -51,7 +48,8 @@ public class TicketCatalogueController {
     @GetMapping("/{id}/catalogue")
     public ResponseEntity<CatalogueResponse> catalogue(@PathVariable long id) {
         AuthenticatedUser user = CurrentUser.get();
-        return catalogue.findByTicketId(id, user.id())
+        return catalogue
+                .findByTicketId(id, user.id())
                 .map(c -> ResponseEntity.ok(CatalogueResponse.of(c)))
                 // One 404 for all four empty cases the port folds
                 // together: no such ticket, not yours, not normalised

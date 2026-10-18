@@ -4,25 +4,23 @@ import com.openai.client.OpenAIClient;
 import com.openai.core.JsonValue;
 import com.openai.core.http.HttpResponseFor;
 import com.openai.errors.OpenAIServiceException;
-import com.openai.models.ResponseFormatJsonObject;
 import com.openai.models.ReasoningEffort;
+import com.openai.models.ResponseFormatJsonObject;
 import com.openai.models.chat.completions.ChatCompletion;
 import com.openai.models.chat.completions.ChatCompletionContentPart;
 import com.openai.models.chat.completions.ChatCompletionContentPartImage;
 import com.openai.models.chat.completions.ChatCompletionContentPartText;
 import com.openai.models.chat.completions.ChatCompletionCreateParams;
 import com.openai.models.completions.CompletionUsage;
+import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.Accessors;
-
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.Base64;
-import java.util.List;
-import java.util.Optional;
 
 /**
  * Client for any OpenAI-compatible chat-completions endpoint, built on
@@ -74,10 +72,8 @@ public final class OpenAiApiClient {
      *         models like to emit. May be empty when the image
      *         carries no readable text.
      */
-    public String transcribeImage(String model, byte[] imageBytes, String mimeType)
-            throws java.io.IOException {
-        log.info("OCR request: model={} bytes={} mime={}",
-                model, imageBytes.length, mimeType);
+    public String transcribeImage(String model, byte[] imageBytes, String mimeType) throws java.io.IOException {
+        log.info("OCR request: model={} bytes={} mime={}", model, imageBytes.length, mimeType);
 
         ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
                 .model(model)
@@ -98,8 +94,7 @@ public final class OpenAiApiClient {
                 // which is the HIGHEST tier. See
                 // OpenAiProperties#reasoningEffort.
                 .reasoningEffort(reasoningEffort())
-                .addUserMessageOfArrayOfContentParts(
-                        List.of(imagePart(imageBytes, mimeType)))
+                .addUserMessageOfArrayOfContentParts(List.of(imagePart(imageBytes, mimeType)))
                 .build();
 
         ChatCompletion completion = sendChatRequest(params);
@@ -178,8 +173,7 @@ public final class OpenAiApiClient {
             params.addUserMessageOfArrayOfContentParts(
                     List.of(textPart("Receipt text (extracted from PDF):\n\n" + input.pdfText())));
         } else {
-            params.addUserMessageOfArrayOfContentParts(
-                    List.of(imagePart(input.bytes(), input.mimeType())));
+            params.addUserMessageOfArrayOfContentParts(List.of(imagePart(input.bytes(), input.mimeType())));
         }
 
         ChatCompletion completion = sendChatRequest(params.build());
@@ -215,8 +209,7 @@ public final class OpenAiApiClient {
      * @throws OpenAiApiException on any HTTP / parse / network
      *                            failure the provider surfaces
      */
-    private ChatCompletion sendChatRequest(ChatCompletionCreateParams params)
-            throws java.io.IOException {
+    private ChatCompletion sendChatRequest(ChatCompletionCreateParams params) throws java.io.IOException {
         if (log.isDebugEnabled()) {
             // Operator-visible diagnostic for "did we send what we think
             // we sent". The SDK's own logLevel toggle is gated
@@ -231,9 +224,12 @@ public final class OpenAiApiClient {
             // tell "I sent the right request" from "I sent the wrong
             // model id" without leaking the payload.
             int messageCount = params.messages() == null ? 0 : params.messages().size();
-            log.debug("openai request: model={} messages={} temp={} maxTokens={} reasoningEffort={}",
-                    params.model(), messageCount,
-                    params.temperature(), params.maxCompletionTokens(),
+            log.debug(
+                    "openai request: model={} messages={} temp={} maxTokens={} reasoningEffort={}",
+                    params.model(),
+                    messageCount,
+                    params.temperature(),
+                    params.maxCompletionTokens(),
                     params.reasoningEffort().map(ReasoningEffort::asString).orElse("absent"));
         }
         HttpResponseFor<ChatCompletion> resp;
@@ -248,30 +244,32 @@ public final class OpenAiApiClient {
             // the SDK could not ingest) the response headers are the
             // only diagnostic the operator gets — we always include
             // them so a 400 with no body is not a dead end.
-            throw new OpenAiApiException(e.statusCode(),
-                    "provider returned " + e.statusCode() + ": " + bodyAsString(e)
-                            + " | headers=" + responseHeaders(e.headers()));
+            throw new OpenAiApiException(
+                    e.statusCode(),
+                    "provider returned " + e.statusCode() + ": " + bodyAsString(e) + " | headers="
+                            + responseHeaders(e.headers()));
         } catch (RuntimeException e) {
             // Connection refused / DNS / timeout — no response at all.
-            throw new OpenAiApiException(0,
-                    "provider call failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            throw new OpenAiApiException(
+                    0, "provider call failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
         }
         try {
             int status = resp.statusCode();
             byte[] bodyBytes = readAllBytes(resp);
             String bodyText = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
             if (status / 100 != 2) {
-                throw new OpenAiApiException(status,
-                        "provider returned " + status + ": " + truncate(bodyText)
-                                + " | headers=" + responseHeaders(resp.headers()));
+                throw new OpenAiApiException(
+                        status,
+                        "provider returned " + status + ": " + truncate(bodyText) + " | headers="
+                                + responseHeaders(resp.headers()));
             }
             try {
-                return com.openai.core.ObjectMappers.jsonMapper()
-                        .readValue(bodyBytes, ChatCompletion.class);
+                return com.openai.core.ObjectMappers.jsonMapper().readValue(bodyBytes, ChatCompletion.class);
             } catch (Exception parseError) {
-                throw new OpenAiApiException(status,
-                        "provider returned " + status + " but the body is not valid JSON: "
-                                + truncate(bodyText) + " | parse error: " + parseError.getMessage());
+                throw new OpenAiApiException(
+                        status,
+                        "provider returned " + status + " but the body is not valid JSON: " + truncate(bodyText)
+                                + " | parse error: " + parseError.getMessage());
             }
         } finally {
             resp.close();
@@ -293,8 +291,7 @@ public final class OpenAiApiClient {
         java.util.List<String> parts = new java.util.ArrayList<>();
         for (String name : headers.names()) {
             String lower = name.toLowerCase();
-            if (lower.equals("set-cookie") || lower.equals("authorization")
-                    || lower.startsWith("set-cookie")) {
+            if (lower.equals("set-cookie") || lower.equals("authorization") || lower.startsWith("set-cookie")) {
                 continue;
             }
             java.util.List<String> values = headers.values(name);
@@ -319,9 +316,7 @@ public final class OpenAiApiClient {
     }
 
     private static String bodyAsString(OpenAIServiceException e) {
-        String body = Optional.ofNullable(e.body())
-                .map(JsonValue::toString)
-                .orElse("");
+        String body = Optional.ofNullable(e.body()).map(JsonValue::toString).orElse("");
         if (body.length() > 1024) {
             body = body.substring(0, 1024) + "...[truncated]";
         }
@@ -332,11 +327,13 @@ public final class OpenAiApiClient {
         if (completion.choices() == null || completion.choices().isEmpty()) {
             throw new OpenAiApiException(502, "provider returned no choices");
         }
-        return completion.choices().get(0)
+        return completion
+                .choices()
+                .get(0)
                 .message()
                 .content()
-                .orElseThrow(() -> new OpenAiApiException(502,
-                        "provider returned empty content (" + describeEmptyReply(completion) + ")"));
+                .orElseThrow(() -> new OpenAiApiException(
+                        502, "provider returned empty content (" + describeEmptyReply(completion) + ")"));
     }
 
     /**
@@ -362,7 +359,9 @@ public final class OpenAiApiClient {
      * instead.
      */
     private static String describeEmptyReply(ChatCompletion completion) {
-        String finishReason = completion.choices().get(0)
+        String finishReason = completion
+                .choices()
+                .get(0)
                 ._finishReason()
                 // asKnown() (not asString()): the field deserialises
                 // into the SDK's FinishReason enum, and JsonField's
@@ -372,12 +371,10 @@ public final class OpenAiApiClient {
                 .map(ChatCompletion.Choice.FinishReason::asString)
                 .orElse("absent");
         Optional<CompletionUsage> usage = completion._usage().asKnown();
-        String completionTokens = usage
-                .flatMap(u -> u._completionTokens().asKnown())
+        String completionTokens = usage.flatMap(u -> u._completionTokens().asKnown())
                 .map(value -> value.toString())
                 .orElse("unknown");
-        String reasoningTokens = usage
-                .flatMap(u -> u._completionTokensDetails().asKnown())
+        String reasoningTokens = usage.flatMap(u -> u._completionTokensDetails().asKnown())
                 .flatMap(details -> details._reasoningTokens().asKnown())
                 .map(value -> value.toString())
                 .orElse("unknown");
@@ -401,33 +398,25 @@ public final class OpenAiApiClient {
     }
 
     private static ChatCompletionContentPart imagePart(byte[] imageBytes, String mimeType) {
-        String dataUrl = "data:" + mimeType + ";base64,"
-                + Base64.getEncoder().encodeToString(imageBytes);
-        return ChatCompletionContentPart.ofImageUrl(
-                ChatCompletionContentPartImage.builder()
-                        .imageUrl(ChatCompletionContentPartImage.ImageUrl.builder()
-                                .url(dataUrl)
-                                .build())
-                        .build());
+        String dataUrl = "data:" + mimeType + ";base64," + Base64.getEncoder().encodeToString(imageBytes);
+        return ChatCompletionContentPart.ofImageUrl(ChatCompletionContentPartImage.builder()
+                .imageUrl(ChatCompletionContentPartImage.ImageUrl.builder()
+                        .url(dataUrl)
+                        .build())
+                .build());
     }
 
     private static ChatCompletionContentPart textPart(String text) {
         return ChatCompletionContentPart.ofText(
-                ChatCompletionContentPartText.builder()
-                        .text(text)
-                        .build());
+                ChatCompletionContentPartText.builder().text(text).build());
     }
 
     /** Input the extraction job feeds into the API call. */
-    public record ReceiptInput(
-            String model,
-            byte[] bytes,
-            String mimeType,
-            String pdfText
-    ) {
+    public record ReceiptInput(String model, byte[] bytes, String mimeType, String pdfText) {
         public static ReceiptInput image(String model, byte[] bytes, String mimeType) {
             return new ReceiptInput(model, bytes, mimeType, null);
         }
+
         public static ReceiptInput pdfText(String model, String text) {
             return new ReceiptInput(model, null, null, text);
         }
@@ -459,8 +448,7 @@ public final class OpenAiApiClient {
             return "ReceiptInput[model=" + model
                     + ", bytes=" + byteCount + " bytes"
                     + ", mimeType=" + mimeType
-                    + ", pdfText=" + (pdfText == null ? "null"
-                            : pdfText.length() + " chars") + "]";
+                    + ", pdfText=" + (pdfText == null ? "null" : pdfText.length() + " chars") + "]";
         }
     }
 
@@ -471,6 +459,7 @@ public final class OpenAiApiClient {
     @Accessors(fluent = true)
     public static final class OpenAiApiException extends RuntimeException {
         private final int statusCode;
+
         public OpenAiApiException(int statusCode, String message) {
             super(message);
             this.statusCode = statusCode;

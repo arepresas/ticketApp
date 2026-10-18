@@ -1,10 +1,16 @@
 package com.ticketapp.bff.api;
 
-import com.ticketapp.bff.api.dto.ExtractionResponse;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.ticketapp.bff.api.dto.TicketResponse;
 import com.ticketapp.bff.auth.AuthController;
 import com.ticketapp.bff.auth.TestGoogleConfig;
 import com.ticketapp.domain.Ticket;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,14 +27,6 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-
-import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * IT for the atomic detail-screen edit, {@code PUT /api/tickets/{id}}.
@@ -55,11 +53,10 @@ class TicketEditControllerIT {
 
     @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:18.4-alpine")
-                    .withDatabaseName("ticketapp")
-                    .withUsername("ticketapp")
-                    .withPassword("ticketapp");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18.4-alpine")
+            .withDatabaseName("ticketapp")
+            .withUsername("ticketapp")
+            .withPassword("ticketapp");
 
     @LocalServerPort
     int port;
@@ -78,6 +75,7 @@ class TicketEditControllerIT {
      * order-dependent — the same trap as the dashboard IT.
      */
     private long ownerId;
+
     private String token;
 
     /** Tickets this test seeded; {@link #dropFixtures()} removes exactly these. */
@@ -88,10 +86,12 @@ class TicketEditControllerIT {
         // No global DELETE: each test seeds and tears down exactly
         // its own rows (see dropFixtures), so a concurrent test's
         // in-flight request never loses its fixtures underneath it.
-        var resp = web().post().uri("/api/auth/google")
+        var resp = web().post()
+                .uri("/api/auth/google")
                 .bodyValue(new AuthController.GoogleLoginRequest(TestGoogleConfig.VALID_TOKEN))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(AuthController.SessionResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -104,11 +104,11 @@ class TicketEditControllerIT {
     void dropFixtures() {
         // Children first, then the parent rows this class created.
         if (!seededTickets.isEmpty()) {
-            jdbc.update("DELETE FROM ticket_extractions WHERE ticket_id IN ("
-                    + placeholders(seededTickets.size()) + ")",
+            jdbc.update(
+                    "DELETE FROM ticket_extractions WHERE ticket_id IN (" + placeholders(seededTickets.size()) + ")",
                     seededTickets.toArray());
-            jdbc.update("DELETE FROM tickets WHERE id IN ("
-                    + placeholders(seededTickets.size()) + ")",
+            jdbc.update(
+                    "DELETE FROM tickets WHERE id IN (" + placeholders(seededTickets.size()) + ")",
                     seededTickets.toArray());
         }
         seededTickets.clear();
@@ -131,10 +131,13 @@ class TicketEditControllerIT {
         // Spring Security's entry point answers 401 with an empty
         // body: no internals about why the token was rejected leak to
         // an anonymous caller.
-        web().put().uri("/api/tickets/1")
+        web().put()
+                .uri("/api/tickets/1")
                 .exchange()
-                .expectStatus().isUnauthorized()
-                .expectBody().isEmpty();
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody()
+                .isEmpty();
     }
 
     @Test
@@ -142,7 +145,8 @@ class TicketEditControllerIT {
     void writesBoth() {
         long ticketId = seedTicket(Ticket.Status.DONE, withExtraction());
 
-        TicketResponse body = web().put().uri("/api/tickets/" + ticketId)
+        TicketResponse body = web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
@@ -150,7 +154,8 @@ class TicketEditControllerIT {
                         "description", "edited by hand",
                         "extraction", extractionBody("Mercadona Centro", "45.60")))
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus()
+                .isOk()
                 .expectBody(TicketResponse.class)
                 .returnResult()
                 .getResponseBody();
@@ -193,7 +198,8 @@ class TicketEditControllerIT {
     void rollsBackMetadataWhenTheExtractionIsRejected() {
         long ticketId = seedTicket(Ticket.Status.DONE, null);
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
@@ -201,7 +207,8 @@ class TicketEditControllerIT {
                         "description", "edited by hand",
                         "extraction", extractionBody("Should Not Persist", "45.60")))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         assertThat(storedTitle(ticketId))
                 .as("metadata must not survive a rejected extraction")
@@ -226,7 +233,8 @@ class TicketEditControllerIT {
 
         // Blank title is rejected before anything is written, so the
         // extraction must still read its original merchant.
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of(
@@ -234,7 +242,8 @@ class TicketEditControllerIT {
                         "description", "edited",
                         "extraction", extractionBody("Should Not Persist", "45.60")))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
 
         assertThat(extractionSnapshot(ticketId)).isEqualTo(before);
         assertThat(storedTitle(ticketId)).isEqualTo("Original title");
@@ -245,12 +254,14 @@ class TicketEditControllerIT {
     void metadataOnly() {
         long ticketId = seedTicket(Ticket.Status.DONE, withExtraction());
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("title", "Just the title"))
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         // A null extraction means "nothing to write", never "clear it"
         // — and the metadata half is not optional: assert it landed.
@@ -273,12 +284,14 @@ class TicketEditControllerIT {
         payload.put("title", "Touched");
         payload.put("extraction", null);
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(payload)
                 .exchange()
-                .expectStatus().isOk();
+                .expectStatus()
+                .isOk();
 
         assertThat(storedTitle(ticketId)).isEqualTo("Touched");
         assertThat(storedMerchant(ticketId)).isEqualTo("Mercadona");
@@ -289,14 +302,14 @@ class TicketEditControllerIT {
     void rejectsInvalidExtraction() {
         long ticketId = seedTicket(Ticket.Status.DONE, withExtraction());
 
-        web().put().uri("/api/tickets/" + ticketId)
+        web().put()
+                .uri("/api/tickets/" + ticketId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
-                        "title", "Weekly shop",
-                        "extraction", extractionBody("   ", "10.00")))
+                .bodyValue(Map.of("title", "Weekly shop", "extraction", extractionBody("   ", "10.00")))
                 .exchange()
-                .expectStatus().isBadRequest();
+                .expectStatus()
+                .isBadRequest();
 
         assertThat(storedTitle(ticketId)).isEqualTo("Original title");
         assertThat(storedMerchant(ticketId)).isEqualTo("Mercadona");
@@ -305,16 +318,21 @@ class TicketEditControllerIT {
     @Test
     @DisplayName("answers 404 for a missing ticket without leaking why")
     void missingTicketIs404() {
-        web().put().uri("/api/tickets/999999")
+        web().put()
+                .uri("/api/tickets/999999")
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("title", "Anything"))
                 .exchange()
-                .expectStatus().isNotFound()
-                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectStatus()
+                .isNotFound()
+                .expectHeader()
+                .contentType(MediaType.APPLICATION_JSON)
                 .expectBody()
-                .jsonPath("$.status").isEqualTo(404)
-                .jsonPath("$.error").isNotEmpty();
+                .jsonPath("$.status")
+                .isEqualTo(404)
+                .jsonPath("$.error")
+                .isNotEmpty();
     }
 
     @Test
@@ -325,12 +343,14 @@ class TicketEditControllerIT {
         // reason: that is a ticket the caller legitimately owns.
         long theirsId = seedUnrelatedUserWithTicket();
 
-        web().put().uri("/api/tickets/" + theirsId)
+        web().put()
+                .uri("/api/tickets/" + theirsId)
                 .header("authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("title", "Hijacked"))
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
 
         assertThat(storedTitle(theirsId)).isEqualTo("Theirs");
     }
@@ -339,8 +359,7 @@ class TicketEditControllerIT {
     // Fixtures
     // ------------------------------------------------------------------
 
-    private record ExtractionSeed(String merchant, String amount) {
-    }
+    private record ExtractionSeed(String merchant, String amount) {}
 
     private static ExtractionSeed withExtraction() {
         return new ExtractionSeed("Mercadona", "25.28");
@@ -348,17 +367,23 @@ class TicketEditControllerIT {
 
     private static Map<String, Object> extractionBody(String merchant, String amount) {
         return Map.of(
-                "merchant", merchant,
-                "purchaseDate", "2026-03-12",
-                "category", "food",
-                "products", java.util.List.of(Map.of(
+                "merchant",
+                merchant,
+                "purchaseDate",
+                "2026-03-12",
+                "category",
+                "food",
+                "products",
+                java.util.List.of(Map.of(
                         "name", "Aceite oliva 1L",
                         "quantity", new BigDecimal("1"),
                         "unit", "unit",
                         "pricePerUnit", new BigDecimal(amount),
                         "lineTotal", new BigDecimal(amount))),
-                "totalAmount", new BigDecimal(amount),
-                "currency", "EUR");
+                "totalAmount",
+                new BigDecimal(amount),
+                "currency",
+                "EUR");
     }
 
     private long seedTicket(Ticket.Status status, ExtractionSeed extraction) {
@@ -373,18 +398,19 @@ class TicketEditControllerIT {
                          total_amount, currency, model, extracted_at,
                          raw_response_text, extraction_payload)
                     VALUES (?, ?, '2026-03-12', 'food'::spend_category, '[]'::jsonb, ?, 'EUR',
-                            'test-model', now(), '{}', '{}'::jsonb)""",
-                    ticketId, extraction.merchant(), new BigDecimal(extraction.amount()));
+                            'test-model', now(), '{}', '{}'::jsonb)""", ticketId, extraction.merchant(), new BigDecimal(extraction.amount()));
         }
         seededTickets.add(ticketId);
         return ticketId;
     }
 
     private long seedUnrelatedUserWithTicket() {
-        unrelatedOwnerId = jdbc.queryForObject("""
+        unrelatedOwnerId = jdbc.queryForObject(
+                """
                 INSERT INTO app_users (google_sub, email, name, created_at, last_login_at)
                 VALUES (?, ?, 'Someone Else', now(), now()) RETURNING id""",
-                Long.class, "unrelated-edit-it-" + UUID.randomUUID(),
+                Long.class,
+                "unrelated-edit-it-" + UUID.randomUUID(),
                 "unrelated-edit-it-" + UUID.randomUUID() + "@example.com");
         return jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
@@ -396,8 +422,7 @@ class TicketEditControllerIT {
     }
 
     private String storedDescription(long ticketId) {
-        return jdbc.queryForObject(
-                "SELECT description FROM tickets WHERE id = ?", String.class, ticketId);
+        return jdbc.queryForObject("SELECT description FROM tickets WHERE id = ?", String.class, ticketId);
     }
 
     private String storedMerchant(long ticketId) {
@@ -424,8 +449,10 @@ class TicketEditControllerIT {
                 FROM ticket_extractions WHERE ticket_id = ?""", ticketId);
         return raw.entrySet().stream()
                 .collect(java.util.stream.Collectors.toMap(
-                        Map.Entry::getKey, e -> String.valueOf(e.getValue()),
-                        (a, b) -> a, java.util.LinkedHashMap::new));
+                        Map.Entry::getKey,
+                        e -> String.valueOf(e.getValue()),
+                        (a, b) -> a,
+                        java.util.LinkedHashMap::new));
     }
 
     private WebTestClient web() {
@@ -434,5 +461,4 @@ class TicketEditControllerIT {
                 .defaultHeader("accept", MediaType.APPLICATION_JSON_VALUE)
                 .build();
     }
-
 }

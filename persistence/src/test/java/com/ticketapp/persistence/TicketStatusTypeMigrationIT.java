@@ -1,16 +1,15 @@
 package com.ticketapp.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Verifies V27: {@code tickets.status} is the native {@code ticket_status}
@@ -40,13 +39,13 @@ class TicketStatusTypeMigrationIT extends AbstractPostgresIntegrationTest {
     @DisplayName("the status changesets are recorded in DATABASECHANGELOG")
     void changesetsAreRecorded() {
         List<String> ids = jdbc.queryForList(
-                "SELECT id FROM databasechangelog WHERE author = 'ticketapp' AND id LIKE '2026101313%'",
-                String.class);
+                "SELECT id FROM databasechangelog WHERE author = 'ticketapp' AND id LIKE '2026101313%'", String.class);
 
-        assertThat(ids).containsExactlyInAnyOrder(
-                "20261013130000-create-ticket-status-type",
-                "20261013130100-ticket-status-column-type",
-                "20261013130200-drop-tickets-status-check");
+        assertThat(ids)
+                .containsExactlyInAnyOrder(
+                        "20261013130000-create-ticket-status-type",
+                        "20261013130100-ticket-status-column-type",
+                        "20261013130200-drop-tickets-status-check");
     }
 
     @Test
@@ -54,9 +53,7 @@ class TicketStatusTypeMigrationIT extends AbstractPostgresIntegrationTest {
     void columnIsTheNativeType() {
         assertThat(jdbc.queryForObject("""
                 SELECT udt_name FROM information_schema.columns
-                WHERE table_name = 'tickets' AND column_name = 'status'""",
-                String.class))
-                .isEqualTo("ticket_status");
+                WHERE table_name = 'tickets' AND column_name = 'status'""", String.class)).isEqualTo("ticket_status");
     }
 
     @Test
@@ -71,8 +68,8 @@ class TicketStatusTypeMigrationIT extends AbstractPostgresIntegrationTest {
         // Not alphabetical: an ORDER BY on the column follows the
         // declaration, so it matches com.ticketapp.domain.Ticket.Status
         // rather than an accident of the alphabet.
-        assertThat(labels).containsExactly("OPEN", "IN_ANALYSIS", "IN_PROGRESS",
-                "ON_ERROR", "DONE", "CANCELLED", "DELETED");
+        assertThat(labels)
+                .containsExactly("OPEN", "IN_ANALYSIS", "IN_PROGRESS", "ON_ERROR", "DONE", "CANCELLED", "DELETED");
     }
 
     @Test
@@ -81,8 +78,7 @@ class TicketStatusTypeMigrationIT extends AbstractPostgresIntegrationTest {
         Integer remaining = jdbc.queryForObject("""
                 SELECT count(*) FROM pg_constraint
                 WHERE conrelid = 'tickets'::regclass
-                  AND conname = 'tickets_status_check'""",
-                Integer.class);
+                  AND conname = 'tickets_status_check'""", Integer.class);
 
         assertThat(remaining).isZero();
     }
@@ -90,16 +86,14 @@ class TicketStatusTypeMigrationIT extends AbstractPostgresIntegrationTest {
     @Test
     @DisplayName("every status is accepted and a foreign one is not")
     void everyStatusIsAccepted() {
-        for (com.ticketapp.domain.Ticket.Status status
-                : com.ticketapp.domain.Ticket.Status.values()) {
+        for (com.ticketapp.domain.Ticket.Status status : com.ticketapp.domain.Ticket.Status.values()) {
             seedTicket(status.name());
         }
 
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tickets", Integer.class))
                 .isEqualTo(com.ticketapp.domain.Ticket.Status.values().length);
 
-        assertThatThrownBy(() -> seedTicket("ARCHIVED"))
-                .hasMessageContaining("ticket_status");
+        assertThatThrownBy(() -> seedTicket("ARCHIVED")).hasMessageContaining("ticket_status");
     }
 
     private void seedTicket(String status) {

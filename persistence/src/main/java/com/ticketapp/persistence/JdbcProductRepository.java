@@ -3,16 +3,14 @@ package com.ticketapp.persistence;
 import com.ticketapp.domain.Product;
 import com.ticketapp.domain.ProductRepository;
 import com.ticketapp.domain.QuantityUnit;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.stereotype.Repository;
-
 import java.sql.PreparedStatement;
 import java.sql.Types;
 import java.util.List;
 import java.util.Optional;
-
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
 
 /**
  * JDBC implementation of {@link ProductRepository}. Plain SQL, no ORM.
@@ -37,8 +35,7 @@ public class JdbcProductRepository implements ProductRepository {
         this.namedJdbc = new NamedParameterJdbcTemplate(jdbc);
     }
 
-    private static final String PRODUCT_COLS =
-            "id, name, normalised_name, unit, created_at";
+    private static final String PRODUCT_COLS = "id, name, normalised_name, unit, created_at";
 
     /**
      * Upsert by the match key. The conflict target names the same
@@ -60,16 +57,12 @@ public class JdbcProductRepository implements ProductRepository {
      * per-query {@code WHERE}/{@code ORDER BY} clauses are appended —
      * changing the projection then cannot leave one query behind.
      */
-    private static final String SELECT_PRODUCTS =
-            "SELECT " + PRODUCT_COLS + " FROM products ";
+    private static final String SELECT_PRODUCTS = "SELECT " + PRODUCT_COLS + " FROM products ";
 
     private static final String FIND_BY_NAME_SQL =
-            SELECT_PRODUCTS +
-            "WHERE normalised_name = :name " +
-            "AND unit = CAST(:unit AS quantity_unit)";
+            SELECT_PRODUCTS + "WHERE normalised_name = :name " + "AND unit = CAST(:unit AS quantity_unit)";
 
-    private static final String FIND_BY_IDS_SQL =
-            SELECT_PRODUCTS + "WHERE id IN (:ids)";
+    private static final String FIND_BY_IDS_SQL = SELECT_PRODUCTS + "WHERE id IN (:ids)";
 
     /**
      * Prefix lookup against {@code normalised_name}. Uses {@code ILIKE}
@@ -79,10 +72,9 @@ public class JdbcProductRepository implements ProductRepository {
      * name keep results stable for the SPA's autocomplete.
      */
     private static final String SEARCH_BY_NAME_SQL =
-            SELECT_PRODUCTS +
-            "WHERE normalised_name ILIKE :prefix ESCAPE '\\' " +
-            "ORDER BY normalised_name ASC " +
-            "LIMIT :limit";
+            SELECT_PRODUCTS + "WHERE normalised_name ILIKE :prefix ESCAPE '\\' "
+                    + "ORDER BY normalised_name ASC "
+                    + "LIMIT :limit";
 
     @Override
     public Optional<Product> findByNormalisedName(String normalisedName, QuantityUnit unit) {
@@ -122,34 +114,35 @@ public class JdbcProductRepository implements ProductRepository {
         // catalogue. The escape character is the backslash — none
         // of the catalogue names currently contain one, but a
         // future shop in another locale might.
-        String escaped = prefix.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-        var params = new MapSqlParameterSource()
-                .addValue("prefix", escaped + "%")
-                .addValue("limit", limit);
+        String escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        var params =
+                new MapSqlParameterSource().addValue("prefix", escaped + "%").addValue("limit", limit);
         return namedJdbc.query(SEARCH_BY_NAME_SQL, params, (rs, n) -> mapProduct(rs));
     }
 
     @Override
     public Product save(Product product) {
-        return jdbc.query(
-                con -> {
-                    PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
-                ps.setString(1, product.name());
-                ps.setString(2, product.normalisedName());
-                // Types.OTHER, not setString: the driver would send the
-                // value as character varying and Postgres rejects it
-                // with "column unit is of type quantity_unit but
-                // expression is of type character varying" — the same
-                // trap JsonbSupport exists for on the JSONB columns.
-                // A value that is not a member fails here rather than
-                // after the row is written.
-                ps.setObject(3, product.unit().storageValue(), Types.OTHER);
-                ps.setObject(4, java.sql.Timestamp.from(product.createdAt()));
-                    return ps;
-                },
-                (rs, n) -> product.withId(rs.getLong(1))).stream().findFirst().orElse(product);
+        return jdbc
+                .query(
+                        con -> {
+                            PreparedStatement ps = con.prepareStatement(UPSERT_SQL);
+                            ps.setString(1, product.name());
+                            ps.setString(2, product.normalisedName());
+                            // Types.OTHER, not setString: the driver would send the
+                            // value as character varying and Postgres rejects it
+                            // with "column unit is of type quantity_unit but
+                            // expression is of type character varying" — the same
+                            // trap JsonbSupport exists for on the JSONB columns.
+                            // A value that is not a member fails here rather than
+                            // after the row is written.
+                            ps.setObject(3, product.unit().storageValue(), Types.OTHER);
+                            ps.setObject(4, java.sql.Timestamp.from(product.createdAt()));
+                            return ps;
+                        },
+                        (rs, n) -> product.withId(rs.getLong(1)))
+                .stream()
+                .findFirst()
+                .orElse(product);
     }
 
     /**

@@ -14,15 +14,11 @@ import com.ticketapp.persistence.JdbcTicketRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.time.Instant;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-
-import java.time.Instant;
-import java.util.List;
-
 
 /**
  * Orchestrates the AI extraction pipeline for one ticket (ADR 0006
@@ -94,8 +90,7 @@ public class TicketExtractionService {
      * @return {@code true} when the segment committed; {@code false}
      *         when the row moved mid-flight and has been recovered
      */
-    private boolean commitExtractionOrRecover(long id, Ticket marked,
-                                              TicketExtraction persisted) {
+    private boolean commitExtractionOrRecover(long id, Ticket marked, TicketExtraction persisted) {
         try {
             tx.executeWithoutResult(status -> {
                 ticketExtractionRepository.save(persisted);
@@ -128,15 +123,17 @@ public class TicketExtractionService {
      */
     private void recoverStaleAnalysis(long id, Ticket marked) {
         try {
-            tx.executeWithoutResult(status ->
-                    ticketRepository.findById(id, marked.ownerId()).ifPresent(current -> {
+            tx.executeWithoutResult(status -> ticketRepository
+                    .findById(id, marked.ownerId())
+                    .ifPresent(current -> {
                         if (current.status() == Status.IN_ANALYSIS) {
                             ticketRepository.save(current.markError(truncate(
-                                    "lost optimistic race during extraction;"
-                                            + " re-queue via PATCH to OPEN")));
+                                    "lost optimistic race during extraction;" + " re-queue via PATCH to OPEN")));
                         } else {
-                            log.info("Ticket {} changed during extraction; winner state {} stands",
-                                    id, current.status());
+                            log.info(
+                                    "Ticket {} changed during extraction; winner state {} stands",
+                                    id,
+                                    current.status());
                         }
                     }));
         } catch (OptimisticLockException e) {
@@ -157,8 +154,7 @@ public class TicketExtractionService {
      */
     private ReceiptExtraction extractWithRetry(Ticket ticket) throws ReceiptExtractionException {
         int maxAttempts = Math.max(1, properties.retryAttempts());
-        ReceiptExtractionRequest request = new ReceiptExtractionRequest(
-                ticket.fileData(), ticket.contentType());
+        ReceiptExtractionRequest request = new ReceiptExtractionRequest(ticket.fileData(), ticket.contentType());
         ReceiptExtractionException lastFailure = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -168,8 +164,13 @@ public class TicketExtractionService {
                 if (!e.retryable() || attempt == maxAttempts) {
                     throw e;
                 }
-                log.warn("Extraction attempt {}/{} failed for ticket {} (retryable, status={}): {}",
-                        attempt, maxAttempts, ticket.id(), e.statusCode(), e.safeMessage());
+                log.warn(
+                        "Extraction attempt {}/{} failed for ticket {} (retryable, status={}): {}",
+                        attempt,
+                        maxAttempts,
+                        ticket.id(),
+                        e.statusCode(),
+                        e.safeMessage());
             }
         }
         throw lastFailure;
@@ -199,13 +200,14 @@ public class TicketExtractionService {
     private final Counter failureCounter;
     private final Counter skippedCounter;
 
-    public TicketExtractionService(TicketRepository ticketRepository,
-                                   TicketExtractionRepository ticketExtractionRepository,
-                                   JdbcTicketRepository jdbcTicketRepository,
-                                   ReceiptExtractor receiptExtractor,
-                                   TransactionTemplate tx,
-                                   AiProperties properties,
-                                   MeterRegistry meters) {
+    public TicketExtractionService(
+            TicketRepository ticketRepository,
+            TicketExtractionRepository ticketExtractionRepository,
+            JdbcTicketRepository jdbcTicketRepository,
+            ReceiptExtractor receiptExtractor,
+            TransactionTemplate tx,
+            AiProperties properties,
+            MeterRegistry meters) {
         this.ticketRepository = ticketRepository;
         this.ticketExtractionRepository = ticketExtractionRepository;
         this.jdbcTicketRepository = jdbcTicketRepository;
@@ -310,9 +312,12 @@ public class TicketExtractionService {
             if (!commitExtractionOrRecover(id, marked, persisted)) {
                 return false;
             }
-            log.info("Extracted ticket {} → merchant='{}' total={} {}",
-                    id, persisted.merchant(),
-                    persisted.totalAmount(), persisted.currency());
+            log.info(
+                    "Extracted ticket {} → merchant='{}' total={} {}",
+                    id,
+                    persisted.merchant(),
+                    persisted.totalAmount(),
+                    persisted.currency());
             successCounter.increment();
             return true;
         } catch (ReceiptExtractionException e) {
@@ -325,11 +330,9 @@ public class TicketExtractionService {
             // safe message is enough for the operator dashboard.
             String persisted = "status=" + e.statusCode() + " " + e.safeMessage();
             markError(marked, persisted);
-            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
-                    id, persisted);
+            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}", id, persisted);
             if (log.isDebugEnabled()) {
-                log.debug("Extraction diagnostic for ticket {} (status={}): {}",
-                        id, e.statusCode(), e.getMessage());
+                log.debug("Extraction diagnostic for ticket {} (status={}): {}", id, e.statusCode(), e.getMessage());
             }
             failureCounter.increment();
             return false;
@@ -349,10 +352,11 @@ public class TicketExtractionService {
             // state, constraint) — bounded by construction because
             // we keep the type-only prefix and truncate the rest.
             markError(marked, e.getClass().getSimpleName() + ": " + truncate(e.getMessage()));
-            log.warn("Extraction failed for ticket {} — marked ON_ERROR: {}",
-                    id, e.getClass().getSimpleName());
-            log.debug("Extraction diagnostic for ticket {}: {}",
-                    id, e.getMessage());
+            log.warn(
+                    "Extraction failed for ticket {} — marked ON_ERROR: {}",
+                    id,
+                    e.getClass().getSimpleName());
+            log.debug("Extraction diagnostic for ticket {}: {}", id, e.getMessage());
             failureCounter.increment();
             return false;
         }
@@ -375,9 +379,9 @@ public class TicketExtractionService {
      */
     private void markError(Ticket ticket, String message) {
         try {
-            tx.executeWithoutResult(status ->
-                    ticketRepository.findById(ticket.id(), ticket.ownerId()).ifPresent(t ->
-                            ticketRepository.save(t.markError(truncate(message)))));
+            tx.executeWithoutResult(status -> ticketRepository
+                    .findById(ticket.id(), ticket.ownerId())
+                    .ifPresent(t -> ticketRepository.save(t.markError(truncate(message)))));
         } catch (OptimisticLockException e) {
             // Lost a micro-race with another writer after the
             // re-read. Their write stands; the error mark is stale

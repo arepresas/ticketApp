@@ -5,8 +5,6 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
-
-
 /**
  * Base class for infrastructure-layer integration tests.
  * <p>
@@ -27,8 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 public abstract class AbstractPostgresIntegrationTest {
 
     @ServiceConnection
-    static final org.testcontainers.containers.PostgreSQLContainer<?> POSTGRES =
-            SharedPostgres.get();
+    static final org.testcontainers.containers.PostgreSQLContainer<?> POSTGRES = SharedPostgres.get();
 
     /**
      * Seed the owner row a ticket insert needs since V19
@@ -42,7 +39,10 @@ public abstract class AbstractPostgresIntegrationTest {
                         + " VALUES (?, ?, ?, now(), now())"
                         + " ON CONFLICT (google_sub) DO UPDATE SET last_login_at = now()"
                         + " RETURNING id",
-                Long.class, googleSub, googleSub + "@example.com", googleSub);
+                Long.class,
+                googleSub,
+                googleSub + "@example.com",
+                googleSub);
         return id;
     }
 }

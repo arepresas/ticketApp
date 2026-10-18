@@ -7,9 +7,6 @@ import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.TicketExtraction.ProductLine;
 import com.ticketapp.domain.ai.ReceiptExtractionException;
 import com.ticketapp.domain.ai.ReceiptExtractionResult;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.DateTimeException;
@@ -17,6 +14,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Pure parser for the provider assistant replies (ADR 0007).
@@ -62,9 +61,10 @@ public class ReceiptResponseParser {
     public ReceiptExtractionResult parse(String raw) throws ReceiptExtractionException {
         String stripped = stripThinkBlocks(stripCodeFences(raw == null ? "" : raw));
         if (stripped.isBlank()) {
-            throw new ReceiptExtractionException(0, false,
-                
-                "the reply contained only thinking, no JSON payload"
+            throw new ReceiptExtractionException(
+                    0,
+                    false,
+                    "the reply contained only thinking, no JSON payload"
                             + " (token budget likely exhausted mid-reasoning): "
                             + truncate(raw, 4096));
         }
@@ -85,15 +85,12 @@ public class ReceiptResponseParser {
             // reply already parsed — the object IS the object.
             return toResult(root, raw);
         }
-        ReceiptExtractionResult recovered =
-                recoverFromSubstring(stripped, structuralFailure, raw);
+        ReceiptExtractionResult recovered = recoverFromSubstring(stripped, structuralFailure, raw);
         if (recovered != null) {
             return recovered;
         }
-        throw new ReceiptExtractionException(0, false,
-
-            "the provider returned a non-JSON reply: " + truncate(raw, 4096),
-                structuralFailure);
+        throw new ReceiptExtractionException(
+                0, false, "the provider returned a non-JSON reply: " + truncate(raw, 4096), structuralFailure);
     }
 
     /**
@@ -104,9 +101,7 @@ public class ReceiptResponseParser {
      *         impossible — the original structural failure then keeps
      *         any suppressed secondary failure for the diagnostic
      */
-    private ReceiptExtractionResult recoverFromSubstring(String stripped,
-                                                         Exception structuralFailure,
-                                                         String raw) {
+    private ReceiptExtractionResult recoverFromSubstring(String stripped, Exception structuralFailure, String raw) {
         String lifted = extractFirstJsonObject(stripped);
         if (lifted == null || lifted.equals(stripped)) {
             return null;
@@ -141,8 +136,7 @@ public class ReceiptResponseParser {
      * @throws ReceiptExtractionException when the payload does not match
      *         the extraction schema
      */
-    private ReceiptExtractionResult toResult(JsonNode root, String raw)
-            throws ReceiptExtractionException {
+    private ReceiptExtractionResult toResult(JsonNode root, String raw) throws ReceiptExtractionException {
         try {
             String merchant = requireText(root, "merchant");
             LocalDate purchaseDate = purchaseDateOrDefault(root);
@@ -156,16 +150,17 @@ public class ReceiptResponseParser {
             // rejecting means a prompt regression narrows what is
             // stored, never what is asked for — and it is the same
             // table the V24 backfill applies to rows already written.
-            SpendCategory category = SpendCategory.fromExtractionValue(
-                    optionalText(root, "category"));
+            SpendCategory category = SpendCategory.fromExtractionValue(optionalText(root, "category"));
             List<ProductLine> products = parseProducts(root.get("products"));
-            return new ReceiptExtractionResult(
-                    merchant, purchaseDate, category, products, totalAmount, currency);
+            return new ReceiptExtractionResult(merchant, purchaseDate, category, products, totalAmount, currency);
         } catch (IllegalStateException | IllegalArgumentException | DateTimeException e) {
-            throw new ReceiptExtractionException(0, false,
-                "the provider returned JSON that does not match"
-                        + " the expected schema: " + e.getMessage()
-                        + "; reply: " + truncate(raw, 4096), e);
+            throw new ReceiptExtractionException(
+                    0,
+                    false,
+                    "the provider returned JSON that does not match"
+                            + " the expected schema: " + e.getMessage()
+                            + "; reply: " + truncate(raw, 4096),
+                    e);
         }
     }
 

@@ -20,66 +20,67 @@ import type { SpendCategory } from './spendCategory';
 const API_BASE = '/api/tickets';
 
 export class TicketApiError extends Error {
-	constructor(
-		message: string,
-		readonly status: number
-	) {
-		super(message);
-		this.name = 'TicketApiError';
-	}
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = 'TicketApiError';
+  }
 }
 
-export type TicketStatus = 'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED' | 'DELETED';
+export type TicketStatus =
+  'OPEN' | 'IN_ANALYSIS' | 'IN_PROGRESS' | 'ON_ERROR' | 'DONE' | 'CANCELLED' | 'DELETED';
 
 export type CreatedTicket = {
-	id: number;
-	title: string;
-	description: string;
-	status: TicketStatus;
-	createdAt: string;
-	updatedAt: string;
-	contentType: string | null;
-	fileName: string | null;
-	sizeBytes: number | null;
-	/**
-	 * Last failure reason for tickets that landed on {@link TicketStatus#ON_ERROR}.
-	 * Mirrors the BFF's `tickets.error_message` column. `null` for tickets
-	 * that have never failed (or whose error was cleared by a status flip).
-	 */
-	errorMessage: string | null;
-/**
- * Number of times the AI extraction pipeline has been triggered for
- * this ticket. Incremented by the BFF orchestrator on every
- * `processTicket` call (success or failure). Manual PATCH
- * `/status → OPEN` does NOT bump the counter — it's a tally of AI
- * attempts, not of user retries. Surfaced in the dashboard so the
- * user can see how many tries a stuck extraction has burned.
- */
-	attempts: number;
-	/**
-	 * Verbatim OCR transcription of the uploaded document (image or
-	 * PDF), produced by the BFF's upload-time OCR step (see the
-	 * `DocumentTextExtractor` port on the backend). `null` when:
-	 *
-	 *   - the upload pre-dates the OCR step (older rows),
-	 *   - the upload had no file attached (metadata-only),
-	 *   - the OCR provider could not transcribe the document (blank
-	 *     receipt, model refusal, transport failure).
-	 *
-	 * The upload preview renders the value verbatim below the file
-	 * thumbnail when present; the detail screen exposes it as a
-	 * dedicated panel for sanity-checking the receipt.
-	 */
-	ocrText: string | null;
+  id: number;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  contentType: string | null;
+  fileName: string | null;
+  sizeBytes: number | null;
+  /**
+   * Last failure reason for tickets that landed on {@link TicketStatus#ON_ERROR}.
+   * Mirrors the BFF's `tickets.error_message` column. `null` for tickets
+   * that have never failed (or whose error was cleared by a status flip).
+   */
+  errorMessage: string | null;
+  /**
+   * Number of times the AI extraction pipeline has been triggered for
+   * this ticket. Incremented by the BFF orchestrator on every
+   * `processTicket` call (success or failure). Manual PATCH
+   * `/status → OPEN` does NOT bump the counter — it's a tally of AI
+   * attempts, not of user retries. Surfaced in the dashboard so the
+   * user can see how many tries a stuck extraction has burned.
+   */
+  attempts: number;
+  /**
+   * Verbatim OCR transcription of the uploaded document (image or
+   * PDF), produced by the BFF's upload-time OCR step (see the
+   * `DocumentTextExtractor` port on the backend). `null` when:
+   *
+   *   - the upload pre-dates the OCR step (older rows),
+   *   - the upload had no file attached (metadata-only),
+   *   - the OCR provider could not transcribe the document (blank
+   *     receipt, model refusal, transport failure).
+   *
+   * The upload preview renders the value verbatim below the file
+   * thumbnail when present; the detail screen exposes it as a
+   * dedicated panel for sanity-checking the receipt.
+   */
+  ocrText: string | null;
 };
 
 const parseError = async (res: Response): Promise<string> => {
-	try {
-		const body = (await res.json()) as { message?: string; error?: string };
-		return body.message ?? body.error ?? `HTTP ${res.status}`;
-	} catch {
-		return `HTTP ${res.status}`;
-	}
+  try {
+    const body = (await res.json()) as { message?: string; error?: string };
+    return body.message ?? body.error ?? `HTTP ${res.status}`;
+  } catch {
+    return `HTTP ${res.status}`;
+  }
 };
 
 /**
@@ -88,9 +89,9 @@ const parseError = async (res: Response): Promise<string> => {
  * isn't 401; safe to call from any path.
  */
 const bubbleAuthExpired = (res: Response): void => {
-	if (res.status !== 401) return;
-	if (typeof window === 'undefined') return; // unit tests in jsdom should still hit this; only guard SSR
-	window.dispatchEvent(new CustomEvent('auth:expired'));
+  if (res.status !== 401) return;
+  if (typeof window === 'undefined') return; // unit tests in jsdom should still hit this; only guard SSR
+  window.dispatchEvent(new CustomEvent('auth:expired'));
 };
 
 /**
@@ -111,29 +112,29 @@ const bubbleAuthExpired = (res: Response): void => {
  * @param description Optional free-form note. Defaults to empty.
  */
 export const createTicket = async (
-	token: string,
-	file: File,
-	description?: string
+  token: string,
+  file: File,
+  description?: string
 ): Promise<CreatedTicket> => {
-	const fd = new FormData();
-	fd.append('file', file);
-	if (description && description.trim().length > 0) {
-		fd.append('description', description.trim());
-	}
+  const fd = new FormData();
+  fd.append('file', file);
+  if (description && description.trim().length > 0) {
+    fd.append('description', description.trim());
+  }
 
-	const res = await fetch(API_BASE, {
-		method: 'POST',
-		headers: { authorization: `Bearer ${token}` },
-		// No Content-Type header — the browser must set it with the
-		// multipart boundary itself. Setting it manually would strip the
-		// boundary and break the upload.
-		body: fd
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket;
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    // No Content-Type header — the browser must set it with the
+    // multipart boundary itself. Setting it manually would strip the
+    // boundary and break the upload.
+    body: fd
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket;
 };
 
 /**
@@ -149,15 +150,15 @@ export const createTicket = async (
  * @param token BFF session JWT. The endpoint returns 401 without one.
  */
 export const listPendingTickets = async (token: string): Promise<CreatedTicket[]> => {
-	const res = await fetch(`${API_BASE}/pending`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket[];
+  const res = await fetch(`${API_BASE}/pending`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket[];
 };
 
 /**
@@ -172,15 +173,15 @@ export const listPendingTickets = async (token: string): Promise<CreatedTicket[]
  * @param token BFF session JWT. The endpoint returns 401 without one.
  */
 export const listAllTickets = async (token: string): Promise<CreatedTicket[]> => {
-	const res = await fetch(`${API_BASE}`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket[];
+  const res = await fetch(`${API_BASE}`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket[];
 };
 
 /**
@@ -189,11 +190,11 @@ export const listAllTickets = async (token: string): Promise<CreatedTicket[]> =>
  * without surprise conversions.
  */
 export type ExtractedProductLine = {
-	name: string;
-	quantity: number;
-	unit: QuantityUnit;
-	pricePerUnit: number;
-	lineTotal: number;
+  name: string;
+  quantity: number;
+  unit: QuantityUnit;
+  pricePerUnit: number;
+  lineTotal: number;
 };
 
 /**
@@ -203,15 +204,15 @@ export type ExtractedProductLine = {
  * data, and the raw text is verbose (multi-KB on long Lidl receipts).
  */
 export type TicketExtraction = {
-	ticketId: number;
-	merchant: string;
-	purchaseDate: string;
-	category: string | null;
-	products: ExtractedProductLine[];
-	totalAmount: number;
-	currency: string;
-	model: string;
-	extractedAt: string;
+  ticketId: number;
+  merchant: string;
+  purchaseDate: string;
+  category: string | null;
+  products: ExtractedProductLine[];
+  totalAmount: number;
+  currency: string;
+  model: string;
+  extractedAt: string;
 };
 
 /**
@@ -221,15 +222,15 @@ export type TicketExtraction = {
  * "ticket not found" UI or simply navigate back to the list.
  */
 export const getTicket = async (token: string, id: number): Promise<CreatedTicket> => {
-	const res = await fetch(`${API_BASE}/${id}`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket;
+  const res = await fetch(`${API_BASE}/${id}`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket;
 };
 
 /**
@@ -243,21 +244,21 @@ export const getTicket = async (token: string, id: number): Promise<CreatedTicke
  * the user back to the login screen instead of showing empty state.
  */
 export const getTicketExtraction = async (
-	token: string,
-	id: number
+  token: string,
+  id: number
 ): Promise<TicketExtraction | null> => {
-	const res = await fetch(`${API_BASE}/${id}/extraction`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (res.status === 404) {
-		return null;
-	}
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as TicketExtraction;
+  const res = await fetch(`${API_BASE}/${id}/extraction`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (res.status === 404) {
+    return null;
+  }
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as TicketExtraction;
 };
 
 /**
@@ -273,20 +274,20 @@ export const getTicketExtraction = async (
  * (e.g. metadata-only tickets created before the upload feature).
  */
 export const getTicketFile = async (
-	token: string,
-	id: number
+  token: string,
+  id: number
 ): Promise<{ url: string; contentType: string | null }> => {
-	const res = await fetch(`${API_BASE}/${id}/file`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}` }
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	const contentType = res.headers.get('content-type');
-	const blob = await res.blob();
-	return { url: URL.createObjectURL(blob), contentType };
+  const res = await fetch(`${API_BASE}/${id}/file`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  const contentType = res.headers.get('content-type');
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), contentType };
 };
 
 /**
@@ -299,24 +300,24 @@ export const getTicketFile = async (
  * copy without a second GET.
  */
 export const updateTicketStatus = async (
-	token: string,
-	id: number,
-	status: TicketStatus
+  token: string,
+  id: number,
+  status: TicketStatus
 ): Promise<CreatedTicket> => {
-	const res = await fetch(`${API_BASE}/${id}/status`, {
-		method: 'PATCH',
-		headers: {
-			authorization: `Bearer ${token}`,
-			'content-type': 'application/json',
-			accept: 'application/json'
-		},
-		body: JSON.stringify({ status })
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket;
+  const res = await fetch(`${API_BASE}/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify({ status })
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket;
 };
 
 /**
@@ -336,7 +337,7 @@ export const updateTicketStatus = async (
  *          the orchestrator's later attempt outcome.
  */
 export const retryTicket = async (token: string, id: number): Promise<CreatedTicket> => {
-	return updateTicketStatus(token, id, 'OPEN');
+  return updateTicketStatus(token, id, 'OPEN');
 };
 
 /**
@@ -348,16 +349,16 @@ export const retryTicket = async (token: string, id: number): Promise<CreatedTic
  * doesn't exist, belongs to another user, or is already deleted.
  */
 export const deleteTicket = async (token: string, id: number): Promise<void> => {
-	const res = await fetch(`${API_BASE}/${id}`, {
-		method: 'DELETE',
-		headers: {
-			authorization: `Bearer ${token}`
-		}
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
+  const res = await fetch(`${API_BASE}/${id}`, {
+    method: 'DELETE',
+    headers: {
+      authorization: `Bearer ${token}`
+    }
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
 };
 
 /**
@@ -367,8 +368,8 @@ export const deleteTicket = async (token: string, id: number): Promise<void> => 
  * action.
  */
 export type TicketMetadataPatch = {
-	title?: string;
-	description?: string;
+  title?: string;
+  description?: string;
 };
 
 /**
@@ -382,24 +383,24 @@ export type TicketMetadataPatch = {
  * never leak existence across tenants).
  */
 export const updateTicketMetadata = async (
-	token: string,
-	id: number,
-	patch: TicketMetadataPatch
+  token: string,
+  id: number,
+  patch: TicketMetadataPatch
 ): Promise<CreatedTicket> => {
-	const res = await fetch(`${API_BASE}/${id}`, {
-		method: 'PATCH',
-		headers: {
-			authorization: `Bearer ${token}`,
-			'content-type': 'application/json',
-			accept: 'application/json'
-		},
-		body: JSON.stringify(patch)
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket;
+  const res = await fetch(`${API_BASE}/${id}`, {
+    method: 'PATCH',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify(patch)
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket;
 };
 
 /**
@@ -421,34 +422,34 @@ export const updateTicketMetadata = async (
  * never "clear it".
  */
 export const applyTicketEdit = async (
-	token: string,
-	id: number,
-	payload: { title?: string; description?: string; extraction?: EditableExtraction | null }
+  token: string,
+  id: number,
+  payload: { title?: string; description?: string; extraction?: EditableExtraction | null }
 ): Promise<CreatedTicket> => {
-	const res = await fetch(`${API_BASE}/${id}`, {
-		method: 'PUT',
-		headers: {
-			authorization: `Bearer ${token}`,
-			'content-type': 'application/json',
-			accept: 'application/json'
-		},
-		body: JSON.stringify(payload)
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as CreatedTicket;
+  const res = await fetch(`${API_BASE}/${id}`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as CreatedTicket;
 };
 
 export type EditableExtraction = {
-	merchant: string;
-	purchaseDate: string;
-	/** One of the closed set — the column no longer accepts anything else. */
-	category: SpendCategory;
-	products: ExtractedProductLine[];
-	totalAmount: number;
-	currency: string;
+  merchant: string;
+  purchaseDate: string;
+  /** One of the closed set — the column no longer accepts anything else. */
+  category: SpendCategory;
+  products: ExtractedProductLine[];
+  totalAmount: number;
+  currency: string;
 };
 
 /**
@@ -464,24 +465,24 @@ export type EditableExtraction = {
  * serialises the full shape).
  */
 export const replaceTicketExtraction = async (
-	token: string,
-	id: number,
-	next: EditableExtraction
+  token: string,
+  id: number,
+  next: EditableExtraction
 ): Promise<TicketExtraction> => {
-	const res = await fetch(`${API_BASE}/${id}/extraction`, {
-		method: 'PUT',
-		headers: {
-			authorization: `Bearer ${token}`,
-			'content-type': 'application/json',
-			accept: 'application/json'
-		},
-		body: JSON.stringify(next)
-	});
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as TicketExtraction;
+  const res = await fetch(`${API_BASE}/${id}/extraction`, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      accept: 'application/json'
+    },
+    body: JSON.stringify(next)
+  });
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as TicketExtraction;
 };
 
 /**
@@ -493,31 +494,31 @@ export const replaceTicketExtraction = async (
  * the normaliser hasn't run).
  */
 export type CatalogueLine = {
-	productName: string | null;
-	unit: QuantityUnit;
-	quantity: number | null;
-	pricePerUnit: number | null;
-	lineTotal: number | null;
+  productName: string | null;
+  unit: QuantityUnit;
+  quantity: number | null;
+  pricePerUnit: number | null;
+  lineTotal: number | null;
 };
 
 export type TicketCatalogue = {
-	shopId: number;
-	shopName: string;
-	lines: CatalogueLine[];
+  shopId: number;
+  shopName: string;
+  lines: CatalogueLine[];
 };
 
 export const getTicketCatalogue = async (
-	token: string,
-	id: number
+  token: string,
+  id: number
 ): Promise<TicketCatalogue | null> => {
-	const res = await fetch(`${API_BASE}/${id}/catalogue`, {
-		method: 'GET',
-		headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
-	});
-	if (res.status === 404) return null;
-	if (!res.ok) {
-		bubbleAuthExpired(res);
-		throw new TicketApiError(await parseError(res), res.status);
-	}
-	return (await res.json()) as TicketCatalogue;
+  const res = await fetch(`${API_BASE}/${id}/catalogue`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}`, accept: 'application/json' }
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    bubbleAuthExpired(res);
+    throw new TicketApiError(await parseError(res), res.status);
+  }
+  return (await res.json()) as TicketCatalogue;
 };

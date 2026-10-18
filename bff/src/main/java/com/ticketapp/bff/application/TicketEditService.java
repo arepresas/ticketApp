@@ -62,11 +62,8 @@ public class TicketEditService {
      *                                   BFF translates it to 404.
      */
     @Transactional
-    public Ticket applyEdit(long id, long ownerId,
-                            String title, String description,
-                            EditableFields extraction) {
-        Ticket ticket = tickets.findById(id, ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("ticket", id));
+    public Ticket applyEdit(long id, long ownerId, String title, String description, EditableFields extraction) {
+        Ticket ticket = tickets.findById(id, ownerId).orElseThrow(() -> new ResourceNotFoundException("ticket", id));
 
         Ticket next = ticket;
         if (title != null) {
@@ -93,8 +90,7 @@ public class TicketEditService {
             }
         }
 
-        log.debug("Applied detail edit to ticket {} (extraction={})",
-                id, extraction != null);
+        log.debug("Applied detail edit to ticket {} (extraction={})", id, extraction != null);
         return ticket;
     }
 }

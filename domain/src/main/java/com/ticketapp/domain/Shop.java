@@ -3,7 +3,6 @@ package com.ticketapp.domain;
 import java.time.Instant;
 import java.util.Locale;
 
-
 /**
  * Master merchant registry. The extraction payload carries the
  * {@code merchant} string verbatim; normalising it against this
@@ -45,8 +44,7 @@ public record Shop(
         String phone,
         String taxId,
         String website,
-        Instant createdAt
-) {
+        Instant createdAt) {
     public Shop {
         if (name == null) throw new NullPointerException("name");
         if (normalisedName == null) {
@@ -82,17 +80,25 @@ public record Shop(
      * a PATCH can update a single field without erasing the others.
      * Non-null values replace the existing field verbatim.
      */
-    public Shop withContact(String addressLine, String postalCode, String city,
-                            String country, String phone, String taxId, String website) {
+    public Shop withContact(
+            String addressLine,
+            String postalCode,
+            String city,
+            String country,
+            String phone,
+            String taxId,
+            String website) {
         return new Shop(
-                id, name, normalisedName,
+                id,
+                name,
+                normalisedName,
                 addressLine != null ? addressLine : this.addressLine,
-                postalCode  != null ? postalCode  : this.postalCode,
-                city        != null ? city        : this.city,
-                country     != null ? country     : this.country,
-                phone       != null ? phone       : this.phone,
-                taxId       != null ? taxId       : this.taxId,
-                website     != null ? website     : this.website,
+                postalCode != null ? postalCode : this.postalCode,
+                city != null ? city : this.city,
+                country != null ? country : this.country,
+                phone != null ? phone : this.phone,
+                taxId != null ? taxId : this.taxId,
+                website != null ? website : this.website,
                 createdAt);
     }
     /**
@@ -102,6 +108,7 @@ public record Shop(
      * {@code save()}. Only the adapter calls this.
      */
     public Shop withId(long newId) {
-        return new Shop(newId, name, normalisedName, addressLine, postalCode, city, country, phone, taxId, website, createdAt);
+        return new Shop(
+                newId, name, normalisedName, addressLine, postalCode, city, country, phone, taxId, website, createdAt);
     }
 }

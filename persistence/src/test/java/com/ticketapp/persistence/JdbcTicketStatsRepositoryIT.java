@@ -1,11 +1,20 @@
 package com.ticketapp.persistence;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.ticketapp.domain.CategorySpend;
 import com.ticketapp.domain.MonthlyTicketCount;
 import com.ticketapp.domain.SpendCategory;
 import com.ticketapp.domain.Ticket;
 import com.ticketapp.domain.TicketStats;
 import com.ticketapp.support.AbstractPostgresIntegrationTest;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,16 +22,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.YearMonth;
-import java.time.Month;
-import java.util.List;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * IT for {@link JdbcTicketStatsRepository} — the dashboard aggregates.
@@ -139,8 +138,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             assertThat(repository.sumByCategory(owner, "eur"))
                     .singleElement()
                     .satisfies(row -> assertThat(row.amount()).isEqualByComparingTo("10.00"));
-            assertThat(repository.loadStats(owner, "eur").totalSpent())
-                    .isEqualByComparingTo("10.00");
+            assertThat(repository.loadStats(owner, "eur").totalSpent()).isEqualByComparingTo("10.00");
         }
 
         @Test
@@ -180,9 +178,15 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // — an unscoped `extractedTicketsInCurrency` or
             // `averageTicketValue` mixes another account's data in too.
             seedTicket("mine", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
-            seedTicketFor(otherOwner, "theirs-open", Ticket.Status.OPEN,
+            seedTicketFor(
+                    otherOwner,
+                    "theirs-open",
+                    Ticket.Status.OPEN,
                     withExtraction("999.00", "EUR", "food", date(2026, 1, 6)));
-            seedTicketFor(otherOwner, "theirs-done", Ticket.Status.DONE,
+            seedTicketFor(
+                    otherOwner,
+                    "theirs-done",
+                    Ticket.Status.DONE,
                     withExtraction("888.00", "EUR", "transport", date(2026, 1, 7)));
 
             TicketStats stats = repository.loadStats(owner, "EUR");
@@ -210,10 +214,11 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("b", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 3, 9)));
             seedTicket("c", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 3, 20)));
 
-            List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH));
+            List<MonthlyTicketCount> rows =
+                    repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH));
 
-            assertThat(rows).extracting(MonthlyTicketCount::month)
+            assertThat(rows)
+                    .extracting(MonthlyTicketCount::month)
                     .containsExactly(YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.MARCH));
             assertThat(rows).extracting(MonthlyTicketCount::count).containsExactly(1L, 2L);
         }
@@ -223,8 +228,8 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
         void omitsEmptyMonths() {
             seedTicket("a", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
 
-            List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
+            List<MonthlyTicketCount> rows =
+                    repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
 
             assertThat(rows).hasSize(1);
         }
@@ -248,20 +253,22 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("jun", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 6, 1)));
             seedTicket("out", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 7, 1)));
 
-            List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
+            List<MonthlyTicketCount> rows =
+                    repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
 
-            assertThat(rows).extracting(MonthlyTicketCount::month)
+            assertThat(rows)
+                    .extracting(MonthlyTicketCount::month)
                     .containsExactly(YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JUNE));
         }
 
         @Test
         @DisplayName("is owner-scoped")
         void isOwnerScoped() {
-            seedTicketFor(otherOwner, "theirs", Ticket.Status.DONE,
-                    withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
+            seedTicketFor(
+                    otherOwner, "theirs", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 1, 5)));
 
-            assertThat(repository.countByMonth(owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JANUARY)))
+            assertThat(repository.countByMonth(
+                            owner, YearMonth.of(2026, Month.JANUARY), YearMonth.of(2026, Month.JANUARY)))
                     .isEmpty();
         }
 
@@ -274,14 +281,16 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // and render a wrong chart.
             seedTicket("done", Ticket.Status.DONE, withExtraction("10.00", "EUR", "food", date(2026, 3, 5)));
             seedTicket("open", Ticket.Status.OPEN, withExtraction("10.00", "EUR", "food", date(2026, 3, 6)));
-            seedTicket("in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("10.00", "EUR", "food", date(2026, 3, 7)));
-            seedTicket("in-progress", Ticket.Status.IN_PROGRESS, withExtraction("10.00", "EUR", "food", date(2026, 3, 8)));
+            seedTicket(
+                    "in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("10.00", "EUR", "food", date(2026, 3, 7)));
+            seedTicket(
+                    "in-progress", Ticket.Status.IN_PROGRESS, withExtraction("10.00", "EUR", "food", date(2026, 3, 8)));
             seedTicket("on-error", Ticket.Status.ON_ERROR, withExtraction("10.00", "EUR", "food", date(2026, 3, 9)));
             seedTicket("cancelled", Ticket.Status.CANCELLED, withExtraction("10.00", "EUR", "food", date(2026, 3, 10)));
             seedTicket("deleted", Ticket.Status.DELETED, withExtraction("10.00", "EUR", "food", date(2026, 3, 11)));
 
-            List<MonthlyTicketCount> rows = repository.countByMonth(
-                    owner, YearMonth.of(2026, Month.MARCH), YearMonth.of(2026, Month.MARCH));
+            List<MonthlyTicketCount> rows =
+                    repository.countByMonth(owner, YearMonth.of(2026, Month.MARCH), YearMonth.of(2026, Month.MARCH));
 
             // Five non-terminal statuses counted; the two terminal ones
             // excluded, matching the total/open KPI policy.
@@ -310,8 +319,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // Sparse by contract — LODGING had no rows, so it is absent
             // rather than zero. CategorySpend.complete() is what pins
             // the arc count for the donut; asserted separately below.
-            assertThat(rows).extracting(CategorySpend::category)
-                    .doesNotContain(SpendCategory.LODGING);
+            assertThat(rows).extracting(CategorySpend::category).doesNotContain(SpendCategory.LODGING);
         }
 
         @Test
@@ -321,10 +329,16 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
 
             List<CategorySpend> complete = CategorySpend.complete(repository.sumByCategory(owner, "EUR"));
 
-            assertThat(complete).extracting(CategorySpend::category)
-                    .containsExactly(SpendCategory.FOOD, SpendCategory.TRANSPORT,
-                            SpendCategory.LODGING, SpendCategory.PHARMACY, SpendCategory.OTHER);
-            assertThat(complete).filteredOn(r -> r.category() == SpendCategory.LODGING)
+            assertThat(complete)
+                    .extracting(CategorySpend::category)
+                    .containsExactly(
+                            SpendCategory.FOOD,
+                            SpendCategory.TRANSPORT,
+                            SpendCategory.LODGING,
+                            SpendCategory.PHARMACY,
+                            SpendCategory.OTHER);
+            assertThat(complete)
+                    .filteredOn(r -> r.category() == SpendCategory.LODGING)
                     .singleElement()
                     .extracting(CategorySpend::amount)
                     .isEqualTo(BigDecimal.ZERO);
@@ -349,8 +363,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // other category fixture here.
             seedTicket("done", Ticket.Status.DONE, withExtraction("1.00", "EUR", "food", date(2026, 1, 1)));
             seedTicket("open", Ticket.Status.OPEN, withExtraction("2.00", "EUR", "food", date(2026, 1, 2)));
-            seedTicket("in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("4.00", "EUR", "food", date(2026, 1, 3)));
-            seedTicket("in-progress", Ticket.Status.IN_PROGRESS, withExtraction("8.00", "EUR", "food", date(2026, 1, 4)));
+            seedTicket(
+                    "in-analysis", Ticket.Status.IN_ANALYSIS, withExtraction("4.00", "EUR", "food", date(2026, 1, 3)));
+            seedTicket(
+                    "in-progress", Ticket.Status.IN_PROGRESS, withExtraction("8.00", "EUR", "food", date(2026, 1, 4)));
             seedTicket("on-error", Ticket.Status.ON_ERROR, withExtraction("16.00", "EUR", "food", date(2026, 1, 5)));
             seedTicket("cancelled", Ticket.Status.CANCELLED, withExtraction("32.00", "EUR", "food", date(2026, 1, 6)));
             seedTicket("deleted", Ticket.Status.DELETED, withExtraction("64.00", "EUR", "food", date(2026, 1, 7)));
@@ -369,8 +385,8 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // time — one layer earlier and once instead of per query.
             seedTicket("a", Ticket.Status.DONE, withExtraction("12.00", "EUR", "food", date(2026, 1, 5)));
 
-            assertThatThrownBy(() -> seedTicket("b", Ticket.Status.DONE,
-                    withExtraction("1.00", "EUR", "gas station", date(2026, 1, 6))))
+            assertThatThrownBy(() -> seedTicket(
+                            "b", Ticket.Status.DONE, withExtraction("1.00", "EUR", "gas station", date(2026, 1, 6))))
                     .hasMessageContaining("category");
         }
 
@@ -380,8 +396,8 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             // "No readable category" is stored as the literal 'other'
             // by the writer, so a NULL reaching the column means a
             // writer that bypassed the enum.
-            assertThatThrownBy(() -> seedTicket("a", Ticket.Status.DONE,
-                    withExtraction("8.00", "EUR", null, date(2026, 1, 5))))
+            assertThatThrownBy(() ->
+                            seedTicket("a", Ticket.Status.DONE, withExtraction("8.00", "EUR", null, date(2026, 1, 5))))
                     .hasMessageContaining("category");
         }
 
@@ -400,7 +416,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
         @Test
         @DisplayName("is owner-scoped")
         void isOwnerScoped() {
-            seedTicketFor(otherOwner, "theirs", Ticket.Status.DONE,
+            seedTicketFor(
+                    otherOwner,
+                    "theirs",
+                    Ticket.Status.DONE,
                     withExtraction("999.00", "EUR", "food", date(2026, 1, 5)));
 
             assertThat(repository.sumByCategory(owner, "EUR")).isEmpty();
@@ -422,8 +441,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             List<CategorySpend> rows = repository.sumByCategory(owner, "EUR");
 
             assertThat(rows).hasSize(SpendCategory.values().length);
-            assertThat(rows).extracting(CategorySpend::category)
-                    .containsExactlyInAnyOrder(SpendCategory.values());
+            assertThat(rows).extracting(CategorySpend::category).containsExactlyInAnyOrder(SpendCategory.values());
             assertThat(amountFor(rows, SpendCategory.FOOD)).isEqualByComparingTo("20.00");
         }
 
@@ -436,8 +454,7 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
             seedTicket("d", Ticket.Status.DONE, withExtraction("1.00", "EUR", "pharmacy", date(2026, 1, 4)));
             seedTicket("e", Ticket.Status.DONE, withExtraction("1.00", "EUR", "other", date(2026, 1, 5)));
 
-            assertThat(repository.sumByCategory(owner, "EUR"))
-                    .hasSizeLessThanOrEqualTo(SpendCategory.values().length);
+            assertThat(repository.sumByCategory(owner, "EUR")).hasSizeLessThanOrEqualTo(SpendCategory.values().length);
         }
     }
 
@@ -445,11 +462,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
     // Seed helpers
     // ------------------------------------------------------------------
 
-    private record ExtractionSeed(String amount, String currency, String category, LocalDate purchaseDate) {
-    }
+    private record ExtractionSeed(String amount, String currency, String category, LocalDate purchaseDate) {}
 
-    private static ExtractionSeed withExtraction(String amount, String currency,
-                                                 String category, LocalDate purchaseDate) {
+    private static ExtractionSeed withExtraction(
+            String amount, String currency, String category, LocalDate purchaseDate) {
         return new ExtractionSeed(amount, currency, category, purchaseDate);
     }
 
@@ -468,10 +484,10 @@ class JdbcTicketStatsRepositoryIT extends AbstractPostgresIntegrationTest {
     private long seedTicketFor(long ownerId, String title, Ticket.Status status, ExtractionSeed extraction) {
         Long id = jdbc.queryForObject("""
                 INSERT INTO tickets (owner_id, title, description, status, created_at, updated_at)
-                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""",
-                Long.class, ownerId, title, status.name());
+                VALUES (?, ?, '', ?::ticket_status, now(), now()) RETURNING id""", Long.class, ownerId, title, status.name());
         if (extraction != null) {
-            jdbc.update("""
+            jdbc.update(
+                    """
                     INSERT INTO ticket_extractions
                         (ticket_id, merchant, purchase_date, category, products,
                          total_amount, currency, model, extracted_at,

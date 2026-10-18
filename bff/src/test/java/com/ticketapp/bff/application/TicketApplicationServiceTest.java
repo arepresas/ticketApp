@@ -1,5 +1,14 @@
 package com.ticketapp.bff.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.ticketapp.bff.ai.DocumentTextExtractionSyncService;
 import com.ticketapp.bff.ai.TicketExtractionService;
 import com.ticketapp.bff.extraction.TicketExtractionNormaliser;
@@ -10,28 +19,16 @@ import com.ticketapp.domain.TicketExtraction;
 import com.ticketapp.domain.TicketExtractionRepository;
 import com.ticketapp.domain.TicketRepository;
 import com.ticketapp.domain.identity.AuthenticatedUser;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Unit tests for {@link TicketApplicationService} — the two
@@ -56,16 +53,27 @@ class TicketApplicationServiceTest {
         extractionService = mock(TicketExtractionService.class);
         ocrService = mock(DocumentTextExtractionSyncService.class);
         normaliser = mock(TicketExtractionNormaliser.class);
-        service = new TicketApplicationService(
-                tickets, extractions, extractionService, ocrService, normaliser);
-        user = new AuthenticatedUser(OWNER, "sub", "u@x.com", "U", null,
-                Instant.now(), Instant.now());
+        service = new TicketApplicationService(tickets, extractions, extractionService, ocrService, normaliser);
+        user = new AuthenticatedUser(OWNER, "sub", "u@x.com", "U", null, Instant.now(), Instant.now());
     }
 
     private static Ticket openTicket(long id) {
-        return new Ticket(id, OWNER, "r.png", "", Status.OPEN,
-                Instant.now(), Instant.now(),
-                "image/png", "r.png", new byte[]{1, 2, 3}, null, 0, null, null, 0);
+        return new Ticket(
+                id,
+                OWNER,
+                "r.png",
+                "",
+                Status.OPEN,
+                Instant.now(),
+                Instant.now(),
+                "image/png",
+                "r.png",
+                new byte[] {1, 2, 3},
+                null,
+                0,
+                null,
+                null,
+                0);
     }
 
     @Test
@@ -74,8 +82,17 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
-                new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
+                id,
+                "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4),
+                SpendCategory.FOOD,
+                List.of(),
+                new BigDecimal("1.00"),
+                "EUR",
+                "stub",
+                Instant.now(),
+                "{}",
+                null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(doneExtraction));
@@ -94,14 +111,24 @@ class TicketApplicationServiceTest {
         Ticket open = openTicket(id);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open));
         TicketExtraction doneExtraction = new TicketExtraction(
-                id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
-                new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null);
+                id,
+                "Mercadona",
+                LocalDate.of(2026, Month.JULY, 4),
+                SpendCategory.FOOD,
+                List.of(),
+                new BigDecimal("1.00"),
+                "EUR",
+                "stub",
+                Instant.now(),
+                "{}",
+                null);
         when(extractions.findByTicketId(id, OWNER))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(doneExtraction));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
         org.mockito.Mockito.doThrow(new RuntimeException("catalogue boom"))
-                .when(normaliser).normaliseOnDone(any(Ticket.class));
+                .when(normaliser)
+                .normaliseOnDone(any(Ticket.class));
 
         Ticket result = service.changeStatus(id, user, Status.DONE);
 
@@ -117,10 +144,19 @@ class TicketApplicationServiceTest {
         long id = nextId();
         Ticket done = openTicket(id).withStatus(Status.DONE);
         when(tickets.findById(id, OWNER)).thenReturn(Optional.of(done));
-        when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.of(
-                new TicketExtraction(
-                        id, "Mercadona", LocalDate.of(2026, Month.JULY, 4), SpendCategory.FOOD, List.of(),
-                        new BigDecimal("1.00"), "EUR", "stub", Instant.now(), "{}", null)));
+        when(extractions.findByTicketId(id, OWNER))
+                .thenReturn(Optional.of(new TicketExtraction(
+                        id,
+                        "Mercadona",
+                        LocalDate.of(2026, Month.JULY, 4),
+                        SpendCategory.FOOD,
+                        List.of(),
+                        new BigDecimal("1.00"),
+                        "EUR",
+                        "stub",
+                        Instant.now(),
+                        "{}",
+                        null)));
         when(tickets.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         service.changeStatus(id, user, Status.DONE);
@@ -135,8 +171,7 @@ class TicketApplicationServiceTest {
 
         assertThatThrownBy(() -> service.changeStatus(id, user, Status.DONE))
                 .isInstanceOf(ResponseStatusException.class)
-                .satisfies(e -> assertThat(
-                        ((ResponseStatusException) e).getStatusCode())
+                .satisfies(e -> assertThat(((ResponseStatusException) e).getStatusCode())
                         .isEqualTo(HttpStatus.NOT_FOUND));
         verify(extractionService, never()).processTicket(any());
     }
@@ -150,9 +185,7 @@ class TicketApplicationServiceTest {
         long id = nextId();
         Ticket open = openTicket(id);
         Ticket failed = open.markError("the AI provider returned 500");
-        when(tickets.findById(id, OWNER))
-                .thenReturn(Optional.of(open))
-                .thenReturn(Optional.of(failed));
+        when(tickets.findById(id, OWNER)).thenReturn(Optional.of(open)).thenReturn(Optional.of(failed));
         when(extractions.findByTicketId(id, OWNER)).thenReturn(Optional.empty());
 
         Ticket result = service.changeStatus(id, user, Status.DONE);
@@ -179,8 +212,7 @@ class TicketApplicationServiceTest {
     }
 
     /** Sequential stand-in for the former UUID test ids. */
-    private static final java.util.concurrent.atomic.AtomicLong IDS =
-            new java.util.concurrent.atomic.AtomicLong(1L);
+    private static final java.util.concurrent.atomic.AtomicLong IDS = new java.util.concurrent.atomic.AtomicLong(1L);
 
     private static long nextId() {
         return IDS.incrementAndGet();

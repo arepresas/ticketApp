@@ -4,7 +4,6 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -125,8 +124,7 @@ public record OpenAiProperties(
          * SDK's debug output includes header lines and is otherwise
          * chatty.
          */
-        boolean debugHttp
-) {
+        boolean debugHttp) {
     /**
      * The reasoning-effort values the OpenAI SDK's
      * {@code ReasoningEffort} enum can serialise, minus {@code none}.
@@ -149,10 +147,9 @@ public record OpenAiProperties(
      */
     private static String normaliseReasoningEffort(String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(
-                    "ticketapp.ai.openai.reasoning-effort is required; set "
-                            + "OPENAI_REASONING_EFFORT to one of " + SUPPORTED_REASONING_EFFORTS
-                            + " (low is the recommended default for receipt OCR)");
+            throw new IllegalArgumentException("ticketapp.ai.openai.reasoning-effort is required; set "
+                    + "OPENAI_REASONING_EFFORT to one of " + SUPPORTED_REASONING_EFFORTS
+                    + " (low is the recommended default for receipt OCR)");
         }
         String normalised = value.trim().toLowerCase(java.util.Locale.ROOT);
         if ("none".equals(normalised)) {
@@ -162,9 +159,8 @@ public record OpenAiProperties(
                             + "adaptive thinking) and OpenAI's none carries different semantics. Use 'low'.");
         }
         if (!SUPPORTED_REASONING_EFFORTS.contains(normalised)) {
-            throw new IllegalArgumentException(
-                    "ticketapp.ai.openai.reasoning-effort=" + value + " is not a known value; expected one of "
-                            + SUPPORTED_REASONING_EFFORTS);
+            throw new IllegalArgumentException("ticketapp.ai.openai.reasoning-effort=" + value
+                    + " is not a known value; expected one of " + SUPPORTED_REASONING_EFFORTS);
         }
         return normalised;
     }
