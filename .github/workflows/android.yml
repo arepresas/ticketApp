@@ -1,0 +1,96 @@
+name: Android
+
+# The Android client (ADR 0009) is a standalone Gradle project, so it
+# cannot ride in the Maven reactor that `ci.yml` drives. This workflow
+# gives it the equivalent gate: unit tests, lint, and both APKs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-android
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287  # v5.3.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326  # v4.4.0
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407  # v3
+        with:
+          # Pin the same platform + build-tools the module targets
+          # (compileSdk/targetSdk 37). The runner image does not carry
+          # API 37 yet, so sdkmanager installs it.
+          packages: 'platforms;android-37.0 build-tools;37.0.0'
+
+      - name: Write local.properties
+        # Compile-time configuration only — no secret is needed to
+        # build. The OAuth client id stays a placeholder: it is public
+        # by OAuth design but environment-specific, and the login
+        # screen refuses to call Google with it (see
+        # auth/GoogleSignIn.kt), so a placeholder fails loudly at
+        # runtime instead of silently mis-signing.
+        run: |
+          cat > local.properties <<EOF
+          sdk.dir=$ANDROID_HOME
+          ticketapp.webOrigin=https://ticketapp-front.fly.dev
+          ticketapp.googleServerClientId=REPLACE_ME.apps.googleusercontent.com
+          EOF
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Lint
+        run: ./gradlew lintDebug
+
+      - name: Assemble debug + release
+        run: ./gradlew assembleDebug assembleRelease
+
+      - name: Publish test results
+        if: always()
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2  # v3.0.0
+        with:
+          name: Android (Gradle)
+          path: app-android/app/build/test-results/testDebugUnitTest/TEST-*.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: android-lint
+          path: app-android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
+      - name: Upload APKs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: android-apks
+          path: |
+            app-android/app/build/outputs/apk/debug/app-debug.apk
+            app-android/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: ignore

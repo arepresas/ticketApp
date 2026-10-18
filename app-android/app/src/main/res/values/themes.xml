@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Compose supplies the real styling (see TicketAppTheme); this is
+        the pre-inflation window theme, kept minimal and DayNight-agnostic
+        so the first frame does not flash a light surface in dark mode.
+    -->
+    <style name="Theme.TicketApp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

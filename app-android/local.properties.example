@@ -1,0 +1,36 @@
+## Template for app-android/local.properties.
+##
+## Copy to `local.properties` (gitignored) and fill in. Every key can
+## also be supplied as a Gradle property or an environment variable —
+## see app-android/README.md.
+#
+# Absolute path to your Android SDK. No portable default: Android
+# Studio writes this itself when you open the project.
+sdk.dir=/path/to/Android/sdk
+
+# Origin the app loads: the FRONT's public origin, never the BFF's.
+# nginx (production) and the Vite dev proxy (local) both forward /api
+# to the BFF, so the WebView and the native auth calls share one base
+# URL and the API stays same-origin (ADR 0008).
+#
+#   production : https://ticketapp-front.fly.dev
+#   local dev  : http://10.0.2.2:5173   (emulator -> host Vite server)
+ticketapp.webOrigin=https://ticketapp-front.fly.dev
+
+# OAuth WEB client id — the same value as the BFF's GOOGLE_CLIENT_ID
+# and the front's VITE_GOOGLE_CLIENT_ID. Credential Manager needs it as
+# the audience of the id_token it returns; an Android client id would
+# mint a token the BFF rejects.
+#
+# Public by OAuth design, but environment-specific, so it stays out of
+# source. The build works with the placeholder below (the login screen
+# refuses to call Google with it) — replace it before signing in.
+ticketapp.googleServerClientId=REPLACE_ME.apps.googleusercontent.com
+
+# Release signing (optional). Leave unset to get an unsigned release
+# APK, which is the right default for CI and local work. Prefer
+# ~/.gradle/gradle.properties over committing anything here.
+#ticketapp.storeFile=/absolute/path/to/upload.jks
+#ticketapp.storePassword=
+#ticketapp.keyAlias=upload
+#ticketapp.keyPassword=

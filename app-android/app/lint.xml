@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!--
+        ObsoleteSdkInt flags `mipmap-anydpi-v26` as collapsible into
+        `mipmap-anydpi`, because minSdk is already 26.
+
+        Followed to the letter, the build breaks: with the files in the
+        unversioned `mipmap-anydpi` folder, AAPT2 (as shipped with
+        AGP 9.4.1) fails the resource merge with
+
+            error: resource mipmap/ic_launcher (aka
+            com.ticketapp.android:mipmap/ic_launcher) not found
+
+        and the app has no launcher icon at all. The qualifier is
+        therefore load-bearing, not redundant. Ignored for that one
+        folder rather than disabling the check everywhere, so real
+        ObsoleteSdkInt findings elsewhere still surface.
+    -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+</lint>

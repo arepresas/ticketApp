@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A receipt silhouette, centred inside the adaptive-icon safe zone
+    (the inner 66dp of the 108dp canvas).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Receipt body with a torn bottom edge. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,26 L72,26 L72,82 L67,78 L62,82 L57,78 L52,82 L47,78 L42,82 L36,78 Z" />
+
+    <!-- Text lines on the receipt. -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M42,36 L66,36 L66,39 L42,39 Z" />
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M42,45 L66,45 L66,48 L42,48 Z" />
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M42,54 L60,54 L60,57 L42,57 Z" />
+
+    <!-- Total amount, emphasised. -->
+    <path
+        android:fillColor="#065F46"
+        android:pathData="M42,64 L66,64 L66,70 L42,70 Z" />
+</vector>
