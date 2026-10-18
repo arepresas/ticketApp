@@ -73,6 +73,7 @@
         <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <spotless.version>3.10.4</spotless.version>
         <pdfbox.version>3.0.8</pdfbox.version>
         <openai-java.version>4.81.0</openai-java.version>
 
@@ -198,6 +199,20 @@
                     <artifactId>sonar-maven-plugin</artifactId>
                     <version>5.8.0.7211</version>
                 </plugin>
+                <plugin>
+                    <groupId>com.diffplug.spotless</groupId>
+                    <artifactId>spotless-maven-plugin</artifactId>
+                    <version>${spotless.version}</version>
+                    <configuration>
+                        <java>
+                            <!-- CONVENTIONS.md §3.2: 4-space indent, 120 soft limit. -->
+                            <palantirJavaFormat/>
+                            <removeUnusedImports/>
+                            <trimTrailingWhitespace/>
+                            <endWithNewline/>
+                        </java>
+                    </configuration>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -206,6 +221,15 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+            <!-- Formatting check. Not bound to the lifecycle: run explicitly
+                 via `mvn spotless:check` / `mvn spotless:apply` (CI does the
+                 check in the `format` job). Binding it to `verify` would make
+                 every build depend on formatter state; keep it opt-in until
+                 the codebase is fully formatted. -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>

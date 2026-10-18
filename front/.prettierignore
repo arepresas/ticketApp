@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+.svelte-kit
+.vite
+coverage
+reports
+storybook-static
+npm
+# stale stub left over from the pnpm migration; gitignored, not JS
+package-lock.json
+pnpm-lock.yaml
