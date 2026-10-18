@@ -307,10 +307,12 @@ A change is **done** when all of the following pass locally:
 ```bash
 # Backend (any change touching domain/, persistence/, openai-ai/, bff/)
 mvn -B verify
+mvn -B spotless:check          # Java format (palantir); `mvn spotless:apply` to fix
 
 # Frontend (any change touching front/)
 cd front
 pnpm install --frozen-lockfile --ignore-scripts
+pnpm format:check              # Prettier (ts/js/svelte); `pnpm format` to fix
 pnpm test:ci
 pnpm build
 pnpm test:coverage
@@ -322,7 +324,9 @@ mvn -B -DskipTests verify sonar:sonar \
   -Dsonar.organization=$SONAR_ORGANIZATION
 ```
 
-CI runs the same gates. PRs that fail the Sonar quality gate are blocked from merge.
+CI runs the same gates plus a `format` job (Spotless + Prettier) and, on
+pull requests, a `commitlint` job that rejects commit messages violating
+§11.1. PRs that fail the Sonar quality gate are blocked from merge.
 
 ### 10.1 Coverage thresholds
 
@@ -350,11 +354,15 @@ Lower coverage on new code requires an explicit justification in the PR body.
 <footer>
 ```
 
-- **type**: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`, `perf`, `revert`.
+- **type**: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`, `perf`, `revert`, `style` (`style` = formatting-only changes, no behaviour change).
 - **scope** (optional): `bff`, `front`, `domain`, `infra`, `deps`, `auth`, `db`, etc.
 - **subject**: ≤ 72 chars, imperative, no trailing period.
 - **body**: explain *why*, not *what*. Wrap at 100 cols.
 - **footer**: `Refs: #123`, `Closes: #123`, `BREAKING CHANGE: …`.
+- **enforced by commitlint** in CI (`.github/workflows/ci.yml`, `commitlint` job,
+  config in `commitlint.config.cjs`). Types outside the list above are rejected —
+  dependency bumps use `build(deps): …` or `chore(deps): …`, not a bare `deps:` type.
+  Local check: `pnpm exec commitlint --from origin/main --to HEAD` (run from repo root).
 
 ### 11.2 Branches
 

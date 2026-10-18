@@ -2,5 +2,13 @@
   "name": "ticketapp",
   "version": "0.0.1",
   "private": true,
-  "description": "Workspace root for the ticketApp monorepo. Exists so the @sonar/scan CLI can bootstrap a package context when invoked from the repo root."
+  "description": "Workspace root for the ticketApp monorepo. Hosts repo-level tooling (commitlint) and provides a package context so the @sonar/scan CLI can bootstrap when invoked from the repo root.",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "commitlint": "commitlint"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0"
+  }
 }
