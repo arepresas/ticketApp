@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.1.1</version>
+        <version>4.1.2</version>
         <relativePath/>
     </parent>
 
@@ -42,7 +42,7 @@
         -->
         <testcontainers.version>2.0.5</testcontainers.version>
         <liquibase.version>5.0.4</liquibase.version>
-        <spring-boot.version>4.1.1</spring-boot.version>
+        <spring-boot.version>4.1.2</spring-boot.version>
         <!--
             Tomcat patch override. Spring Boot 4.1.1 manages 11.0.24,
             which is affected by three critical CVEs in the
@@ -75,7 +75,7 @@
         <jacoco.version>0.8.15</jacoco.version>
         <spotless.version>3.10.4</spotless.version>
         <pdfbox.version>3.0.8</pdfbox.version>
-        <openai-java.version>4.81.0</openai-java.version>
+        <openai-java.version>4.91.0</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
