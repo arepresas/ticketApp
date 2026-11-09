@@ -73,9 +73,9 @@
         <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <jackson-bom.version>3.1.7</jackson-bom.version>
         <jacoco.version>0.8.16</jacoco.version>
-        <spotless.version>3.10.4</spotless.version>
+        <spotless.version>3.11.0</spotless.version>
         <pdfbox.version>3.0.8</pdfbox.version>
-        <openai-java.version>4.94.0</openai-java.version>
+        <openai-java.version>4.101.0</openai-java.version>
 
         <sonar.organization>${env.SONAR_ORGANIZATION}</sonar.organization>
         <sonar.host.url>${env.SONAR_HOST_URL}</sonar.host.url>
